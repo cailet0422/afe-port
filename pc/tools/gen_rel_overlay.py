@@ -41,12 +41,18 @@ TYPE_KINDS = {
 STRUCT_KINDS = {
     "mCL_ftr_info_c": KIND_U16,
 }
+# Structs whose leading bytes are text (the rest holds pointers): (kind, size)
+STRUCT_PREFIXES = {
+    "mTG_tag_word_c": (KIND_BYTES, 8),
+}
 
 SYMBOL = re.compile(r"^(\S+) = (\.\w+):0x([0-9A-Fa-f]+);.*?size:0x([0-9A-Fa-f]+)")
 MAP_SECTION = re.compile(r"^ (\.(?:data|rodata)(?:\.rel(?:\.ro)?)?(?:\.local)?)\.(\S+)(?:\s+0x([0-9a-f]+)\s+0x([0-9a-f]+)\s+(\S+))?$")
 MAP_CONT = re.compile(r"^\s+0x([0-9a-f]+)\s+0x([0-9a-f]+)\s+(\S+)$")
 MAP_SYMBOL = re.compile(r"^\s+0x([0-9a-f]+)\s+(\w+)$")
 DECL = re.compile(r"^[ \t]*(?:static\s+)?(?:const\s+)?([A-Za-z_][\w ]*?)\s+(\w+)\s*((?:\[[^\]]*\]\s*)+)(?:ATTRIBUTE_ALIGN\(\d+\)\s*)?=", re.M)
+# struct objects that are not arrays: "static mTG_tag_word_c name = {"
+DECL_SCALAR = re.compile(r"^[ \t]*(?:static\s+)?(?:const\s+)?([A-Za-z_]\w*)\s+(\w+)\s*=\s*\{", re.M)
 C_INCLUDE = re.compile(r'#include\s+"([^"]+\.(?:c_inc|c))"')
 
 
@@ -160,7 +166,10 @@ def main():
         # absolute sources keep their path minus the leading '/'
         path = Path("/" + rel) if Path("/" + rel).exists() else build_dir / rel
         if path not in decl_cache:
-            decl_cache[path] = {d.group(2): d.group(1).strip() for d in DECL.finditer(source_text(path))}
+            text = source_text(path)
+            decls = {d.group(2): d.group(1).strip() for d in DECL_SCALAR.finditer(text)}
+            decls.update({d.group(2): d.group(1).strip() for d in DECL.finditer(text)})
+            decl_cache[path] = decls
         return decl_cache[path].get(name)
 
     out = []
@@ -203,6 +212,8 @@ def main():
             kind = TYPE_KINDS.get(t) if t else None
             if kind is None and t in STRUCT_KINDS:
                 kind = STRUCT_KINDS[t]
+            if kind is None and t in STRUCT_PREFIXES:
+                kind, size = STRUCT_PREFIXES[t]
             if kind is None:
                 stats[f"type:{t}"] += 1
                 continue

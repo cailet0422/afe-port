@@ -103,4 +103,5 @@ PC 포트는 자체 번역을 만드는 대신, 사용자가 직접 적용한 �
 
 `gen_rel_overlay.py`는 요소 형식이 단순한(바이트·u16·u32·Vtx) 객체만 덮어쓴다. 함수 안의 static
 (`country_str$457` 같은 것, PC 빌드에서는 `country_str.1`)도 포함한다 — 마을 이름 입력의 접미사
-`마을로`가 여기서 온다. 포인터 표·구조체(`type:None`, `type:Gfx` 등)는 빠진다.
+`마을로`가 여기서 온다. 앞부분이 글자인 구조체는 그 부분만 덮는다(`STRUCT_PREFIXES`: 태그 메뉴 문구
+`mTG_tag_word_c`의 8바이트). 그 밖의 포인터 표·구조체(`type:None`, `type:Gfx` 등)는 빠진다.
