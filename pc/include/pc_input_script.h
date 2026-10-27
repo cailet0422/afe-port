@@ -5,6 +5,7 @@
  *     <frame> <inputs> [<duration>]   hold inputs for duration frames (default 6)
  *     <frame> SHOT <name>             save the framebuffer as shots/<name>.ppm
  *     <frame> QUIT                    exit the game
+ *     <frame> TYPE <keys>             type into the text editor (pc_input_script.c)
  *
  * <frame> counts VI retraces (60 per second) from boot. <inputs> joins any of
  * A B X Y START Z L R UP DOWN LEFT RIGHT (D-pad) and SU SD SL SR (main stick)

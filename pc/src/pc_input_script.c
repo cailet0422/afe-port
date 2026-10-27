@@ -1,5 +1,6 @@
 /* pc_input_script.c - see pc_input_script.h */
 #include "pc_input_script.h"
+#include "pc_typing.h"
 
 #include <ctype.h>
 #include <dolphin/pad.h>
@@ -15,6 +16,7 @@ typedef enum {
     SCRIPT_INPUT,
     SCRIPT_SHOT,
     SCRIPT_QUIT,
+    SCRIPT_TYPE,
 } ScriptKind;
 
 typedef struct {
@@ -24,7 +26,7 @@ typedef struct {
     u16 buttons;
     s8 stick_x;
     s8 stick_y;
-    char name[48];
+    char name[128];
 } ScriptEvent;
 
 static ScriptEvent* s_events = NULL;
@@ -80,7 +82,7 @@ int pc_input_script_load(const char* path) {
     while (fgets(line, sizeof(line), f) != NULL) {
         ScriptEvent ev;
         char word[64] = "";
-        char arg[64] = "";
+        char arg[128] = "";
         char* hash = strchr(line, '#');
         unsigned long frame;
         int fields;
@@ -89,7 +91,7 @@ int pc_input_script_load(const char* path) {
         if (hash != NULL) {
             *hash = '\0';
         }
-        fields = sscanf(line, "%lu %63s %63s", &frame, word, arg);
+        fields = sscanf(line, "%lu %63s %127s", &frame, word, arg);
         if (fields <= 0) {
             continue; /* blank or comment */
         }
@@ -109,6 +111,9 @@ int pc_input_script_load(const char* path) {
             snprintf(ev.name, sizeof(ev.name), "%s", fields >= 3 ? arg : "shot");
         } else if (strcmp(word, "QUIT") == 0) {
             ev.kind = SCRIPT_QUIT;
+        } else if (strcmp(word, "TYPE") == 0 && fields >= 3) {
+            ev.kind = SCRIPT_TYPE;
+            snprintf(ev.name, sizeof(ev.name), "%s", arg);
         } else {
             ev.kind = SCRIPT_INPUT;
             ev.duration = fields >= 3 ? (u32)strtoul(arg, NULL, 10) : SCRIPT_DEFAULT_HOLD;
@@ -146,6 +151,46 @@ void pc_input_script_apply(u16* buttons, s8* stick_x, s8* stick_y) {
                 *stick_y = ev->stick_y;
             }
         }
+    }
+}
+
+/* Types keys into the text editor: plain characters are QWERTY keys, and
+ * {SP} {BS} {HAN} {ENTER} {END} {LEFT} {RIGHT} {UP} {DOWN} name the others. */
+static void type_keys(const char* text) {
+    static const struct {
+        const char* name;
+        int key;
+    } names[] = {
+        { "{SP}", ' ' },
+        { "{BS}", PC_TYPING_CMD_BACKSPACE },
+        { "{HAN}", -1 },
+        { "{ENTER}", PC_TYPING_CMD_ENTER },
+        { "{END}", PC_TYPING_CMD_END },
+        { "{LEFT}", PC_TYPING_CMD_LEFT },
+        { "{RIGHT}", PC_TYPING_CMD_RIGHT },
+        { "{UP}", PC_TYPING_CMD_UP },
+        { "{DOWN}", PC_TYPING_CMD_DOWN },
+    };
+
+    while (*text != '\0') {
+        size_t i;
+        int key = (unsigned char)*text;
+        size_t len = 1;
+
+        for (i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+            if (strncmp(text, names[i].name, strlen(names[i].name)) == 0) {
+                key = names[i].key;
+                len = strlen(names[i].name);
+                break;
+            }
+        }
+        if (key < 0) {
+            pc_typing_toggle_korean();
+        } else if (!pc_typing_key(key)) {
+            printf("[INPUT] frame %u: no text editor to type into\n", s_frame);
+            return;
+        }
+        text += len;
     }
 }
 
@@ -197,6 +242,8 @@ int pc_input_script_frame(u32 frame) {
         }
         if (ev->kind == SCRIPT_SHOT) {
             save_shot(ev->name);
+        } else if (ev->kind == SCRIPT_TYPE) {
+            type_keys(ev->name);
         } else if (ev->kind == SCRIPT_QUIT) {
             printf("[INPUT] frame %u: quit\n", frame);
             keep_running = 0;

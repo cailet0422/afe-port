@@ -66,5 +66,7 @@ cp ../bin/settings.ini ../bin/keybindings.ini . && ln -sfn /tmp/disc/ko.iso rom/
 ```
 
 로그에 `Korean patch detected`, `loaded N data objects from the disc`가 나오면 된다.
+한글 입력 확인: `python3 pc/tools/make_opening_script.py --korean 9000 > /tmp/op_ko.txt`로 만든 스크립트를
+돌리면 `shots/name_*.ppm`, `town_*.ppm`, `eng_*.ppm`에 단계별 화면이 남는다.
 패치의 코드 분석은 `pc/tools/reldis.py hooks|dis`(패치된 foresta.rel은 `gcdisc.py extract`로 꺼냄)와
 [korean_patch.md](korean_patch.md) 참고.

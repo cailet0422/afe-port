@@ -35,6 +35,14 @@ if(PC_BUILD_TESTS)
     target_include_directories(test_ko_ime PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
     target_compile_options(test_ko_ime PRIVATE -Wall -Wextra)
     add_test(NAME ko_ime COMMAND test_ko_ime)
+
+    add_executable(test_ko_charset
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_charset.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_ko_charset.c
+    )
+    target_include_directories(test_ko_charset PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_compile_options(test_ko_charset PRIVATE -Wall -Wextra)
+    add_test(NAME ko_charset COMMAND test_ko_charset)
 endif()
 
 # =============================================================================
@@ -210,8 +218,10 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_os.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_dvd.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_pad.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_typing.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_input_script.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_ko.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_ko_editor.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_rel_overlay.c
     ${DECOMP_ROOT}/src/static/GAEJ01_01/dolphin/pad/Padclamp.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_card.c
@@ -231,6 +241,7 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_stubs_cpp.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_disc.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_ime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_charset.c
     ${SYSTEM_FONT_C}
 )
 
@@ -364,7 +375,7 @@ add_custom_command(TARGET afe_pc POST_BUILD
     COMMENT "Generating REL data overlay table"
 )
 if(NOT WIN32)
-    target_link_options(afe_pc PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/cmake/exe_exports.map")
+    target_link_options(afe_pc PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/cmake/exe_exports.ver")
 endif()
 
 if(MINGW)

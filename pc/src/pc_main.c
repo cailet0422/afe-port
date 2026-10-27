@@ -219,8 +219,6 @@ void pc_platform_swap_buffers(void) {
 int pc_platform_poll_events(void) {
     SDL_Event event;
 
-    pc_typing_update();
-
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
             case SDL_QUIT:

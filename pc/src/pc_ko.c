@@ -5,6 +5,7 @@
 #include "pc_disc.h"
 #include "pc_bswap.h"
 #include "jsyswrap.h"
+#include "ko_charset.h"
 
 int g_pc_ko_mode = 0;
 
@@ -159,4 +160,46 @@ int pc_ko_glyph_slot(int g) {
     slot_glyph[best] = g;
     slot_used[best] = use_clock;
     return best;
+}
+
+void pc_ko_encode_glyph(int g, u8 out[2]) {
+    ko_charset_encode(g, out);
+}
+
+int pc_ko_encode_utf8(const char* text, u8* out, int max) {
+    const u8* p = (const u8*)text;
+    int len = 0;
+
+    while (*p != '\0') {
+        u32 cp;
+        int glyph;
+
+        if (p[0] < 0x80) {
+            cp = *p++;
+        } else if ((p[0] & 0xE0) == 0xC0 && p[1] != '\0') {
+            cp = ((p[0] & 0x1F) << 6) | (p[1] & 0x3F);
+            p += 2;
+        } else if ((p[0] & 0xF0) == 0xE0 && p[1] != '\0' && p[2] != '\0') {
+            cp = ((p[0] & 0x0F) << 12) | ((p[1] & 0x3F) << 6) | (p[2] & 0x3F);
+            p += 3;
+        } else {
+            p++;
+            continue;
+        }
+
+        glyph = cp <= 0xFFFF ? ko_charset_glyph((u16)cp) : -1;
+        if (glyph >= 0) {
+            if (len + 2 > max) {
+                break;
+            }
+            ko_charset_encode(glyph, out + len);
+            len += 2;
+        } else if (cp < 0x80 && ko_charset_ascii((char)cp) >= 0) {
+            if (len + 1 > max) {
+                break;
+            }
+            out[len++] = (u8)ko_charset_ascii((char)cp);
+        }
+    }
+    return len;
 }

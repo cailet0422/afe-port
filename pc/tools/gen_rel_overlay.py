@@ -46,7 +46,7 @@ SYMBOL = re.compile(r"^(\S+) = (\.\w+):0x([0-9A-Fa-f]+);.*?size:0x([0-9A-Fa-f]+)
 MAP_SECTION = re.compile(r"^ (\.(?:data|rodata)(?:\.rel(?:\.ro)?)?(?:\.local)?)\.(\S+)(?:\s+0x([0-9a-f]+)\s+0x([0-9a-f]+)\s+(\S+))?$")
 MAP_CONT = re.compile(r"^\s+0x([0-9a-f]+)\s+0x([0-9a-f]+)\s+(\S+)$")
 MAP_SYMBOL = re.compile(r"^\s+0x([0-9a-f]+)\s+(\w+)$")
-DECL = re.compile(r"^(?:static\s+)?(?:const\s+)?([A-Za-z_][\w ]*?)\s+(\w+)\s*((?:\[[^\]]*\]\s*)+)(?:ATTRIBUTE_ALIGN\(\d+\)\s*)?=", re.M)
+DECL = re.compile(r"^[ \t]*(?:static\s+)?(?:const\s+)?([A-Za-z_][\w ]*?)\s+(\w+)\s*((?:\[[^\]]*\]\s*)+)(?:ATTRIBUTE_ALIGN\(\d+\)\s*)?=", re.M)
 C_INCLUDE = re.compile(r'#include\s+"([^"]+\.(?:c_inc|c))"')
 
 
@@ -145,6 +145,7 @@ def main():
         stem, dot, num = key.rpartition(".")
         if dot and num.isdigit():
             local_statics[stem].append(key)
+    local_static_keys = {key for keys in local_statics.values() for key in keys}
 
     decl_cache = {}
 
@@ -197,7 +198,8 @@ def main():
                 stats["unmatched" if not sized else "ambiguous"] += 1
                 continue
             (obj, mapped), (vma, _) = sized[0]
-            t = decl_type(obj, mapped)
+            # a function-local static is declared without its .N suffix
+            t = decl_type(obj, mapped.rpartition(".")[0] if mapped in local_static_keys else mapped)
             kind = TYPE_KINDS.get(t) if t else None
             if kind is None and t in STRUCT_KINDS:
                 kind = STRUCT_KINDS[t]

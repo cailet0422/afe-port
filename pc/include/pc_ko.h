@@ -37,6 +37,19 @@ int pc_ko_font_offset(u8 c);
  * there (1-255). The caller draws that code from mFont_TEX_TYPE_FONT2. */
 int pc_ko_glyph_slot(int g);
 
+/* Writes the two bytes of glyph g (see ko_charset.h). */
+void pc_ko_encode_glyph(int g, u8 out[2]);
+
+/* Converts UTF-8 text to the patch's encoding, dropping characters it has
+ * no glyph for. Returns the number of bytes written. */
+int pc_ko_encode_utf8(const char* text, u8* out, int max);
+
+struct game_s;
+
+/* Draws the keyboard help that replaces the text editor's input panel; x and
+ * y are the editor's slide offsets. */
+void pc_ko_editor_draw(struct game_s* game, f32 x, f32 y);
+
 #ifdef __cplusplus
 }
 #endif
