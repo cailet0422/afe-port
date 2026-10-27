@@ -44,6 +44,23 @@ void pc_ko_encode_glyph(int g, u8 out[2]);
  * no glyph for. Returns the number of bytes written. */
 int pc_ko_encode_utf8(const char* text, u8* out, int max);
 
+/* Strings may hold 0x96 0xF6.. codes that stand for dictionary entries
+ * (long item names). Returns the length of str with them expanded and sets
+ * *out to the text: str itself, or one of PC_KO_EXPAND_SLOTS buffers that
+ * stays valid until the slot is used again. */
+#define PC_KO_EXPAND_SLOTS 5
+int pc_ko_expand(const u8* str, int len, int slot, const u8** out);
+
+/* A villager's catchphrase as text (the patch packs it), padded with spaces
+ * to PC_KO_WORD_ENDING_LEN; returns ending unchanged without the patch. */
+#define PC_KO_WORD_ENDING_LEN 16
+u8* pc_ko_word_ending(u8* ending);
+
+/* After a name was copied into a message at text, turns the particle that
+ * follows (은/는 을/를 이/가 과/와 아/야) into the form that fits the name's
+ * last sound. */
+void pc_ko_fix_josa(u8* text, int len);
+
 struct game_s;
 
 /* Draws the keyboard help that replaces the text editor's input panel; x and

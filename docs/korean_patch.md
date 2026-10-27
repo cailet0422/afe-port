@@ -27,7 +27,12 @@ PC 포트는 자체 번역을 만드는 대신, 사용자가 직접 적용한 �
 - 1바이트 문자: 패치된 글꼴은 영문·숫자를 ASCII 위치에 둔다. 기호는 대부분 ASCII와 같지만
   `~`=0x2A, `+`=0x3D, `\`=0x60, `;`=0x7B, `*`=0x7C, `=`=0x7D, `/`=0x7E(`ko_charset_ascii`).
   한국어 모드에서 영문은 고정폭(12)이다.
-- `0x96, 0xF6 이상, xx`의 3바이트는 패치 쪽 사전 확장(문자열 치환)용으로 따로 해석된다.
+- `0x96, 0xF6 이상, xx`의 3바이트는 사전 코드다. 번호 `e = b1×255 + b2 − (b2≥0x80 ? 1 : 0) − 0xF6×255`
+  (0–1194), 섹션 7의 `0xD340 + 16 + 2e`에 있는 u16 오프셋 `o`에 대해 항목은 `0xD340 + o`이고 길이
+  바이트가 `+1010`, 내용이 `+1011`부터다. 주로 필드(10바이트)에 들어가지 않는 긴 아이템 이름이다
+  (예: 0번 "오렌지편지지").
+- 1바이트 `0x97–0xC6` 일부는 자주 쓰는 한글 음절(예: `ac c0 a8` = "마을로"). 섹션 7 `0xA0DE`의 u16 표가
+  각 1바이트 문자의 음절 번호+1을 준다(받침 판정용).
 
 ## 글리프
 
@@ -47,9 +52,17 @@ PC 포트는 자체 번역을 만드는 대신, 사용자가 직접 적용한 �
 
 - 글자 크기·폭·그리기: `mFont_CodeSize_get`, `mFontW_CodeSize_get`, `mFont_GetStringWidth(2F)`,
   `mFont_SetLineStrings_AndSpace_new`, `mFontChar_gppDraw`, `mFontCharW_gppDraw`, `mFont_GetCodeWidth(F)B`
-- 메시지 조립: `mMsg_Set_free_str`, `mMsg_Set_item_str`, `mMsg_CopyString`, `mMsg_CopyTail(Truth)`,
-  이름 색, 말소리(`mMsg_sound_CodeVoice`), 선택지 커서, `mHandbill_Set_free_str`
-- 말버릇: `mNpc_GetWordEnding(_forTag)`, `aMJN3_check_word`
+- 메시지 조립 (PC 구현: `pc_ko_expand`, `pc_ko_fix_josa`)
+  - `mMsg_Set_free_str`/`mMsg_Set_item_str`/`mHandbill_Set_free_str`: 사전 코드를 최대 66바이트로 펼친 뒤
+    원래 함수로 넘긴다. 마지막 코드 뒤가 공백뿐이면 거기서 끝낸다.
+  - `mMsg_CopyString`: 복사한 문자열의 마지막 소리로 받침을 정하고(한글 음절, 1바이트 한글, 숫자는
+    영·일·이…·십·백·천·만, 영문 등은 모름 → 그대로), 바로 뒤(태그 건너뜀)의 조사 은/는·을/를·이/가·
+    과/와·아/야를 섹션 7 `0xA0CA` 표의 형태로 바꾼다. 조사 뒤에 한글 음절이 이어지면 낱말로 보고 두며,
+    아/야는 받침이 있을 때 뒤에 쉼표(또는 0xC7)가 있어야 바꾼다.
+  - 이름 색, 말소리(`mMsg_sound_CodeVoice`), 선택지 커서: 미대응
+- 말버릇 (PC 구현: `pc_ko_word_ending`): `mNpc_GetWordEnding(_forTag)`의 결과를 16바이트로 풀어 준다.
+  `0xFE` + 6바이트면 12비트 값 4개(2400 미만 = 글리프, 2400–2655 = 1바이트 문자 `v−2400`), 사전 코드면
+  사전 항목, 아니면 그대로. `mMsg_CopyTail(Truth)`의 길이도 4→16. `aMJN3_check_word`는 미대응.
 - 줄 검사: 게시판·일기·알림판 `*_strLineCheck`
 - 입력기: `mED_*`(이름·편지 입력), `mLE_*`
   - 편집 버퍼에서 한글은 2칸(u8 버퍼면 2바이트, u16 버퍼면 바이트 하나씩 2칸). 패치의
@@ -60,7 +73,9 @@ PC 포트는 자체 번역을 만드는 대신, 사용자가 직접 적용한 �
     원래 코드로 그리면 깨진다).
   - `mLE_ledit_ovl_init`: 말버릇(EPHRASE)·리셋·요청 편집은 섹션 7의 새 버퍼를 쓰고, `mLE_move_Wait`의
     두 훅이 그 버퍼에서 결과를 옮긴다(길이가 늘어난 것으로 보임, 미대응).
-- 고정 길이 상수: 지명·이름 등 필드 길이(2→4 등)
+- 고정 길이 상수: 지명·이름 등 필드 길이(2→4 등). 원본과 패치의 `.text`를 비교하면 훅 말고 직접 바뀐
+  명령은 32곳이다(`mBm_init_BDMsg_Mail`, `mNtc_set_landname_string`, `mBD_board_ovl_init`, `mPM/mAL/mHB/mTI_*`,
+  `mNT_set_day_strings_dl`, `mTG_price_draw`, `player_select_draw_title`, RTC 연도 상한 등). 대부분 미대응.
 - 그 밖: 화면 비율(시야·직교 행렬·카메라), RTC 연도 상한 2032→2100, 구역 경계 달리기, 부팅 주민의
   한자 메뉴 → 화면 비율 메뉴
 
