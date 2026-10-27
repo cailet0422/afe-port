@@ -19,6 +19,10 @@ int pc_disc_find_file(const char* path, u32* disc_offset, u32* file_size);
 /* Read bytes from a logical disc offset. Returns 1 on success. */
 int pc_disc_read(u32 offset, void* dest, u32 size);
 
+/* Read a whole file into a malloc'd buffer, Yaz0-decompressing it if needed.
+ * Returns NULL if the file is missing. */
+u8* pc_disc_load_file(const char* path, u32* out_size);
+
 /* Extract DOL and REL as malloc'd buffers (for pc_assets.c). */
 u8* pc_disc_extract_dol(void);
 u8* pc_disc_extract_rel(void); /* handles Yaz0 decompression */

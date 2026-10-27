@@ -106,6 +106,8 @@ static void apply_fixup(const PCDataFixup* fix) {
     }
 }
 
+extern void pc_rel_overlay_apply(void);
+
 void pc_boot_fixup_data(void) {
     static int done = FALSE;
     int i;
@@ -114,6 +116,9 @@ void pc_boot_fixup_data(void) {
         return;
     }
     done = TRUE;
+
+    /* Replace the built-in REL data with the disc's before swapping it */
+    pc_rel_overlay_apply();
 
     for (i = 0; i < pc_data_fixup_count; i++) {
         apply_fixup(&pc_data_fixups[i]);

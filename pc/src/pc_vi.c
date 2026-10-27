@@ -1,5 +1,6 @@
 /* pc_vi.c - video interface → SDL window swap + frame pacing */
 #include "pc_platform.h"
+#include "pc_input_script.h"
 
 #define VI_TVMODE_NTSC_INT    0
 #define VI_TVMODE_NTSC_DS     1
@@ -35,6 +36,10 @@ void VIWaitForRetrace(void) {
     if (!pc_platform_poll_events()) {
         g_pc_running = 0;
         return;
+    }
+
+    if (!pc_input_script_frame(pc_frame_counter)) {
+        g_pc_running = 0;
     }
 
     Uint64 t_before_swap = SDL_GetPerformanceCounter();
@@ -82,7 +87,7 @@ void VIWaitForRetrace(void) {
             double secs = (double)(now - fps_start) / (double)perf_freq;
             double fps = (double)fps_count / secs;
             char title[64];
-            snprintf(title, sizeof(title), "Animal Crossing - %.1f FPS", fps);
+            snprintf(title, sizeof(title), "Dobutsu no Mori e+ - %.1f FPS", fps);
             SDL_SetWindowTitle(g_pc_window, title);
             fps_start = now;
             fps_count = 0;

@@ -10,6 +10,8 @@
 #include "pc_disc.h"
 #include "pc_typing.h"
 #include "pc_pause_menu.h"
+#include "pc_input_script.h"
+#include "pc_ko.h"
 
 /* prefer discrete GPU on laptops */
 #ifdef _WIN32
@@ -268,12 +270,17 @@ int main(int argc, char* argv[]) {
             printf("Usage: DobutsuNoMoriEPlus [options]\n");
             printf("  --verbose, -v       Enable diagnostic output\n");
             printf("  --no-framelimit     Disable frame limiter\n");
+            printf("  --input-script F    Replay frame-indexed input from F (see pc_input_script.h)\n");
             printf("  --model-viewer [N]  Launch model viewer (optional start index)\n");
             printf("  --time H[:M[:S]]    Override in-game time (e.g. 5, 17:30, 5:55:00)\n");
             printf("  --help, -h          Show this help message\n");
             return 0;
         } else if (strcmp(argv[i], "--no-framelimit") == 0) {
             g_pc_no_framelimit = 1;
+        } else if (strcmp(argv[i], "--input-script") == 0 && i + 1 < argc) {
+            if (!pc_input_script_load(argv[++i])) {
+                return 1;
+            }
         } else if (strcmp(argv[i], "--verbose") == 0 || strcmp(argv[i], "-v") == 0) {
             g_pc_verbose = 1;
         } else if (strcmp(argv[i], "--model-viewer") == 0) {
@@ -345,6 +352,7 @@ int main(int argc, char* argv[]) {
     pc_keybindings_load();
     pc_platform_init();
     pc_disc_init();
+    pc_ko_init();
     pc_jfw_prepare_system_font();
 
     ac_entry();                         /* sets HotStartEntry = &entry */

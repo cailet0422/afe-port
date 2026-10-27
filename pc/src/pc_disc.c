@@ -384,6 +384,38 @@ u8* pc_disc_extract_dol(void) {
     return buf;
 }
 
+u8* pc_disc_load_file(const char* path, u32* out_size) {
+    u32 off, sz;
+    u8* raw;
+
+    if (!pc_disc_find_file(path, &off, &sz)) {
+        return NULL;
+    }
+    raw = (u8*)malloc(sz);
+    if (raw == NULL) {
+        return NULL;
+    }
+    if (!disc_read(&g_disc, off, raw, sz)) {
+        free(raw);
+        return NULL;
+    }
+    if (sz >= 16 && memcmp(raw, "Yaz0", 4) == 0) {
+        u32 dec_sz;
+        u8* dec = yaz0_decode(raw, sz, &dec_sz);
+
+        free(raw);
+        if (dec == NULL) {
+            return NULL;
+        }
+        raw = dec;
+        sz = dec_sz;
+    }
+    if (out_size != NULL) {
+        *out_size = sz;
+    }
+    return raw;
+}
+
 u8* pc_disc_extract_rel(void) {
     u32 off, sz;
     u8* raw;

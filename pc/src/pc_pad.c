@@ -2,6 +2,7 @@
 #include "pc_platform.h"
 #include "pc_typing.h"
 #include "pc_keybindings.h"
+#include "pc_input_script.h"
 #include <dolphin/pad.h>
 
 /* analog stick constants */
@@ -136,6 +137,8 @@ u32 PADRead(PADStatus* status) {
         status[0].triggerLeft = lt;
         status[0].triggerRight = rt;
     }
+
+    pc_input_script_apply(&buttons, &stickX, &stickY);
 
     status[0].button = buttons;
     status[0].stickX = stickX;

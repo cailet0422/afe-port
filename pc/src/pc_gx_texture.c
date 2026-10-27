@@ -147,6 +147,29 @@ static TexCacheEntry* tex_cache_insert(u32 data_ptr, int w, int h, u32 fmt, u32 
     return e;
 }
 
+/* Drops cached GL textures made from `data`, for textures the game rewrites
+ * in place (the hash only samples the head and tail of large textures). */
+void pc_gx_texture_invalidate_data(const void* data) {
+    u32 ptr = (u32)(uintptr_t)data;
+    int out = 0;
+
+    for (int i = 0; i < tex_cache_count; i++) {
+        TexCacheEntry* e = &tex_cache[i];
+
+        if (e->data_ptr == ptr && !e->external) {
+            for (int s = 0; s < 8; s++) {
+                if (g_gx.gl_textures[s] == e->gl_tex)
+                    g_gx.gl_textures[s] = 0;
+            }
+            if (e->gl_tex)
+                glDeleteTextures(1, &e->gl_tex);
+            continue;
+        }
+        tex_cache[out++] = *e;
+    }
+    tex_cache_count = out;
+}
+
 void pc_gx_texture_cache_invalidate(void) {
     for (int i = 0; i < tex_cache_count; i++) {
         if (tex_cache[i].gl_tex && !tex_cache[i].external) {

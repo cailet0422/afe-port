@@ -210,6 +210,9 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_os.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_dvd.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_pad.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_input_script.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_ko.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_rel_overlay.c
     ${DECOMP_ROOT}/src/static/GAEJ01_01/dolphin/pad/Padclamp.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_card.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_vi.c
@@ -353,7 +356,13 @@ if(WIN32)
     endif()
 endif()
 
-target_link_options(afe_pc PRIVATE -Wl,--gc-sections)
+target_link_options(afe_pc PRIVATE -Wl,--gc-sections "-Wl,-Map=${CMAKE_BINARY_DIR}/DobutsuNoMoriEPlus.map")
+# Table that lets the game load REL data from the disc it runs from (pc_rel_overlay.c)
+add_custom_command(TARGET afe_pc POST_BUILD
+    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_rel_overlay.py" ${AFE_VERSION}
+            "${CMAKE_BINARY_DIR}/DobutsuNoMoriEPlus.map" -o "${CMAKE_BINARY_DIR}/bin/DobutsuNoMoriEPlus.relmap"
+    COMMENT "Generating REL data overlay table"
+)
 if(NOT WIN32)
     target_link_options(afe_pc PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/cmake/exe_exports.map")
 endif()
