@@ -86,6 +86,11 @@ const u8* pc_ko_patched_str(u32 s7_offset, const u8* original);
 const void* pc_ko_data_ptr(u32 offset, const void* original);
 u32 pc_ko_data_u32(u32 offset, u32 original);
 
+/* Width of the character at p in the board, diary and notice editors'
+ * line checks, as the patch measures it (one-byte half-width punctuation,
+ * a syllable's second byte 0, a new line 0). */
+int pc_ko_line_char_width(const u16* p);
+
 struct game_s;
 
 /* Draws the keyboard help that replaces the text editor's input panel; x and

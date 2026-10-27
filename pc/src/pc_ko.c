@@ -7,6 +7,7 @@
 #include "jsyswrap.h"
 #include "ko_charset.h"
 #include "charmap.h"
+#include "m_font.h"
 
 int g_pc_ko_mode = 0;
 
@@ -606,4 +607,24 @@ void pc_ko_fix_josa(u8* text, int len) {
     }
     p[0] = s7[S7_JOSA + josa * 4 + (has_final ? 0 : 2)];
     p[1] = s7[S7_JOSA + josa * 4 + (has_final ? 1 : 3)];
+}
+
+int pc_ko_line_char_width(const u16* p) {
+    u16 c = p[0];
+
+    if (c > 0xFF) {
+        return mFont_TEX_CHAR_WIDTH;
+    }
+    if (c == CHAR_NEW_LINE) {
+        return 0;
+    }
+    /* The second byte of a syllable; like the patch, this looks at the entry
+     * before p, which every caller has */
+    if (c >= KO_TRAIL_FIRST && p[-1] <= 0xFF && lead_index[p[-1]] >= 0) {
+        return 0;
+    }
+    if (c == CHAR_SPACE || c == CHAR_COMMA || c == CHAR_PERIOD) {
+        return mFont_TEX_CHAR_WIDTH / 2;
+    }
+    return mFont_TEX_CHAR_WIDTH;
 }
