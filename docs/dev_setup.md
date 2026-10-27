@@ -54,6 +54,9 @@ cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
 - `--deterministic`: 게임 시계를 2026-11-01 정오(UTC)에서 시작해 프레임 수로만 진행시킨다. 새 게임의 마을
   배치가 매번 같아져 걷기 경로를 스크립트로 재현할 수 있다(옷 색처럼 비동기 로딩 시점에 따라 달라지는
   무작위는 남는다). `--time H`와 같이 쓰면 그 날의 H시.
+- 새 게임 → 마을: `python3 pc/tools/make_newgame_script.py --korean [단계...] > /tmp/ng.txt` 후
+  `./DobutsuNoMoriEPlus --no-framelimit --script-fast --deterministic --input-script /tmp/ng.txt`
+  (약 1분 반). 단계 형식은 스크립트 설명 참고. 자유 이동은 약 21,500프레임부터.
 - 메모리 문제는 `-fsanitize=address -fsanitize-recover=address`로 별도 빌드 디렉터리를 만들어 본다
   (`ASAN_OPTIONS=detect_leaks=0:halt_on_error=0`). 원래 게임의 읽기 범위 초과
   (`mFM_LoadBGCommonTex` 등)는 무해한 것도 있다.
