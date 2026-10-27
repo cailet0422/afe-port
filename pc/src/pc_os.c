@@ -27,7 +27,35 @@ static s64 gc_epoch_offset_ticks = 0; /* Ticks from GC epoch to program start */
 /* GC epoch: Jan 1, 2000 (946684800 seconds after Unix epoch) */
 #define GC_UNIX_EPOCH_DIFF 946684800LL
 
+/* --deterministic: the main thread sees time advance one frame per retrace
+ * plus a little per call (so waits on the clock still end); other threads
+ * see the main thread's last value. */
+#define DETERMINISTIC_DATE 1793534400LL /* 2026-11-01 12:00:00 UTC, a Sunday */
+#define DETERMINISTIC_CALL_TICKS 64
+extern u32 pc_frame_counter;
+static SDL_threadID main_thread_id = 0;
+static s64 deterministic_last = 0;
+
+static s64 deterministic_time(void) {
+    static u32 frame = 0xFFFFFFFF;
+    static s64 calls = 0;
+
+    if (SDL_ThreadID() != main_thread_id) {
+        return deterministic_last;
+    }
+    if (frame != pc_frame_counter) {
+        frame = pc_frame_counter;
+        calls = 0;
+    }
+    calls++;
+    deterministic_last = gc_epoch_offset_ticks + (s64)frame * (GC_TIMER_CLOCK / 60) + calls * DETERMINISTIC_CALL_TICKS;
+    return deterministic_last;
+}
+
 s64 osGetTime(void) {
+    if (g_pc_deterministic) {
+        return deterministic_time();
+    }
     u64 now = SDL_GetPerformanceCounter();
     u64 freq = SDL_GetPerformanceFrequency();
     s64 elapsed = (s64)((now - time_base_start) * (u64)GC_TIMER_CLOCK / freq);
@@ -329,9 +357,10 @@ void OSInit(void) {
         arena_hi = arena_memory + PC_MAIN_MEMORY_SIZE;
     }
     time_base_start = SDL_GetPerformanceCounter();
+    main_thread_id = SDL_ThreadID();
     /* compute ticks from GC epoch (Jan 1, 2000) to now, with timezone */
     {
-        time_t unix_now = time(NULL);
+        time_t unix_now = g_pc_deterministic ? (time_t)DETERMINISTIC_DATE : time(NULL);
 
         struct tm* gmt = gmtime(&unix_now);
         if (!gmt) { gc_epoch_offset_ticks = 0; return; }
