@@ -32,6 +32,11 @@ typedef struct {
 static ScriptEvent* s_events = NULL;
 static int s_count = 0;
 static u32 s_frame = 0;
+static int s_fast = 0;
+
+void pc_input_script_set_fast(int fast) {
+    s_fast = fast;
+}
 
 static int parse_inputs(char* text, ScriptEvent* ev) {
     static const struct {
@@ -247,6 +252,17 @@ int pc_input_script_frame(u32 frame) {
         } else if (ev->kind == SCRIPT_QUIT) {
             printf("[INPUT] frame %u: quit\n", frame);
             keep_running = 0;
+        }
+    }
+    if (s_fast) {
+        /* Draw the next frame only if it is captured. Menus that keep a copy
+         * of the scene behind them show black. */
+        g_pc_skip_draw = 1;
+        for (i = 0; i < s_count; i++) {
+            if (s_events[i].kind == SCRIPT_SHOT && s_events[i].frame == frame + 1) {
+                g_pc_skip_draw = 0;
+                break;
+            }
         }
     }
     return keep_running;

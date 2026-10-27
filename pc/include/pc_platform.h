@@ -68,6 +68,7 @@ extern SDL_GLContext  g_pc_gl_context;
 extern int           g_pc_running;
 extern int           g_pc_verbose;
 extern int           g_pc_no_framelimit;
+extern int           g_pc_skip_draw; /* drop GL draws (fast input-script replay) */
 extern int           g_pc_time_override;
 extern int           g_pc_min_override;
 extern int           g_pc_sec_override;

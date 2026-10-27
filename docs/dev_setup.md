@@ -48,7 +48,9 @@ cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
 - 크래시 조사는 `gdb -batch -ex run -ex bt --args ./DobutsuNoMoriEPlus --verbose`.
 - 자동 입력: `python3 pc/tools/make_opening_script.py 16000 > /tmp/opening.txt` 후
   `./DobutsuNoMoriEPlus --no-framelimit --input-script /tmp/opening.txt` → `shots/*.ppm`
-  (`montage`로 묶어 보면 편하다). 약 66fps(llvmpipe)로 돈다.
+  (`montage`로 묶어 보면 편하다). llvmpipe에서 약 30–60fps.
+- `--script-fast`를 더하면 스크린샷을 찍는 프레임만 그려서 약 400fps로 돈다(오프닝 6,000프레임이 16초).
+  메뉴가 뒤에 깔아 두는 장면 복사본은 검게 나온다.
 - 메모리 문제는 `-fsanitize=address -fsanitize-recover=address`로 별도 빌드 디렉터리를 만들어 본다
   (`ASAN_OPTIONS=detect_leaks=0:halt_on_error=0`). 원래 게임의 읽기 범위 초과
   (`mFM_LoadBGCommonTex` 등)는 무해한 것도 있다.

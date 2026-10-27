@@ -563,6 +563,7 @@ int pc_gx_draw_call_count = 0;
 void pc_gx_flush_vertices(void) {
     int count = g_gx.current_vertex_idx;
     if (count == 0) return;
+    if (g_pc_skip_draw) return; /* fast script replay; GXBegin resets the buffer */
 
     pc_gx_draw_call_count++;
 

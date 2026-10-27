@@ -25,6 +25,9 @@ int pc_input_script_load(const char* path);
 /* Adds the scripted buttons and stick for the current frame. */
 void pc_input_script_apply(u16* buttons, s8* stick_x, s8* stick_y);
 
+/* Draws only the frames that a SHOT command captures (g_pc_skip_draw). */
+void pc_input_script_set_fast(int fast);
+
 /* Runs SHOT/QUIT commands due this frame; call before presenting it.
  * Returns 0 when the script asked to quit. */
 int pc_input_script_frame(u32 frame);
