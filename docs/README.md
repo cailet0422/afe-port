@@ -163,8 +163,15 @@
   휠 자리에 키보드 안내 패널(`pc/src/pc_ko_editor.c`)을 그린다. **게임패드만으로는 한글을 입력할 수
   없다** — 화면 키보드(QWERTY 배치 + 한/영 버튼)가 남은 일이다(Android 터치 입력과 함께).
 - 원본 디스크에서는 ACGC처럼 `Tab`으로 켜며, 일본어 글꼴에 확실히 있는 영문·숫자·공백·`!?,.`만 받는다.
-- 자동 테스트: `--input-script`의 `TYPE` 명령(`pc/src/pc_input_script.c`),
-  `make_opening_script.py --korean`.
+- **시스템 입력기** (`settings.ini` `[Input]`의 `text_input = 1`, Android 기본값): 내장 두벌식 대신
+  OS 입력기(Android 화면 키보드, Windows IME 등)를 쓴다. 편집기가 열리면 `SDL_StartTextInput`으로
+  화면 키보드를 띄우고, 확정된 글자(`SDL_TEXTINPUT`)는 그대로, 조합 중인 글자(`SDL_TEXTEDITING`)는
+  "조합 중" 표시를 달아 버퍼에 넣었다가 바뀔 때 지우고 다시 넣는다(`PC_TYPING_CMD_PREEDIT_CLEAR`).
+  칸이 차서 조합 중 글자 일부만 들어가도 들어간 만큼 정확히 지운다. SDL 2.30의 Android 입력 연결은
+  조합을 "백스페이스 + 새 글자"로 보내므로 그 경로로도 같은 결과가 된다. 게임패드 명령으로 조합이
+  확정되면 `SDL_ClearComposition`으로 입력기 쪽 조합도 비워 같은 글자가 두 번 들어가지 않게 한다.
+- 자동 테스트: `--input-script`의 `TYPE`(내장 입력기 키), `EDIT`/`TEXT`(시스템 입력기의 조합 중·확정
+  텍스트) 명령(`pc/src/pc_input_script.c`), `make_opening_script.py --korean`.
 
 ## 알려진 문제 (M1 기준)
 

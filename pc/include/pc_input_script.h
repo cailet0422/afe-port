@@ -6,6 +6,8 @@
  *     <frame> SHOT <name>             save the framebuffer as shots/<name>.ppm
  *     <frame> QUIT                    exit the game
  *     <frame> TYPE <keys>             type into the text editor (pc_input_script.c)
+ *     <frame> EDIT [<utf8>]           system input method: text being composed
+ *     <frame> TEXT <utf8>             system input method: committed text
  *
  * <frame> counts VI retraces (60 per second) from boot. <inputs> joins any of
  * A B X Y START Z L R UP DOWN LEFT RIGHT (D-pad) and SU SD SL SR (main stick)

@@ -268,6 +268,7 @@ int pc_platform_poll_events(void) {
                 pc_typing_handle_event(&event);
                 break;
             case SDL_TEXTINPUT:
+            case SDL_TEXTEDITING:
                 if (g_pc_paused) break;
                 pc_typing_handle_event(&event);
                 break;

@@ -41,8 +41,9 @@ Android Studio에서는 `pc/android`를 열면 된다. 첫 네이티브 빌드�
 
 - 빌드(컴파일·링크·APK 패키징)까지 확인했다. 이 작업 환경에는 Android 기기·에뮬레이터가 없어 실제
   실행은 확인하지 못했다. 같은 렌더러는 리눅스에서 OpenGL ES 3.0 컨텍스트로 확인했다(dev_setup.md 7).
-- 입력: 게임패드(블루투스 등)와 물리 키보드는 SDL이 처리한다. 터치 조작과 Android 키보드(IME) 한글
-  입력은 아직 없다.
+- 입력: 게임패드(블루투스 등)와 물리 키보드는 SDL이 처리한다. 글자 입력 화면(이름·편지 등)이 열리면
+  Android 화면 키보드가 뜨고, 그 키보드로 한글을 입력한다(`settings.ini`의 `text_input = 1`,
+  README의 "시스템 입력기"). 터치 조작(화면 게임패드)은 아직 없다.
 - Clang(NDK)과 GCC의 차이로 고친 것: `-fsigned-char`(ARM의 char는 unsigned), `operator new`의 `size_t`,
   `EOF`/`SEEK_*`가 stdio 매크로로 바뀌는 열거자(정수 → enum 변환), libc++ `<cmath>`의 C++ 링크,
   bionic의 `bcmp`, lld 링크 맵과 Clang의 함수 안 static 이름(`함수.변수`).

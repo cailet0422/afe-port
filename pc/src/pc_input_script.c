@@ -17,6 +17,8 @@ typedef enum {
     SCRIPT_SHOT,
     SCRIPT_QUIT,
     SCRIPT_TYPE,
+    SCRIPT_EDIT,
+    SCRIPT_TEXT,
 } ScriptKind;
 
 typedef struct {
@@ -119,6 +121,10 @@ int pc_input_script_load(const char* path) {
         } else if (strcmp(word, "TYPE") == 0 && fields >= 3) {
             ev.kind = SCRIPT_TYPE;
             snprintf(ev.name, sizeof(ev.name), "%s", arg);
+        } else if ((strcmp(word, "EDIT") == 0 || strcmp(word, "TEXT") == 0) && fields >= 2) {
+            /* the system input method's composition ("EDIT" alone ends it) or committed text */
+            ev.kind = word[0] == 'E' ? SCRIPT_EDIT : SCRIPT_TEXT;
+            snprintf(ev.name, sizeof(ev.name), "%s", fields >= 3 ? arg : "");
         } else {
             ev.kind = SCRIPT_INPUT;
             ev.duration = fields >= 3 ? (u32)strtoul(arg, NULL, 10) : SCRIPT_DEFAULT_HOLD;
@@ -260,6 +266,10 @@ int pc_input_script_frame(u32 frame) {
             save_shot(ev->name);
         } else if (ev->kind == SCRIPT_TYPE) {
             type_keys(ev->name);
+        } else if (ev->kind == SCRIPT_EDIT) {
+            pc_typing_system_editing(ev->name);
+        } else if (ev->kind == SCRIPT_TEXT) {
+            pc_typing_system_text(ev->name);
         } else if (ev->kind == SCRIPT_QUIT) {
             printf("[INPUT] frame %u: quit\n", frame);
             keep_running = 0;

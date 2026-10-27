@@ -5,46 +5,29 @@
 PCSettings g_pc_settings = {
     .window_width  = PC_SCREEN_WIDTH,
     .window_height = PC_SCREEN_HEIGHT,
+#ifdef __ANDROID__
+    .fullscreen    = 2,
+    .vsync         = 1,
+    .msaa          = 0,
+#else
     .fullscreen    = 0,
     .vsync         = 0,
     .msaa          = 4,
+#endif
     .preload_textures = 0,
     .disable_resetti = 0,
     .nes_aspect = 1,
     .master_volume = 100,
+#ifdef __ANDROID__
+    .text_input = 1,
+    .touch_controls = 1,
+#else
+    .text_input = 0,
+    .touch_controls = 0,
+#endif
 };
 
 static const char* SETTINGS_FILE = "settings.ini";
-
-static const char* DEFAULT_SETTINGS =
-    "[Graphics]\n"
-    "# Window size (ignored in fullscreen)\n"
-    "window_width = 640\n"
-    "window_height = 480\n"
-    "\n"
-    "# 0 = windowed, 1 = fullscreen, 2 = borderless fullscreen\n"
-    "fullscreen = 0\n"
-    "\n"
-    "# Vertical sync: 0 = off, 1 = on\n"
-    "vsync = 0\n"
-    "\n"
-    "# Anti-aliasing samples: 0 = off, 2, 4, or 8\n"
-    "msaa = 4\n"
-    "\n"
-    "[Enhancements]\n"
-    "# Preload HD textures at startup: 0 = off (load on demand), 1 = preload, 2 = preload + cache file (fastest)\n"
-    "preload_textures = 0\n"
-    "\n"
-    "[Gameplay]\n"
-    "# Disable Mr. Resetti: 0 = normal, 1 = disable\n"
-    "disable_resetti = 0\n"
-    "\n"
-    "# NES emulator aspect ratio: 0 = stretch to fullscreen, 1 = 4:3 pillarbox\n"
-    "nes_aspect = 1\n"
-    "\n"
-    "[Audio]\n"
-    "# Master output volume as a percentage (0-100)\n"
-    "master_volume = 100\n";
 
 static const char* skip_ws(const char* s) {
     while (*s == ' ' || *s == '\t') s++;
@@ -81,14 +64,10 @@ static void apply_setting(const char* key, const char* value) {
         if (val == 0 || val == 1) g_pc_settings.nes_aspect = val;
     } else if (strcmp(key, "master_volume") == 0) {
         if (val >= 0 && val <= 100) g_pc_settings.master_volume = val;
-    }
-}
-
-static void write_defaults(const char* path) {
-    FILE* f = fopen(path, "w");
-    if (f) {
-        fputs(DEFAULT_SETTINGS, f);
-        fclose(f);
+    } else if (strcmp(key, "text_input") == 0) {
+        if (val == 0 || val == 1) g_pc_settings.text_input = val;
+    } else if (strcmp(key, "touch_controls") == 0) {
+        if (val == 0 || val == 1) g_pc_settings.touch_controls = val;
     }
 }
 
@@ -126,6 +105,14 @@ void pc_settings_save(void) {
     fprintf(f, "[Audio]\n");
     fprintf(f, "# Master output volume as a percentage (0-100)\n");
     fprintf(f, "master_volume = %d\n", g_pc_settings.master_volume);
+    fprintf(f, "\n");
+    fprintf(f, "[Input]\n");
+    fprintf(f, "# Typing in name and letter fields: 0 = built-in Hangul input (dubeolsik on the keys,\n");
+    fprintf(f, "# Hangul/English with the Hangul key, right Alt or Shift+Space), 1 = the system's input method\n");
+    fprintf(f, "text_input = %d\n", g_pc_settings.text_input);
+    fprintf(f, "\n");
+    fprintf(f, "# On-screen controller for touch screens: 0 = off, 1 = on\n");
+    fprintf(f, "touch_controls = %d\n", g_pc_settings.touch_controls);
     fclose(f);
     printf("[Settings] Saved %s\n", SETTINGS_FILE);
 }
@@ -273,7 +260,7 @@ void pc_settings_apply(void) {
 void pc_settings_load(void) {
     FILE* f = fopen(SETTINGS_FILE, "r");
     if (!f) {
-        write_defaults(SETTINGS_FILE);
+        pc_settings_save(); /* the defaults */
         printf("[Settings] Created default %s\n", SETTINGS_FILE);
         return;
     }

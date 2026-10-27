@@ -15,6 +15,8 @@ typedef struct {
     int disable_resetti;  /* 0=normal (Resetti appears on reset), 1=disable reset penalty */
     int nes_aspect;       /* NES emulator aspect: 0=fullscreen stretch, 1=4:3 pillarbox (default) */
     int master_volume;    /* Applied at the PC audio output, 0-100 (default 100) */
+    int text_input;       /* 0 = built-in Hangul input from keys, 1 = the system's input method */
+    int touch_controls;   /* 0 = off, 1 = on-screen pad for touch screens */
 } PCSettings;
 
 extern PCSettings g_pc_settings;

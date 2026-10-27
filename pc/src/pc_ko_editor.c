@@ -45,11 +45,17 @@ static void draw_text(GAME* game, const char* text, f32 x, f32 y, int r, int g, 
 }
 
 void pc_ko_editor_draw(GAME* game, f32 x, f32 y) {
-    static const char* const help[] = {
+    static const char* const help_builtin[] = {
         "한/영    오른쪽 Alt",
         "Enter    줄바꿈/결정",
         "Ctrl+Enter  끝내기",
     };
+    static const char* const help_system[] = {
+        "화면 키보드로 입력",
+        "Enter    줄바꿈/결정",
+        "START    끝내기",
+    };
+    const char* const* help = pc_typing_system_ime() ? help_system : help_builtin;
     f32 left = PANEL_LEFT + x;
     f32 top = PANEL_TOP - y;
     const char* mode;
@@ -59,13 +65,15 @@ void pc_ko_editor_draw(GAME* game, f32 x, f32 y) {
 
     if (!g_pc_typing_mode) {
         mode = "키보드 입력: Tab";
+    } else if (pc_typing_system_ime()) {
+        mode = "키보드 입력";
     } else if (pc_typing_korean()) {
         mode = "한글 입력";
     } else {
         mode = "영문 입력";
     }
     draw_text(game, mode, left + 8.0f, top + 6.0f, 255, 235, 120, 1.0f);
-    for (i = 0; i < (int)(sizeof(help) / sizeof(help[0])); i++) {
+    for (i = 0; i < 3; i++) {
         draw_text(game, help[i], left + 8.0f, top + 28.0f + LINE_HEIGHT * i, 235, 235, 235, TEXT_SCALE);
     }
 }

@@ -4,6 +4,7 @@
 #include "ko_charset.h"
 #include "ko_ime.h"
 #include "pc_ko.h"
+#include "pc_settings.h"
 
 int g_pc_typing_mode = 0;
 int g_pc_editor_active = 0;
@@ -13,7 +14,8 @@ static int s_head = 0;
 static int s_count = 0;
 
 static KoIme s_ime;
-static int s_preedit = -1; /* glyph of the composing syllable in the editor, or -1 */
+static int s_preedit = -1;     /* built-in input: glyph being composed, or -1 */
+static int s_has_preedit = 0;  /* composition operations went to the editor */
 
 static void queue_clear(void) {
     s_head = 0;
@@ -43,18 +45,31 @@ static void drop_composition(void) {
     ko_ime_init(&s_ime);
     s_ime.mode = mode;
     s_preedit = -1;
+    s_has_preedit = 0;
+}
+
+int pc_typing_system_ime(void) {
+    return g_pc_settings.text_input == 1;
 }
 
 void pc_typing_preedit_rejected(void) {
-    drop_composition();
+    /* The system's input method keeps composing; what part of its text did
+     * fit is still removed by the next PC_TYPING_CMD_PREEDIT_CLEAR */
+    if (!pc_typing_system_ime()) {
+        drop_composition();
+    }
 }
 
 void pc_typing_commit_composition(void) {
+    if (pc_typing_system_ime() && s_has_preedit) {
+        /* Otherwise the input method would commit the same text again */
+        SDL_ClearComposition();
+    }
     drop_composition();
 }
 
 int pc_typing_korean(void) {
-    return g_pc_ko_mode && s_ime.mode == KO_IME_MODE_KO;
+    return g_pc_ko_mode && !pc_typing_system_ime() && s_ime.mode == KO_IME_MODE_KO;
 }
 
 /* One-byte code of a typed ASCII character. Without the Korean patch only
@@ -77,31 +92,43 @@ static int ascii_code(uint16_t c) {
     }
 }
 
-static void emit_preedit(int glyph) {
-    if (glyph != s_preedit) {
-        push(glyph >= 0 ? PC_TYPING_PREEDIT | glyph : PC_TYPING_PREEDIT_NONE);
-        s_preedit = glyph;
+static void clear_preedit(void) {
+    if (s_has_preedit) {
+        push(PC_TYPING_CMD_PREEDIT_CLEAR);
+        s_has_preedit = 0;
+    }
+    s_preedit = -1;
+}
+
+/* Queues one character; characters the font cannot show are dropped (a
+ * syllable outside KS X 1001, or any Hangul without the Korean patch). */
+static void push_unit(uint16_t unit, int preedit) {
+    int glyph = g_pc_ko_mode ? ko_charset_glyph(unit) : -1;
+    int op;
+
+    if (glyph >= 0) {
+        op = PC_TYPING_PAIR | glyph;
+    } else if (ascii_code(unit) >= 0) {
+        op = ascii_code(unit);
+    } else {
+        return;
+    }
+    push(preedit ? (op | PC_TYPING_PREEDIT) : op);
+    if (preedit) {
+        s_has_preedit = 1;
     }
 }
 
-/* Committed text from the input method. The first unit finishes the
- * syllable that is already in the editor as the composition. */
+/* Committed text from the built-in input method. Its first unit finishes
+ * the syllable that is in the editor as the composition. */
 static void emit_text(const uint16_t* units, int n) {
     int i;
 
+    if (n > 0) {
+        clear_preedit();
+    }
     for (i = 0; i < n; i++) {
-        int glyph = ko_charset_glyph(units[i]);
-
-        if (i == 0 && s_preedit >= 0) {
-            /* A syllable outside KS X 1001 has no glyph and is dropped */
-            emit_preedit(glyph);
-            push(PC_TYPING_CMD_COMMIT);
-            s_preedit = -1;
-        } else if (glyph >= 0) {
-            push(PC_TYPING_PAIR | glyph);
-        } else if (ascii_code(units[i]) >= 0) {
-            push(ascii_code(units[i]));
-        }
+        push_unit(units[i], FALSE);
     }
 }
 
@@ -116,7 +143,14 @@ static void update_preedit(void) {
             glyph = KO_GLYPH_JAMO_FIRST + (p - 0xAC00) / (21 * 28);
         }
     }
-    emit_preedit(glyph);
+    if (glyph != s_preedit) {
+        clear_preedit();
+        if (glyph >= 0) {
+            push(PC_TYPING_PREEDIT | PC_TYPING_PAIR | glyph);
+            s_has_preedit = 1;
+            s_preedit = glyph;
+        }
+    }
 }
 
 static void flush(void) {
@@ -131,7 +165,7 @@ int pc_typing_toggle_korean(void) {
     uint16_t out[KO_IME_MAX_COMMIT];
     int n;
 
-    if (!g_pc_ko_mode || !g_pc_typing_mode || !g_pc_editor_active) {
+    if (!g_pc_ko_mode || !g_pc_typing_mode || !g_pc_editor_active || pc_typing_system_ime()) {
         return 0;
     }
     n = ko_ime_toggle_mode(&s_ime, out);
@@ -156,7 +190,9 @@ int pc_typing_key(int key) {
         push(key);
         return 1;
     }
-    if (g_pc_ko_mode) {
+    if (pc_typing_system_ime()) {
+        push_unit((uint16_t)key, FALSE);
+    } else if (g_pc_ko_mode) {
         n = ko_ime_key(&s_ime, (char)key, out);
         emit_text(out, n);
         update_preedit();
@@ -170,13 +206,17 @@ void pc_typing_editor_open(int latin) {
     queue_clear();
     ko_ime_init(&s_ime);
     s_preedit = -1;
+    s_has_preedit = 0;
     if (g_pc_ko_mode) {
         uint16_t unused[KO_IME_MAX_COMMIT];
 
         ko_ime_set_mode(&s_ime, latin ? KO_IME_MODE_EN : KO_IME_MODE_KO, unused);
         g_pc_typing_mode = 1;
     }
-    if (g_pc_typing_mode) {
+    if (pc_typing_system_ime()) {
+        g_pc_typing_mode = 1;
+        SDL_StartTextInput(); /* shows the on-screen keyboard on phones */
+    } else if (g_pc_typing_mode) {
         SDL_StopTextInput(); /* keep the OS input method out of the way */
     }
     g_pc_editor_active = 1;
@@ -186,6 +226,48 @@ void pc_typing_editor_close(void) {
     g_pc_editor_active = 0;
     queue_clear();
     drop_composition();
+    if (pc_typing_system_ime()) {
+        SDL_StopTextInput();
+    }
+}
+
+/* Queues each code point of UTF-8 text (BMP only) */
+static void each_unit(const char* text, int preedit) {
+    const u8* p = (const u8*)text;
+
+    while (*p != '\0') {
+        u32 cp;
+
+        if (p[0] < 0x80) {
+            cp = *p++;
+        } else if ((p[0] & 0xE0) == 0xC0 && p[1] != '\0') {
+            cp = ((p[0] & 0x1F) << 6) | (p[1] & 0x3F);
+            p += 2;
+        } else if ((p[0] & 0xF0) == 0xE0 && p[1] != '\0' && p[2] != '\0') {
+            cp = ((p[0] & 0x0F) << 12) | ((p[1] & 0x3F) << 6) | (p[2] & 0x3F);
+            p += 3;
+        } else {
+            p++;
+            continue;
+        }
+        push_unit((uint16_t)cp, preedit);
+    }
+}
+
+void pc_typing_system_editing(const char* text) {
+    if (!g_pc_typing_mode || !g_pc_editor_active || !pc_typing_system_ime()) {
+        return;
+    }
+    clear_preedit();
+    each_unit(text, TRUE);
+}
+
+void pc_typing_system_text(const char* text) {
+    if (!g_pc_typing_mode || !g_pc_editor_active || !pc_typing_system_ime()) {
+        return;
+    }
+    clear_preedit();
+    each_unit(text, FALSE);
 }
 
 /* Character a key gives on a US QWERTY layout, or 0 */
@@ -228,7 +310,18 @@ void pc_typing_handle_event(const SDL_Event* event) {
     Uint16 mod;
     int c;
 
-    if (event->type != SDL_KEYDOWN || !g_pc_editor_active) {
+    if (!g_pc_editor_active) {
+        return;
+    }
+    if (event->type == SDL_TEXTEDITING) {
+        pc_typing_system_editing(event->edit.text);
+        return;
+    }
+    if (event->type == SDL_TEXTINPUT) {
+        pc_typing_system_text(event->text.text);
+        return;
+    }
+    if (event->type != SDL_KEYDOWN) {
         return;
     }
     sym = event->key.keysym.sym;
@@ -238,7 +331,7 @@ void pc_typing_handle_event(const SDL_Event* event) {
         g_pc_typing_mode ^= 1;
         queue_clear();
         drop_composition();
-        if (g_pc_typing_mode) {
+        if (g_pc_typing_mode && !pc_typing_system_ime()) {
             SDL_StopTextInput();
         }
         return;
@@ -269,8 +362,8 @@ void pc_typing_handle_event(const SDL_Event* event) {
         default:
             break;
     }
-    if (mod & (KMOD_CTRL | KMOD_ALT | KMOD_GUI)) {
-        return;
+    if ((mod & (KMOD_CTRL | KMOD_ALT | KMOD_GUI)) || pc_typing_system_ime()) {
+        return; /* with the system's input method, text comes as SDL_TEXTINPUT */
     }
     c = key_char(sym, mod);
     if (c != 0) {
