@@ -7,9 +7,9 @@
 
 #include "pc_platform.h"
 #include "pc_typing.h"
-#include "graph.h"
 #include "m_font.h"
 #include "m_rcp.h"
+#include "graph.h"
 
 #define PANEL_LEFT 76.0f
 #define PANEL_TOP 150.0f

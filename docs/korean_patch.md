@@ -73,9 +73,18 @@ PC 포트는 자체 번역을 만드는 대신, 사용자가 직접 적용한 �
     원래 코드로 그리면 깨진다).
   - `mLE_ledit_ovl_init`: 말버릇(EPHRASE)·리셋·요청 편집은 섹션 7의 새 버퍼를 쓰고, `mLE_move_Wait`의
     두 훅이 그 버퍼에서 결과를 옮긴다(길이가 늘어난 것으로 보임, 미대응).
-- 고정 길이 상수: 지명·이름 등 필드 길이(2→4 등). 원본과 패치의 `.text`를 비교하면 훅 말고 직접 바뀐
-  명령은 32곳이다(`mBm_init_BDMsg_Mail`, `mNtc_set_landname_string`, `mBD_board_ovl_init`, `mPM/mAL/mHB/mTI_*`,
-  `mNT_set_day_strings_dl`, `mTG_price_draw`, `player_select_draw_title`, RTC 연도 상한 등). 대부분 미대응.
+- 고정 길이 상수와 옮긴 문자열: 원본과 패치의 `.text`를 비교하면 훅 말고 직접 바뀐 명령은 32곳이고,
+  대부분 문자열 복사 길이(2→4, 5→6 등)다. 그 문자열 자체는 패치가 섹션 7에 새로 두고 주소 재배치를
+  그쪽으로 돌렸다(`reldis.py retarget 패치.rel 원본.rel`로 130곳: `.text` 참조와 `.data` 표의 포인터).
+  - PC 구현: `pc_ko_patched_str`(섹션 7 오프셋으로 문자열), `pc_ko_data_ptr`/`pc_ko_data_u32`(디스크의
+    `.data`에 있는 포인터·길이; 포인터가 `.data`를 가리키면 디스크 사본을 준다 — 제자리에서 길어진
+    문자열이 PC 객체 크기를 넘기 때문).
+  - 대응함: 생일 편지·편지지 맺음말("드림"), 알림판 마을 접미사("마을", 패치는 4바이트를 쓰고 2로 세지만
+    PC는 4로 센다), 낚시 기록 마을("쿠니치"), 분실물 이름, 하니와 메시지 표("それ" 접두어 없음), 지도 라벨
+    (한 줄), 배치 불가 효과 문자열("위엔 못 둬!"/"이미 있어!").
+  - 미대응: `mPM/mAL/mHB/mTI_*`(비밀번호·알람·시간 입력), `mNT_set_day_strings_dl`, `mTG_price_draw`,
+    `aMKBC_clip_set_itemstr3`, `player_select_draw_title`, `mMsg_sound_CodeVoice`, 말소리 `voice$3952`,
+    RTC 연도 상한(2032→2100), SD·필름 경고 문자열(`fl_strb_*`, `wr_*`).
 - 그 밖: 화면 비율(시야·직교 행렬·카메라), RTC 연도 상한 2032→2100, 구역 경계 달리기, 부팅 주민의
   한자 메뉴 → 화면 비율 메뉴
 

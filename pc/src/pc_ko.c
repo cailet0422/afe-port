@@ -58,9 +58,116 @@ static u32 slot_used[KO_SLOTS];
 static u32 use_clock = 0;
 static u8* s7 = NULL; /* copy of the patch's section 7 */
 static u32 s7_size = 0;
+static u8* rel_data = NULL; /* copy of the patched foresta .data */
+static u32 rel_data_size = 0;
+
+/* Pointers in the patched foresta .data that point into .data or section 7,
+ * in offset order */
+typedef struct {
+    u32 offset;  /* in .data */
+    u32 section; /* REL_SECTION_DATA or REL_SECTION_PATCH_CODE */
+    u32 target;
+} DataRedirect;
+static DataRedirect* data_redirects = NULL;
+static int data_redirect_count = 0;
 
 static u32 rd32(const u8* p) {
     return ((u32)p[0] << 24) | ((u32)p[1] << 16) | ((u32)p[2] << 8) | p[3];
+}
+
+/* Collects the .data relocations that point into .data or section 7 */
+static void scan_data_redirects(const u8* rel, u32 size) {
+    u32 module_id = rd32(rel);
+    u32 imp_offset = rd32(rel + 0x28);
+    u32 imp_size = rd32(rel + 0x2C);
+    int capacity = 0;
+    u32 i;
+
+    for (i = 0; i + 8 <= imp_size && imp_offset + i + 8 <= size; i += 8) {
+        u32 p = rd32(rel + imp_offset + i + 4);
+        u32 sec = 0;
+        u32 off = 0;
+
+        if (rd32(rel + imp_offset + i) != module_id) {
+            continue;
+        }
+        while (p + 8 <= size) {
+            u16 delta = (u16)((rel[p] << 8) | rel[p + 1]);
+            u8 type = rel[p + 2];
+            u8 section = rel[p + 3];
+            u32 addend = rd32(rel + p + 4);
+
+            p += 8;
+            if (type == 203) { /* R_DOLPHIN_END */
+                break;
+            }
+            if (type == 202) { /* R_DOLPHIN_SECTION */
+                sec = section;
+                off = 0;
+                continue;
+            }
+            off += delta;
+            if (type == 1 && sec == REL_SECTION_DATA &&
+                (section == REL_SECTION_DATA || section == REL_SECTION_PATCH_CODE)) { /* R_PPC_ADDR32 */
+                if (data_redirect_count == capacity) {
+                    capacity = capacity ? capacity * 2 : 1024;
+                    data_redirects = (DataRedirect*)realloc(data_redirects, capacity * sizeof(DataRedirect));
+                }
+                data_redirects[data_redirect_count].offset = off;
+                data_redirects[data_redirect_count].section = section;
+                data_redirects[data_redirect_count].target = addend;
+                data_redirect_count++;
+            }
+        }
+    }
+}
+
+const u8* pc_ko_s7(u32 offset) {
+    return (s7 != NULL && offset < s7_size) ? s7 + offset : NULL;
+}
+
+const u8* pc_ko_patched_str(u32 s7_offset, const u8* original) {
+    const u8* p = g_pc_ko_mode ? pc_ko_s7(s7_offset) : NULL;
+
+    return p != NULL ? p : original;
+}
+
+const void* pc_ko_data_ptr(u32 offset, const void* original) {
+    int lo = 0;
+    int hi = data_redirect_count - 1;
+
+    if (!g_pc_ko_mode) {
+        return original;
+    }
+    /* Relocations are listed in offset order */
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        const DataRedirect* r = &data_redirects[mid];
+
+        if (r->offset == offset) {
+            if (r->section == REL_SECTION_PATCH_CODE && r->target < s7_size) {
+                return s7 + r->target;
+            }
+            /* Text the patch lengthened in place can run past the PC object */
+            if (r->section == REL_SECTION_DATA && r->target < rel_data_size) {
+                return rel_data + r->target;
+            }
+            break;
+        }
+        if (r->offset < offset) {
+            lo = mid + 1;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    return original;
+}
+
+u32 pc_ko_data_u32(u32 offset, u32 original) {
+    if (!g_pc_ko_mode || rel_data == NULL || offset + 4 > rel_data_size) {
+        return original;
+    }
+    return rd32(rel_data + offset);
 }
 
 void pc_ko_init(void) {
@@ -101,6 +208,10 @@ void pc_ko_init(void) {
             s7 = (u8*)malloc(patch_size);
             memcpy(s7, rel + s7_offset, patch_size);
             s7_size = patch_size;
+            rel_data = (u8*)malloc(data_size);
+            memcpy(rel_data, rel + data_offset, data_size);
+            rel_data_size = data_size;
+            scan_data_redirects(rel, size);
         } else {
             printf("[PC] Korean patch: unexpected code section size %u, text features off\n", (unsigned)patch_size);
         }

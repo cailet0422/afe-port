@@ -61,6 +61,31 @@ u8* pc_ko_word_ending(u8* ending);
  * last sound. */
 void pc_ko_fix_josa(u8* text, int len);
 
+/* Strings the patch moved into its own code section (foresta.rel section 7).
+ * pc_ko_patched_str returns the patch's text at s7_offset in Korean mode and
+ * original otherwise. Offsets are those of v0.9.2, found with
+ * `pc/tools/reldis.py retarget` (docs/pc_port/korean_patch.md). */
+#define PC_KO_S7_BIRTHDAY_FOOTER 0xC124 /* footer_str$510 in mBm_init_BDMsg_Mail, 4 bytes */
+#define PC_KO_S7_FISH_LAND 0xC12C       /* l_name$544 in mEv_fishRecord_local, 6 bytes */
+#define PC_KO_S7_LAND_SUFFIX 0xC134     /* land_name_end in m_notice.c, 4 bytes */
+#define PC_KO_S7_LOST_ITEM 0xC13C       /* str$521 in watch_my_step_move, 6 bytes */
+#define PC_KO_S7_TURI_LAND 0xC154       /* l_name$572 in aTRC_clip_random_topsize, 6 bytes */
+#define PC_KO_S7_BOARD_FOOTER 0xC15C    /* footer_str$885 in mBD_board_ovl_init, 4 bytes */
+const u8* pc_ko_s7(u32 offset);
+const u8* pc_ko_patched_str(u32 s7_offset, const u8* original);
+
+/* A pointer or 32-bit value at a foresta .data offset as the patched disc
+ * has it, for tables of string pointers and lengths (not overlaid because
+ * they hold pointers). pc_ko_data_ptr returns the text the field points
+ * to on the disc (the patch's section or the disc's copy of .data, since the
+ * patch lengthens some strings in place), or original. */
+#define PC_KO_DATA_HANIWA_MSG_TABLE 0x590DC /* mes_data_tbl$461 in mHW_make_cond_message */
+#define PC_KO_DATA_MAP_LABELS 0x59AF8       /* mMP_label_data */
+#define PC_KO_DATA_ESTRING_CLASS1 0x604BC   /* eString_string1_class */
+#define PC_KO_DATA_ESTRING_CLASS2 0x604D4   /* eString_string2_class */
+const void* pc_ko_data_ptr(u32 offset, const void* original);
+u32 pc_ko_data_u32(u32 offset, u32 original);
+
 struct game_s;
 
 /* Draws the keyboard help that replaces the text editor's input panel; x and

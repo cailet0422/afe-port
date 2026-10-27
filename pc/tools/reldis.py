@@ -2,6 +2,7 @@
 """Inspect a (patched) foresta.rel using the decomp's symbols.
 
     reldis.py hooks REL                  # references from original sections into added sections
+    reldis.py retarget REL ORIG_REL      # address references the patch moved into added sections
     reldis.py dis REL SECTION START END  # disassemble with relocation targets annotated
 
 Needs powerpc-linux-gnu-objdump (apt install binutils-powerpc-linux-gnu) for `dis`.
@@ -76,6 +77,16 @@ def main():
     mid, secs, relocs = parse_rel(d)
     dol = load_syms(CFG / "symbols.txt")
     mod = load_syms(CFG / "foresta" / "symbols.txt")
+    if cmd == "retarget":
+        _, _, orig_relocs = parse_rel(Path(sys.argv[3]).read_bytes())
+        orig = {(ts, off): (m, sec, ad) for (ts, off, t, m, sec, ad) in orig_relocs}
+        for tsec, toff, typ, imod, ssec, addend in sorted(relocs):
+            if tsec in SECTION_NAMES and imod == mid and ssec not in SECTION_NAMES and typ != 10:
+                o = orig.get((tsec, toff))
+                was = target_name(mid, dol, mod, *o) if o else "-"
+                site = lookup(mod, SECTION_NAMES[tsec], toff)
+                print(f"{site:50s} {SECTION_NAMES[tsec]}+{toff:#08x} {was:40s} -> s{ssec}+{addend:#06x} (type {typ})")
+        return
     if cmd == "hooks":
         for tsec, toff, typ, imod, ssec, addend in sorted(relocs):
             if tsec in SECTION_NAMES and imod == mid and ssec not in SECTION_NAMES:
