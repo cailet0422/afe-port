@@ -288,6 +288,12 @@ set_source_files_properties("${DECOMP_ROOT}/src/static/boot.c" PROPERTIES COMPIL
 # so those references never need resolving.
 add_compile_options(-ffunction-sections -fdata-sections)
 
+# MinGW lays out bit-fields the MSVC way by default; the game's structs (and
+# the data that fills them) assume the GCC/SysV layout used everywhere else.
+if(MINGW)
+    add_compile_options(-mno-ms-bitfields)
+endif()
+
 # Decomp C files use nullptr; define it as NULL for C compilation.
 add_compile_options($<$<COMPILE_LANGUAGE:C>:-Dnullptr=NULL>)
 
@@ -358,7 +364,9 @@ add_custom_command(TARGET afe_pc POST_BUILD
 )
 
 if(WIN32)
-    find_file(SDL2_DLL_PATH SDL2.dll PATHS "$ENV{MINGW_PREFIX}/bin")
+    # MSYS2 keeps it in $MINGW_PREFIX/bin; the SDL2 MinGW devel package (for
+    # cross builds) next to its lib/cmake/SDL2
+    find_file(SDL2_DLL_PATH SDL2.dll PATHS "$ENV{MINGW_PREFIX}/bin" "${SDL2_DIR}/../../../bin" NO_CMAKE_FIND_ROOT_PATH)
     if(SDL2_DLL_PATH)
         add_custom_command(TARGET afe_pc POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different "${SDL2_DLL_PATH}" "${CMAKE_BINARY_DIR}/bin/"

@@ -99,3 +99,18 @@ void osSyncPrintf(const char* fmt, ...) { (void)fmt; }
 void osWritebackDCache(void* vaddr, u32 nbytes) { (void)vaddr; (void)nbytes; }
 
 int vaprintf(void* func, const char* fmt, va_list ap) { (void)func; (void)fmt; (void)ap; return 0; }
+
+/* Dead code that only ELF links tolerate. GCC's -O0 keeps unused static
+ * functions; ELF's --gc-sections drops them before resolving their
+ * references, the PE linker (MinGW) does not. */
+
+/* GX command processor registers: Padclamp.c's unused __GXReadCPCounterU32
+ * reads them; the GX emulation never maps them. */
+u16* __cpReg = NULL;
+
+/* ac_npc2.c includes ac_npc_talk.c_inc, whose aNPC_getP_move_target calls
+ * these static helpers that only ac_npc.c defines; npc2 never reaches it. */
+void* aNPC_check_balloon(void* nactorx, void* play) { (void)nactorx; (void)play; return NULL; }
+void* aNPC_check_ball(void* nactorx, void* play) { (void)nactorx; (void)play; return NULL; }
+void* aNPC_check_gyoei(void* nactorx) { (void)nactorx; return NULL; }
+void* aNPC_check_insect(void* nactorx, void* play) { (void)nactorx; (void)play; return NULL; }

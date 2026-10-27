@@ -111,6 +111,12 @@ void AIInit(u8* stack) {
                have.freq, have.format, have.channels, have.samples, want.freq);
     } else {
         printf("[AUDIO] Failed to open: %s\n", SDL_GetError());
+        /* The game waits for the sound system to run, so keep consuming
+         * samples in real time without output (no device, e.g. no speakers) */
+        if (SDL_AudioInit("dummy") == 0) {
+            audio_device = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
+        }
+        printf("[AUDIO] %s\n", audio_device != 0 ? "Running without sound" : SDL_GetError());
     }
 }
 

@@ -169,6 +169,9 @@ void pc_platform_init(void) {
         exit(1);
     }
 
+    printf("[PC] OpenGL %s (%s, %s)\n", (const char*)glGetString(GL_VERSION), (const char*)glGetString(GL_RENDERER),
+           (const char*)glGetString(GL_VENDOR));
+
     SDL_GL_SetSwapInterval(g_pc_settings.vsync);
 
     pc_platform_update_window_size();

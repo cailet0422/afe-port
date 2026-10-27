@@ -65,7 +65,19 @@
    cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
    ```
 
-Windows는 MSYS2 **MINGW32** 셸에서 같은 순서로 빌드하는 것을 목표로 한다(아직 미검증).
+### Windows (32비트)
+
+- 리눅스에서 교차 빌드(검증됨): `gcc-mingw-w64-i686 g++-mingw-w64-i686`와 SDL2 MinGW 개발 패키지
+  (`SDL2-devel-2.30.x-mingw.tar.gz`, libsdl-org/SDL 릴리스)를 받아
+  ```sh
+  cmake -S pc -B pc/buildwin -G Ninja -DCMAKE_TOOLCHAIN_FILE=$PWD/pc/cmake/Toolchain-mingw32.cmake \
+        -DSDL2_DIR=<SDL2>/i686-w64-mingw32/lib/cmake/SDL2 -DPC_BUILD_TESTS=OFF
+  ninja -C pc/buildwin
+  ```
+  `pc/buildwin/bin/`에 exe, `SDL2.dll`(자동 복사), `shaders/`, `.relmap`이 생긴다. 이 폴더째 Windows로 옮기고
+  `rom/`에 디스크 이미지를 넣으면 된다. 필요한 DLL은 `SDL2.dll`뿐(그 밖은 Windows 기본).
+- MSYS2 **MINGW32** 셸: `pacman -S mingw-w64-i686-{gcc,cmake,ninja,SDL2,python}` 후 리눅스와 같은 순서(미검증).
+- Wine으로 실행 확인: 오프닝·한글 이름 입력·새 게임 → 마을 경로가 리눅스 빌드와 같은 결과.
 
 빌드하면 `bin/`에 `DobutsuNoMoriEPlus.relmap`이 함께 생긴다. 실행 파일은 이 표를 보고 REL 데이터를
 실행 중인 디스크에서 다시 읽으므로 두 파일을 같은 폴더에 둔다.
@@ -89,7 +101,7 @@ Windows는 MSYS2 **MINGW32** 셸에서 같은 순서로 빌드하는 것을 목�
 | 단계 | 내용 | 상태 |
 |---|---|---|
 | M0 | `TARGET_PC` 훅 병합, 매칭 유지 검증, PC 빌드 링크 | 완료 |
-| M1 | Linux/Windows에서 타이틀 화면까지 부팅 | Linux 완료 (타이틀 데모의 마을·로고·"Press Start Button!" 렌더링 확인), Windows 빌드 미검증 |
+| M1 | Linux/Windows에서 타이틀 화면까지 부팅 | 완료: Linux, Windows(리눅스에서 MinGW 교차 빌드, Wine으로 실행 확인) |
 | M2 | 마을 플레이, 세이브(메모리 카드 파일), e+ 전용 기능(SD/e-Reader/GBA)은 우회 | 진행 중: 한글 디스크로 역 → 너굴 → 집 구경·선택 → 자유 이동 → 소지품 화면까지 크래시 없음(`pc/tools/make_newgame_script.py`). 저장은 집 문 왼쪽의 토용군(하니와)에게서 하는데 첫날은 너굴 상점(1구역 4번지) 아르바이트를 마쳐야 한다("조금만 더 아르바이트 힘내 주세용"). 아르바이트 경로·저장·불러오기 남음 |
 | M3 | 오디오 정상화, 패미컴(FixNES) | 예정 |
 | M4 | 64비트 정리(포인터↔u32), Android(arm64, SDL2 + GLES3, 터치 입력) | 예정 |

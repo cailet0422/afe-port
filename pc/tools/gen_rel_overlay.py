@@ -47,7 +47,8 @@ STRUCT_PREFIXES = {
 }
 
 SYMBOL = re.compile(r"^(\S+) = (\.\w+):0x([0-9A-Fa-f]+);.*?size:0x([0-9A-Fa-f]+)")
-MAP_SECTION = re.compile(r"^ (\.(?:data|rodata)(?:\.rel(?:\.ro)?)?(?:\.local)?)\.(\S+)(?:\s+0x([0-9a-f]+)\s+0x([0-9a-f]+)\s+(\S+))?$")
+# ELF: .data.NAME, .rodata.NAME, .data.rel.local.NAME; PE (MinGW): .data$NAME, .rdata$NAME
+MAP_SECTION = re.compile(r"^ (\.(?:data|rodata|rdata)(?:\.rel(?:\.ro)?)?(?:\.local)?)[.$](\S+)(?:\s+0x([0-9a-f]+)\s+0x([0-9a-f]+)\s+(\S+))?$")
 MAP_CONT = re.compile(r"^\s+0x([0-9a-f]+)\s+0x([0-9a-f]+)\s+(\S+)$")
 MAP_SYMBOL = re.compile(r"^\s+0x([0-9a-f]+)\s+(\w+)$")
 DECL = re.compile(r"^[ \t]*(?:static\s+)?(?:const\s+)?([A-Za-z_][\w ]*?)\s+(\w+)\s*((?:\[[^\]]*\]\s*)+)(?:ATTRIBUTE_ALIGN\(\d+\)\s*)?=", re.M)
@@ -158,7 +159,7 @@ def main():
     build_dir = Path(args.map).resolve().parent
 
     def decl_type(obj, name):
-        src = obj[:-2] if obj.endswith(".o") else obj
+        src = re.sub(r"\.(o|obj)$", "", obj)
         m = re.match(r"CMakeFiles/[^/]+\.dir/(.*)$", src)
         if not m:
             return None
@@ -196,13 +197,17 @@ def main():
                 # function-local statics are named base.N
                 cands += [(obj, key) for key in local_statics.get(base, ()) for obj in objects_by_name[key]]
             if unit:
-                in_unit = [c for c in cands if c[0].endswith("/" + unit + ".o")]
+                in_unit = [c for c in cands if re.search(re.escape("/" + unit) + r"\.(o|obj)$", c[0])]
                 if in_unit:
                     cands = in_unit
             elif module in ("foresti", "foresto"):
                 cands = [c for c in cands if f"/assetdis/{module}/" in c[0]] or cands
             # keep candidates whose size matches
             sized = [(c, v) for c in cands for v in entries[c] if v[1] == size]
+            if not sized:
+                # PE maps list sections padded to their alignment (3 bytes as 4)
+                sized = [(c, v) for c in cands for v in entries[c]
+                         if c[0].endswith(".obj") and size < v[1] <= (size + 31) & ~31]
             if len(sized) != 1:
                 stats["unmatched" if not sized else "ambiguous"] += 1
                 continue

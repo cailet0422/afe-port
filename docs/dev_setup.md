@@ -78,3 +78,21 @@ cp ../bin/settings.ini ../bin/keybindings.ini . && ln -sfn /tmp/disc/ko.iso rom/
 돌리면 `shots/name_*.ppm`, `town_*.ppm`, `eng_*.ppm`에 단계별 화면이 남는다.
 패치의 코드 분석은 `pc/tools/reldis.py hooks|dis`(패치된 foresta.rel은 `gcdisc.py extract`로 꺼냄)와
 [korean_patch.md](korean_patch.md) 참고.
+
+## 6. Windows 빌드와 Wine 확인
+
+```sh
+apt-get install -y gcc-mingw-w64-i686 g++-mingw-w64-i686 wine32:i386 wine
+mkdir -p /tmp/sdl2mingw && curl -sSL https://github.com/libsdl-org/SDL/releases/download/release-2.30.9/SDL2-devel-2.30.9-mingw.tar.gz | tar xz -C /tmp/sdl2mingw
+cmake -S pc -B pc/buildwin -G Ninja -DCMAKE_TOOLCHAIN_FILE=$PWD/pc/cmake/Toolchain-mingw32.cmake \
+      -DSDL2_DIR=/tmp/sdl2mingw/SDL2-2.30.9/i686-w64-mingw32/lib/cmake/SDL2 -DPC_BUILD_TESTS=OFF
+ninja -C pc/buildwin
+cd pc/buildwin/bin && mkdir -p rom && ln -sfn /tmp/disc/ko.iso rom/game.iso && cp ../../build32/bin/settings.ini .
+WINEPREFIX=/tmp/wineprefix WINEDEBUG=-all wine DobutsuNoMoriEPlus.exe --no-framelimit --script-fast \
+      --input-script 'Z:\tmp\op_fast.txt'
+```
+
+- MinGW 차이: 비트필드 배치(`-mno-ms-bitfields`로 맞춤), PE 링커는 버려질 함수의 미정의 참조도 오류로 봄
+  (`pc_stubs.c`), 링크 맵 형식(`.data$이름`, 4바이트 단위 크기; `gen_rel_overlay.py`가 둘 다 읽음).
+- Wine에는 사운드 장치가 없어서 오디오가 SDL `dummy`로 대체된다(실제 Windows에서 출력 장치가 없을 때도 같음).
+- Xvfb가 꺼지면 Wine은 "no driver could be loaded"로 창을 못 만든다.
