@@ -148,13 +148,6 @@ s32 GBAJoyBoot(s32 chan, s32 palette_color, s32 palette_speed, u8* programp, s32
     return GBA_NOT_READY;
 }
 
-/* --- Libultra ------------------------------------------------------------ */
-
-BOOL osIsTerminatedThread(OSThread* t) {
-    (void)t;
-    return FALSE;
-}
-
 /* --- ACGC model viewer (not ported) -------------------------------------- */
 
 int g_pc_model_viewer = 0;

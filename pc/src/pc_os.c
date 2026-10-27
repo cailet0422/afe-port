@@ -196,21 +196,71 @@ int osRecvMesg(void* mq, void** msg, int flags) {
     return OSReceiveMessage(mq, msg, flags) ? 0 : -1;
 }
 
-static void (*pending_thread_entry)(void*) = NULL;
-static void* pending_thread_arg = NULL;
+/* Threads are not run on PC: the game loop is driven directly (graph),
+ * and the IRQ/pad managers are polled. e+ also starts short-lived worker
+ * threads (indoor/outdoor data reload, SD card access) whose bodies run to
+ * completion; those run synchronously inside osStartThread instead. */
+#define PC_THREAD_ID_RELOAD_DATA 14
+#define PC_THREAD_ID_MEMCARD 15
+#define PC_MAX_THREADS 16
+
+typedef struct {
+    void* thread;
+    int id;
+    void (*entry)(void*);
+    void* arg;
+} PCThreadSlot;
+
+static PCThreadSlot pc_threads[PC_MAX_THREADS];
+
+static PCThreadSlot* pc_thread_slot(void* thread, int create) {
+    PCThreadSlot* free_slot = NULL;
+    int i;
+
+    for (i = 0; i < PC_MAX_THREADS; i++) {
+        if (pc_threads[i].thread == thread) {
+            return &pc_threads[i];
+        }
+        if (free_slot == NULL && pc_threads[i].thread == NULL) {
+            free_slot = &pc_threads[i];
+        }
+    }
+    if (create && free_slot != NULL) {
+        free_slot->thread = thread;
+    }
+    return create ? free_slot : NULL;
+}
 
 void osCreateThread2(void* thread, int id, void (*entry)(void*), void* arg,
                      void* stack, int stack_size, int priority) {
-    (void)thread; (void)id; (void)stack; (void)stack_size; (void)priority;
-    pending_thread_entry = entry;
-    pending_thread_arg = arg;
+    PCThreadSlot* slot = pc_thread_slot(thread, TRUE);
+
+    (void)stack; (void)stack_size; (void)priority;
+    if (slot != NULL) {
+        slot->id = id;
+        slot->entry = entry;
+        slot->arg = arg;
+    }
 }
 
 void osStartThread(void* thread) {
-    /* don't actually start threads — single-threaded mode */
-    (void)thread;
-    pending_thread_entry = NULL;
-    pending_thread_arg = NULL;
+    PCThreadSlot* slot = pc_thread_slot(thread, FALSE);
+
+    if (slot == NULL || slot->entry == NULL) {
+        return;
+    }
+    if (slot->id == PC_THREAD_ID_RELOAD_DATA || slot->id == PC_THREAD_ID_MEMCARD) {
+        void (*entry)(void*) = slot->entry;
+
+        slot->entry = NULL; /* terminated once the body returns */
+        entry(slot->arg);
+    }
+}
+
+BOOL osIsTerminatedThread(void* thread) {
+    PCThreadSlot* slot = pc_thread_slot(thread, FALSE);
+
+    return slot == NULL || slot->entry == NULL || (slot->id != PC_THREAD_ID_RELOAD_DATA && slot->id != PC_THREAD_ID_MEMCARD);
 }
 
 void osSetThreadPri(void* thread, int pri) { (void)thread; (void)pri; }

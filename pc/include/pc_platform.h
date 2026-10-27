@@ -30,7 +30,7 @@
 #define PC_WINDOW_TITLE   "Animal Crossing"
 
 #define PC_MAIN_MEMORY_SIZE   (24 * 1024 * 1024)
-#define PC_ARAM_SIZE          (16 * 1024 * 1024)
+#define PC_ARAM_SIZE          (32 * 1024 * 1024) /* GC has 16MB; e+ also keeps famicom.arc here on PC */
 #define PC_FIFO_SIZE          (256 * 1024)
 
 #define PC_PI  3.14159265358979323846

@@ -73,6 +73,7 @@ add_compile_definitions(
     VERSION=${AFE_VERSION_NUM}
     F3DEX_GBI_2
     NDEBUG
+    BUGFIXES          # Original out-of-bounds bugs that corrupt host memory (e.g. m_collision_bg_column)
     _LANGUAGE_C       # Required for N64 GBI/ultratypes headers
     PC_ENHANCEMENTS   # Optional visual improvements (MSAA, etc). Remove to get pure PC port.
 )
@@ -81,6 +82,7 @@ add_compile_options(
     -fno-strict-aliasing
     -fwrapv
     -malign-double    # PowerPC aligns double/long long to 8 bytes inside structs
+    -g
 )
 
 # =============================================================================
@@ -170,6 +172,19 @@ include("${MODULE_DATA_DIR}/module_data.cmake")
 include_directories(BEFORE "${MODULE_DATA_DIR}/include")
 list(APPEND DECOMP_C_SOURCES ${GENERATED_DATA_SOURCES})
 
+# Raw big-endian blobs that game code reads as typed data, swapped at boot.
+set(DATA_FIXUPS_C "${MODULE_DATA_DIR}/pc_data_fixups.c")
+execute_process(
+    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_data_fixups.py"
+            ${AFE_VERSION} "${DATA_FIXUPS_C}" "${DECOMP_SOURCES_CMAKE}" "${MODULE_DATA_DIR}/module_data.cmake"
+    WORKING_DIRECTORY "${DECOMP_ROOT}"
+    RESULT_VARIABLE GEN_FIXUPS_RESULT
+)
+if(NOT GEN_FIXUPS_RESULT EQUAL 0)
+    message(FATAL_ERROR "gen_data_fixups.py failed")
+endif()
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_data_fixups.py")
+
 # The system font is linked from an .s file with .incbin on GameCube; embed it as a C array.
 set(SYSTEM_FONT_BFN "${DECOMP_BUILD_DIR}/bin/assets/JSystem/JUtility/FontData/Ascfont_fix12.bfn")
 set(SYSTEM_FONT_C "${CMAKE_BINARY_DIR}/gen/pc_system_font.c")
@@ -188,6 +203,7 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_main.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_boot_fixups.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_sdk_extra.c
+    ${DATA_FIXUPS_C}
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_gx.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_gx_tev.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_gx_texture.c
@@ -338,6 +354,9 @@ if(WIN32)
 endif()
 
 target_link_options(afe_pc PRIVATE -Wl,--gc-sections)
+if(NOT WIN32)
+    target_link_options(afe_pc PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/cmake/exe_exports.map")
+endif()
 
 if(MINGW)
     target_link_options(afe_pc PRIVATE -static-libgcc -static-libstdc++ -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic)

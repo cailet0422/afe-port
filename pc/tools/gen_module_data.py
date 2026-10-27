@@ -85,6 +85,8 @@ def extract_assets(bad, version, module, work, out):
         by_name.setdefault(obj.symbol.name, []).append(obj)
 
     count = 0
+    for path in sorted((work / "src").rglob("*.c")):
+        rewrite_pointer_tables(path, by_name)
     for entry in parse_fragment(work / "extract.fragment.yml"):
         symbol = entry["symbol"]
         if "!" in symbol:
@@ -115,6 +117,44 @@ def extract_assets(bad, version, module, work, out):
             raise ValueError(f"{module}: unsupported asset kind for {symbol}: {entry}")
         count += 1
     return count
+
+
+RAW_DEF = re.compile(r'^(static\s+)?u8\s+(\w+)\s*\[\]\s*(?:ATTRIBUTE_ALIGN\(\d+\)\s*)?=\s*\{\s*\n#include\s+"assets/[^"]+"\s*\n\};\n?', re.M)
+POINTER_MARKER = "/* Pointer tables rewritten by gen_module_data.py */\n"
+
+
+def rewrite_pointer_tables(source_path, by_name):
+    """batch_assetdis emits pointer tables as raw bytes, which loses the
+    pointers; rewrite tables that consist only of 4-byte references."""
+    text = source_path.read_text(encoding="utf-8")
+    if POINTER_MARKER in text:
+        return 0
+    defined_here = set(GLOBAL_DEF.findall(text)) | set(re.findall(r"\b(\w+)\s*\[\]\s*(?:ATTRIBUTE_ALIGN\(\d+\)\s*)?=", text))
+    tables = []
+    for m in RAW_DEF.finditer(text):
+        objs = by_name.get(m.group(2), [])
+        if len(objs) != 1 or not objs[0].references:
+            continue
+        obj = objs[0]
+        refs = obj.references
+        if obj.symbol.size % 4 or len(refs) * 4 != obj.symbol.size or any(off % 4 for off in refs):
+            continue
+        targets = [refs[off] for off in sorted(refs)]
+        tables.append((m, targets))
+    if not tables:
+        return 0
+    externs = sorted({t for _, targets in tables for t in targets if t not in defined_here})
+    out = text
+    for m, targets in reversed(tables):
+        out = out[: m.start()] + out[m.end() :]
+    out += "\n" + POINTER_MARKER
+    out += "".join(f"extern u8 {t}[];\n" for t in externs)
+    for m, targets in tables:
+        static = m.group(1) or ""
+        body = "".join(f"    {t},\n" for t in targets)
+        out += f"\n{static}void* {m.group(2)}[] = {{\n{body}}};\n"
+    source_path.write_text(out, encoding="utf-8")
+    return len(tables)
 
 
 RENAME_MARKER = "/* Renamed: also defined by an earlier module in the PC build */\n"
