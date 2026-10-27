@@ -1,6 +1,7 @@
 /* pc_vi.c - video interface → SDL window swap + frame pacing */
 #include "pc_platform.h"
 #include "pc_input_script.h"
+#include "pc_touch.h"
 
 #define VI_TVMODE_NTSC_INT    0
 #define VI_TVMODE_NTSC_DS     1
@@ -38,6 +39,7 @@ void VIWaitForRetrace(void) {
         return;
     }
 
+    pc_touch_draw();
     if (!pc_input_script_frame(pc_frame_counter)) {
         g_pc_running = 0;
     }

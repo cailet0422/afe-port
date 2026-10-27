@@ -64,5 +64,10 @@ void pc_android_prepare(void) {
     }
 
     SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+    /* The back button opens the pause menu instead of closing the app, and
+     * touches are only the on-screen pad's (pc_touch.c), not mouse clicks */
+    SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
+    SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+    SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
 }
 #endif

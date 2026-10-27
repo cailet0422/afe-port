@@ -254,6 +254,7 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_dvd.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_pad.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_typing.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_touch.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_android.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_input_script.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_ko.c

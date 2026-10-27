@@ -1,5 +1,6 @@
 /* pc_input_script.c - see pc_input_script.h */
 #include "pc_input_script.h"
+#include "pc_touch.h"
 #include "pc_typing.h"
 
 #include <ctype.h>
@@ -19,6 +20,7 @@ typedef enum {
     SCRIPT_TYPE,
     SCRIPT_EDIT,
     SCRIPT_TEXT,
+    SCRIPT_TOUCH,
 } ScriptKind;
 
 typedef struct {
@@ -28,6 +30,8 @@ typedef struct {
     u16 buttons;
     s8 stick_x;
     s8 stick_y;
+    float touch[4]; /* TOUCH: where the finger lands, then where it moves (0-1) */
+    int touch_moves;
     char name[128];
 } ScriptEvent;
 
@@ -90,6 +94,7 @@ int pc_input_script_load(const char* path) {
         ScriptEvent ev;
         char word[64] = "";
         char arg[128] = "";
+        char arg2[32] = "";
         char* hash = strchr(line, '#');
         unsigned long frame;
         int fields;
@@ -98,7 +103,7 @@ int pc_input_script_load(const char* path) {
         if (hash != NULL) {
             *hash = '\0';
         }
-        fields = sscanf(line, "%lu %63s %127s", &frame, word, arg);
+        fields = sscanf(line, "%lu %63s %127s %31s", &frame, word, arg, arg2);
         if (fields <= 0) {
             continue; /* blank or comment */
         }
@@ -121,6 +126,21 @@ int pc_input_script_load(const char* path) {
         } else if (strcmp(word, "TYPE") == 0 && fields >= 3) {
             ev.kind = SCRIPT_TYPE;
             snprintf(ev.name, sizeof(ev.name), "%s", arg);
+        } else if (strcmp(word, "TOUCH") == 0 && fields >= 3) {
+            float* t = ev.touch;
+            int n = sscanf(arg, "%f,%f:%f,%f", &t[0], &t[1], &t[2], &t[3]);
+
+            if (n != 2 && n != 4) {
+                fprintf(stderr, "[INPUT] %s:%d: expected 'TOUCH x,y[:x2,y2] [frames]'\n", path, line_no);
+                fclose(f);
+                return 0;
+            }
+            ev.kind = SCRIPT_TOUCH;
+            ev.touch_moves = n == 4;
+            for (int i = 0; i < 4; i++) {
+                t[i] /= 100.0f; /* percent of the window */
+            }
+            ev.duration = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : SCRIPT_DEFAULT_HOLD;
         } else if ((strcmp(word, "EDIT") == 0 || strcmp(word, "TEXT") == 0) && fields >= 2) {
             /* the system input method's composition ("EDIT" alone ends it) or committed text */
             ev.kind = word[0] == 'E' ? SCRIPT_EDIT : SCRIPT_TEXT;
@@ -259,6 +279,19 @@ int pc_input_script_frame(u32 frame) {
     for (i = 0; i < s_count; i++) {
         const ScriptEvent* ev = &s_events[i];
 
+        if (ev->kind == SCRIPT_TOUCH) {
+            s64 id = 0x5C000 + i;
+
+            if (frame == ev->frame) {
+                pc_touch_finger_down(id, ev->touch[0], ev->touch[1]);
+            } else if (frame == ev->frame + 1 && ev->touch_moves) {
+                pc_touch_finger_move(id, ev->touch[2], ev->touch[3]);
+            }
+            if (frame == ev->frame + ev->duration) {
+                pc_touch_finger_up(id);
+            }
+            continue;
+        }
         if (ev->frame != frame) {
             continue;
         }

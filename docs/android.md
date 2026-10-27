@@ -43,7 +43,19 @@ Android Studio에서는 `pc/android`를 열면 된다. 첫 네이티브 빌드�
   실행은 확인하지 못했다. 같은 렌더러는 리눅스에서 OpenGL ES 3.0 컨텍스트로 확인했다(dev_setup.md 7).
 - 입력: 게임패드(블루투스 등)와 물리 키보드는 SDL이 처리한다. 글자 입력 화면(이름·편지 등)이 열리면
   Android 화면 키보드가 뜨고, 그 키보드로 한글을 입력한다(`settings.ini`의 `text_input = 1`,
-  README의 "시스템 입력기"). 터치 조작(화면 게임패드)은 아직 없다.
+  README의 "시스템 입력기").
+- 터치 조작(`pc/src/pc_touch.c`, `settings.ini`의 `touch_controls = 1`, Android 기본값): 게임 화면 위에
+  게임큐브 패드 모양의 화면 패드를 그린다. 왼쪽 아래 절반에 엄지를 대면 그 자리가 스틱 중심이 되고
+  (떠 있는 스틱), 오른쪽에 A(크게)/B/X/Y, 위쪽에 L·START·R·Z, 왼쪽 위에 작은 십자키가 있다. 버튼 사이를
+  미끄러지면 손가락 아래 버튼이 눌린다. 크기는 화면의 짧은 변 기준이라 4:3·20:9 모두 가장자리에 붙는다.
+  실제 게임패드 버튼을 누르면 숨고, 다시 화면을 만지면 나타난다. 그리기는 프레임이 끝난 뒤 자체
+  셰이더로 하고 GX 상태를 다시 적용하게 표시한다(`pc_gx_restore_after_nes`).
+- 뒤로 버튼은 앱을 끄지 않고 일시정지 메뉴를 연다(`SDL_HINT_ANDROID_TRAP_BACK_BUTTON`, Esc와 같음).
+  일시정지 메뉴는 키 입력만 받으므로 화면 패드의 십자키/A/B(START)를 방향키/Enter/Esc로 바꿔 보낸다.
+  글자 입력 중 화면 키보드를 내렸으면 패드가 없는 곳을 눌러 다시 띄운다. 터치는 마우스 클릭으로
+  바꾸지 않고(`SDL_HINT_TOUCH_MOUSE_EVENTS`), 가속도계를 조이스틱으로 잡지 않는다.
+- 자동 테스트: `--input-script`의 `TOUCH x,y[:x2,y2] [프레임]`(창 크기 대비 %, 다음 프레임에 x2,y2로
+  이동)으로 데스크톱에서 `touch_controls = 1`을 켜고 시험한다(스틱 걷기, START 소지품, B 닫기 확인).
 - Clang(NDK)과 GCC의 차이로 고친 것: `-fsigned-char`(ARM의 char는 unsigned), `operator new`의 `size_t`,
   `EOF`/`SEEK_*`가 stdio 매크로로 바뀌는 열거자(정수 → enum 변환), libc++ `<cmath>`의 C++ 링크,
   bionic의 `bcmp`, lld 링크 맵과 Clang의 함수 안 static 이름(`함수.변수`).

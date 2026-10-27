@@ -9,6 +9,7 @@
 #include "pc_keybindings.h"
 #include "pc_disc.h"
 #include "pc_typing.h"
+#include "pc_touch.h"
 #ifdef _WIN32
 #include <direct.h>
 #define getcwd _getcwd
@@ -249,6 +250,9 @@ int pc_platform_poll_events(void) {
                 }
                 break;
             case SDL_KEYDOWN:
+                if (event.key.keysym.sym == SDLK_AC_BACK) {
+                    event.key.keysym.sym = SDLK_ESCAPE; /* Android's back button */
+                }
                 if (event.key.keysym.sym == SDLK_ESCAPE && !event.key.repeat) {
                     if (g_pc_paused) {
                         pc_pause_menu_handle_event(&event);
@@ -271,6 +275,12 @@ int pc_platform_poll_events(void) {
             case SDL_TEXTEDITING:
                 if (g_pc_paused) break;
                 pc_typing_handle_event(&event);
+                break;
+            case SDL_FINGERDOWN:
+            case SDL_FINGERMOTION:
+            case SDL_FINGERUP:
+            case SDL_CONTROLLERBUTTONDOWN:
+                pc_touch_handle_event(&event);
                 break;
         }
     }
