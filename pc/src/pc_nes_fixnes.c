@@ -33,7 +33,7 @@
 
 /* Now include GL via SDL2 (avoid pc_platform.h which pulls in game types.h) */
 #include <SDL2/SDL.h>
-#include <glad/gl.h>
+#include "pc_gl.h"
 #include "fm2play.h"
 #include "audio.h"
 
@@ -98,7 +98,7 @@ static int fixnes_initialized = 0;
 
 static GLuint fixnes_compile_shader(GLenum type, const char *src) {
     GLuint s = glCreateShader(type);
-    glShaderSource(s, 1, &src, NULL);
+    pc_gl_shader_source(s, src);
     glCompileShader(s);
     GLint ok;
     glGetShaderiv(s, GL_COMPILE_STATUS, &ok);
@@ -382,8 +382,24 @@ void pc_fixnes_render_frame(uint16_t *fb) {
      * (R in low bits) — upload with GL_UNSIGNED_SHORT_5_6_5_REV.
      * Skip top 8 rows (often garbage), show 224 lines. */
     glBindTexture(GL_TEXTURE_2D, fixnes_texture);
+#ifdef PC_GLES
+    {
+        /* ES has no 5_6_5_REV: swap red and blue into 5_6_5 */
+        static uint16_t rgb565[256 * 224];
+        const uint16_t* src = fb + 256 * 8;
+        int i;
+
+        for (i = 0; i < 256 * 224; i++) {
+            uint16_t v = src[i];
+
+            rgb565[i] = (uint16_t)(((v & 0x1F) << 11) | (v & 0x07E0) | (v >> 11));
+        }
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 256, 224, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, rgb565);
+    }
+#else
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 256, 224, 0,
                  GL_RGB, GL_UNSIGNED_SHORT_5_6_5_REV, fb + 256 * 8);
+#endif
 
     /* 0 = stretch to window, 1 = centered 4:3 with pillar/letterbox. */
     int win_w = g_pc_window_w;

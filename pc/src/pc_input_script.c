@@ -204,7 +204,7 @@ static void save_shot(const char* name) {
     char path[96];
     int w = g_pc_window_w;
     int h = g_pc_window_h;
-    u8* pixels = (u8*)malloc((size_t)w * h * 3);
+    u8* pixels = (u8*)malloc((size_t)w * h * 4);
     FILE* f;
     int y;
 
@@ -220,7 +220,18 @@ static void save_shot(const char* name) {
 
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glReadBuffer(GL_BACK);
+#ifdef PC_GLES
+    { /* ES only guarantees RGBA reads */
+        int i;
+
+        glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+        for (i = 0; i < w * h; i++) {
+            memmove(pixels + i * 3, pixels + i * 4, 3);
+        }
+    }
+#else
     glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+#endif
 
     f = fopen(path, "wb");
     if (f != NULL) {

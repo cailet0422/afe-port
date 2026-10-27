@@ -42,7 +42,7 @@ static GLuint default_program = 0;
 
 static GLuint compile_shader(GLenum type, const char* source) {
     GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, NULL);
+    pc_gl_shader_source(shader, source);
     glCompileShader(shader);
 
     GLint success;

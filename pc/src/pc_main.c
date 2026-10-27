@@ -120,9 +120,15 @@ void pc_platform_init(void) {
         exit(1);
     }
 
+#ifdef PC_GLES
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+#else
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+#endif
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 #ifdef PC_ENHANCEMENTS
@@ -161,6 +167,7 @@ void pc_platform_init(void) {
         exit(1);
     }
 
+#ifndef PC_GLES
     if (!gladLoadGL((GLADloadfunc)SDL_GL_GetProcAddress)) {
         fprintf(stderr, "gladLoadGL failed\n");
         SDL_GL_DeleteContext(g_pc_gl_context);
@@ -168,6 +175,7 @@ void pc_platform_init(void) {
         SDL_Quit();
         exit(1);
     }
+#endif
 
     printf("[PC] OpenGL %s (%s, %s)\n", (const char*)glGetString(GL_VERSION), (const char*)glGetString(GL_RENDERER),
            (const char*)glGetString(GL_VENDOR));
@@ -176,7 +184,7 @@ void pc_platform_init(void) {
 
     pc_platform_update_window_size();
 
-#ifdef PC_ENHANCEMENTS
+#if defined(PC_ENHANCEMENTS) && !defined(PC_GLES)
     if (g_pc_settings.msaa > 0) {
         glEnable(GL_MULTISAMPLE);
     }

@@ -96,3 +96,9 @@ WINEPREFIX=/tmp/wineprefix WINEDEBUG=-all wine DobutsuNoMoriEPlus.exe --no-frame
   (`pc_stubs.c`), 링크 맵 형식(`.data$이름`, 4바이트 단위 크기; `gen_rel_overlay.py`가 둘 다 읽음).
 - Wine에는 사운드 장치가 없어서 오디오가 SDL `dummy`로 대체된다(실제 Windows에서 출력 장치가 없을 때도 같음).
 - Xvfb가 꺼지면 Wine은 "no driver could be loaded"로 창을 못 만든다.
+
+## 7. OpenGL ES 경로 (Android용) 데스크톱 확인
+
+`apt-get install -y libgles-dev:i386 libegl-dev:i386` 후 `-DPC_GLES=ON`으로 따로 빌드한다
+(`pc/build32gles`). SDL이 ES 3.0 컨텍스트를 만들고, 셰이더의 `#version 330 core`는 `pc_gl.h`가
+`#version 300 es`로 바꾼다. 로그에 `OpenGL OpenGL ES 3.x Mesa`가 나오면 된다.
