@@ -81,19 +81,42 @@ s32 DVDConvertPathToEntrynum(const char* path) {
     return idx;
 }
 
-/* DVDFileInfo: 0x3C bytes. We store FILE* in the DVDCommandBlock area at offset 0x18. */
-/* For disc-image backed files, FILE* is set to sentinel DISC_SENTINEL,
- * and the disc offset is stored in startAddr (0x30). */
+/* The layout of DVDFileInfo (dolphin/dvd.h, 0x3C bytes on GC), which this
+ * file can't include for its prototypes. We store FILE* in the command
+ * block's addr; for disc-image backed files FILE* is the sentinel
+ * DISC_SENTINEL and startAddr holds the disc offset. */
+typedef struct {
+    void* next;
+    void* prev;
+    u32 command;
+    s32 state;
+    u32 offset;
+    u32 length;
+    void* addr;
+    u32 currTransferSize;
+    u32 transferredSize;
+    void* id;
+    void* callback;
+    void* userData;
+} PCDVDCommandBlock;
+
+typedef struct {
+    PCDVDCommandBlock cb;
+    u32 startAddr;
+    u32 length;
+    void* callback;
+} PCDVDFileInfo;
+
 #define DISC_SENTINEL ((FILE*)(uintptr_t)0xDEADC0DE)
 
 static FILE** dvd_fi_fp(void* fileInfo) {
-    return (FILE**)((u8*)fileInfo + 0x18);
+    return (FILE**)&((PCDVDFileInfo*)fileInfo)->cb.addr;
 }
 static u32* dvd_fi_length(void* fileInfo) {
-    return (u32*)((u8*)fileInfo + 0x34);
+    return &((PCDVDFileInfo*)fileInfo)->length;
 }
 static u32* dvd_fi_startAddr(void* fileInfo) {
-    return (u32*)((u8*)fileInfo + 0x30);
+    return &((PCDVDFileInfo*)fileInfo)->startAddr;
 }
 
 BOOL DVDFastOpen(s32 entrynum, void* fileInfo) {
@@ -107,7 +130,7 @@ BOOL DVDFastOpen(s32 entrynum, void* fileInfo) {
     if (pc_disc_is_open()) {
         u32 disc_off, disc_sz;
         if (pc_disc_find_file(path, &disc_off, &disc_sz)) {
-            memset(fileInfo, 0, 0x3C);
+            memset(fileInfo, 0, sizeof(PCDVDFileInfo));
             *dvd_fi_fp(fileInfo) = DISC_SENTINEL;
             *dvd_fi_startAddr(fileInfo) = disc_off;
             *dvd_fi_length(fileInfo) = disc_sz;
@@ -137,7 +160,7 @@ BOOL DVDFastOpen(s32 entrynum, void* fileInfo) {
         len = (u32)ftell(fp);
         fseek(fp, 0, SEEK_SET);
 
-        memset(fileInfo, 0, 0x3C);
+        memset(fileInfo, 0, sizeof(PCDVDFileInfo));
         *dvd_fi_fp(fileInfo) = fp;
         *dvd_fi_startAddr(fileInfo) = 0;
         *dvd_fi_length(fileInfo) = len;

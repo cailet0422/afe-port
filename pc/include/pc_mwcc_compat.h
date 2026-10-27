@@ -55,9 +55,9 @@ using ::tanf;
 #ifdef __ANDROID__
 /* Bionic's headers dropped the BSD bcmp; pc_stubs.c defines it */
 #ifdef __cplusplus
-extern "C" int bcmp(const void* a, const void* b, unsigned int n);
+extern "C" int bcmp(const void* a, const void* b, size_t n);
 #else
-int bcmp(const void* a, const void* b, unsigned int n);
+int bcmp(const void* a, const void* b, size_t n);
 #endif
 #endif
 

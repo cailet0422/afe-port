@@ -25,7 +25,7 @@ u32 ARAlloc(u32 size) {
     u32 aligned_size = (size + 31) & ~31; /* 32-byte align */
     if (aram_alloc_ptr + aligned_size > PC_ARAM_SIZE) {
         fprintf(stderr, "[PC/ARAM] Out of ARAM! Requested %lu, used %lu/%u\n",
-                size, aram_alloc_ptr, PC_ARAM_SIZE);
+                (unsigned long)size, (unsigned long)aram_alloc_ptr, PC_ARAM_SIZE);
         return 0;
     }
     u32 addr = aram_alloc_ptr;
@@ -38,7 +38,7 @@ void ARFree(u32* addr) {
 }
 
 /* type 0 = MRAM→ARAM, type 1 = ARAM→MRAM. params are always (type, mram, aram). */
-void ARStartDMA(u32 type, u32 mram_addr, u32 aram_addr, u32 length) {
+void ARStartDMA(u32 type, uintptr_t mram_addr, u32 aram_addr, u32 length) {
     if (!aram_base) return;
 
     /* some code passes (aram_base + offset) instead of just the offset */
@@ -68,14 +68,14 @@ BOOL ARCheckInit(void) { return aram_base != NULL; }
 /* ARQ - synchronous wrapper around ARStartDMA.
  * ARQPostRequest's source/dest order differs from ARStartDMA's, so we remap. */
 void ARQInit(void) {}
-void ARQPostRequest(void* req, u32 owner, u32 type, u32 prio,
-                    u32 source, u32 dest, u32 length, void* callback) {
+void ARQPostRequest(void* req, uintptr_t owner, u32 type, u32 prio,
+                    uintptr_t source, uintptr_t dest, u32 length, void* callback) {
     if (type == 0) {
-        ARStartDMA(type, source, dest, length); /* source=mram, dest=aram */
+        ARStartDMA(type, source, (u32)dest, length); /* source=mram, dest=aram */
     } else {
-        ARStartDMA(type, dest, source, length); /* source=aram, dest=mram — swapped */
+        ARStartDMA(type, dest, (u32)source, length); /* source=aram, dest=mram — swapped */
     }
-    if (callback) ((void (*)(u32))callback)((u32)(uintptr_t)req);
+    if (callback) ((void (*)(uintptr_t))callback)((uintptr_t)req);
 }
 
 void ARQFlushQueue(void) {}

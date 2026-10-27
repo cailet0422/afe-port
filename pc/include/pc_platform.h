@@ -2,11 +2,7 @@
 #ifndef PC_PLATFORM_H
 #define PC_PLATFORM_H
 
-/* 32-bit required: decomp code (JSystem, emu64) casts pointers to u32 */
 #include <stdint.h>
-#if UINTPTR_MAX != 0xFFFFFFFFu
-#error "This project must be compiled as 32-bit (pointer size != 4 bytes)"
-#endif
 
 #define SDL_MAIN_HANDLED
 #include <SDL.h>
@@ -105,8 +101,8 @@ unsigned int pc_crash_get_addr(void);
 unsigned int pc_crash_get_data_addr(void);
 
 /* EXE image range for seg2k0 pointer disambiguation (vs N64 segment addresses) */
-extern unsigned int pc_image_base;
-extern unsigned int pc_image_end;
+extern uintptr_t pc_image_base;
+extern uintptr_t pc_image_end;
 
 /* --- Model viewer --- */
 extern int g_pc_model_viewer;

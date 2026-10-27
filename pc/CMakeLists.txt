@@ -59,7 +59,7 @@ endif()
 # =============================================================================
 # 32-bit enforcement (the decomp casts pointers to u32 throughout)
 # =============================================================================
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+if(CMAKE_SIZEOF_VOID_P EQUAL 8 AND NOT PC_ALLOW_64BIT)
     message(FATAL_ERROR
         "The PC port MUST be built as 32-bit (pointer-to-u32 casts in the decomp).\n"
         "  Windows/MSYS2: Use the MINGW32 shell (not MINGW64)\n"
@@ -254,6 +254,7 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_dvd.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_pad.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_typing.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_ptr32.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_touch.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_android.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_input_script.c
