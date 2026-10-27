@@ -72,7 +72,7 @@ Windows는 MSYS2 **MINGW32** 셸에서 같은 순서로 빌드하는 것을 목�
 | 단계 | 내용 | 상태 |
 |---|---|---|
 | M0 | `TARGET_PC` 훅 병합, 매칭 유지 검증, PC 빌드 링크 | 완료 |
-| M1 | Linux/Windows에서 타이틀 화면까지 부팅 | 진행 중 (Linux에서 타이틀의 "Press Start Button!" 표시까지 확인, 3D 배경·로고는 아직 검게 나옴) |
+| M1 | Linux/Windows에서 타이틀 화면까지 부팅 | Linux 완료 (타이틀 데모의 마을·로고·"Press Start Button!" 렌더링 확인), Windows 빌드 미검증 |
 | M2 | 마을 플레이, 세이브(메모리 카드 파일), e+ 전용 기능(SD/e-Reader/GBA)은 우회 | 예정 |
 | M3 | 오디오 정상화, 패미컴(FixNES) | 예정 |
 | M4 | 64비트 정리(포인터↔u32), Android(arm64, SDL2 + GLES3, 터치 입력) | 예정 |
@@ -119,7 +119,6 @@ Windows는 MSYS2 **MINGW32** 셸에서 같은 순서로 빌드하는 것을 목�
 
 ## 알려진 문제 (M1 기준)
 
-- 타이틀 데모의 3D 배경과 로고가 그려지지 않음(검은 화면에 글자만 보임).
 - 정적(static)으로 선언된 TLUT 블롭 3개는 부팅 시 바이트 순서 보정을 못 하고 있음.
 - e+ 세이브 경로는 아직 ACGC의 `pc_card.c` 위에서 그대로 컴파일만 되는 상태.
 - SD 카드, e-Reader, GBA 연동은 "장치 없음"으로 응답.

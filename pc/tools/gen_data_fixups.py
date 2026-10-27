@@ -39,7 +39,7 @@ RAW_DEF = re.compile(
     r"^(static\s+)?(?:u8|unsigned char|char|s8)\s+(\w+)\s*\[\s*\w*\s*\][^;=]*=\s*\{\s*\n\s*#include\s+\"(assets/[^\"]+)\"",
     re.M,
 )
-EXTERN = re.compile(r"\bextern\s+(?:const\s+)?([A-Za-z_]\w*)\s*(\*?)\s*(\w+)\s*(?:\[[^\]]*\])?\s*;")
+EXTERN = re.compile(r"\bextern\s+(?:const\s+)?([A-Za-z_]\w*)\s*(\*?)\s*(\w+)\s*(?:\[[^\]]*\]\s*)*;")
 TLUT = re.compile(r"\b[gG]s?DPLoadTLUT\w*\s*\(([^;]*?)\)\s*[,;]", re.S)
 C_INCLUDE = re.compile(r'#include\s+"([^"]+\.(?:c_inc|c))"')
 SYMBOL = re.compile(r"^(\w+)\s*=\s*\.(\w+):(0x[0-9A-Fa-f]+);\s*//.*?size:(0x[0-9A-Fa-f]+)")
