@@ -1,0 +1,80 @@
+// Android build of the PC port (docs/pc_port/android.md).
+//
+// Needs the SDL2 source tree (its Java glue and native library): put it in
+// pc/android/SDL or pass -PsdlDir=/path/to/SDL2-2.30.x.
+plugins {
+    id 'com.android.application'
+}
+
+def sdlDir = file(project.findProperty('sdlDir') ?: "${rootDir}/SDL")
+def assetDir = file("${buildDir}/generated/afe_assets")
+
+android {
+    namespace 'org.afedecomp.dobutsunomori'
+    compileSdk 34
+    ndkVersion '27.2.12479018'
+
+    defaultConfig {
+        applicationId 'org.afedecomp.dobutsunomori'
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName '0.1'
+        ndk {
+            // The game code keeps pointers in 32-bit fields: 32-bit ARM only for now
+            abiFilters 'armeabi-v7a'
+        }
+        externalNativeBuild {
+            cmake {
+                arguments "-DSDL_SOURCE_DIR=${sdlDir}",
+                          "-DPC_ANDROID_ASSET_DIR=${assetDir}",
+                          '-DANDROID_STL=c++_shared'
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path 'jni/CMakeLists.txt'
+            version '3.22.1'
+        }
+    }
+
+    sourceSets {
+        main {
+            java.srcDirs += "${sdlDir}/android-project/app/src/main/java"
+            assets.srcDirs += assetDir
+        }
+    }
+
+    buildTypes {
+        debug {
+            // The decomp is built without optimization (see pc/CMakeLists.txt)
+            debuggable true
+        }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging true
+        }
+    }
+}
+
+// The native build writes the shaders and the REL overlay table that go into
+// the assets, so it has to run first.
+tasks.configureEach { task ->
+    def m = task.name =~ /^merge(\w+)Assets$/
+    if (m) {
+        task.dependsOn "externalNativeBuild${m[0][1]}"
+    }
+}

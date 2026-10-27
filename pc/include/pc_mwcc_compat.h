@@ -31,6 +31,8 @@
 #endif
 
 #ifdef __cplusplus
+/* types.h can be included inside extern "C"; libc++'s <cmath> needs C++ linkage */
+extern "C++" {
 #include <cmath>
 /* MSL's <cmath> puts the C float functions in std; libstdc++ only has overloads */
 namespace std {
@@ -47,6 +49,16 @@ using ::sinf;
 using ::sqrtf;
 using ::tanf;
 }
+}
+#endif
+
+#ifdef __ANDROID__
+/* Bionic's headers dropped the BSD bcmp; pc_stubs.c defines it */
+#ifdef __cplusplus
+extern "C" int bcmp(const void* a, const void* b, unsigned int n);
+#else
+int bcmp(const void* a, const void* b, unsigned int n);
+#endif
 #endif
 
 /* Gekko reciprocal square root estimate */

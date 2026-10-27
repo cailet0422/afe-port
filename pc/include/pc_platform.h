@@ -91,6 +91,9 @@ extern int g_pc_widescreen_stretch;
 
 /* --- Functions --- */
 void pc_platform_init(void);
+#ifdef __ANDROID__
+void pc_android_prepare(void); /* working folder and APK assets (pc_android.c) */
+#endif
 void pc_platform_shutdown(void);
 void pc_platform_swap_buffers(void);
 int  pc_platform_poll_events(void);

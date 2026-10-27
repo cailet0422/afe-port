@@ -49,6 +49,9 @@ STRUCT_PREFIXES = {
 SYMBOL = re.compile(r"^(\S+) = (\.\w+):0x([0-9A-Fa-f]+);.*?size:0x([0-9A-Fa-f]+)")
 # ELF: .data.NAME, .rodata.NAME, .data.rel.local.NAME; PE (MinGW): .data$NAME, .rdata$NAME
 MAP_SECTION = re.compile(r"^ (\.(?:data|rodata|rdata)(?:\.rel(?:\.ro)?)?(?:\.local)?)[.$](\S+)(?:\s+0x([0-9a-f]+)\s+0x([0-9a-f]+)\s+(\S+))?$")
+# LLD (Android NDK): "     VMA      LMA     Size Align Out     In      Symbol"
+LLD_SECTION = re.compile(r"^\s*([0-9a-f]+)\s+[0-9a-f]+\s+([0-9a-f]+)\s+\d+\s+(\S+):\((\.(?:data|rodata)(?:\.rel)?(?:\.ro)?(?:\.local)?)\.(\S+)\)$")
+LLD_SYMBOL = re.compile(r"^\s*([0-9a-f]+)\s+[0-9a-f]+\s+[0-9a-f]+\s+\d+\s+(\w+)$")
 MAP_CONT = re.compile(r"^\s+0x([0-9a-f]+)\s+0x([0-9a-f]+)\s+(\S+)$")
 MAP_SYMBOL = re.compile(r"^\s+0x([0-9a-f]+)\s+(\w+)$")
 DECL = re.compile(r"^[ \t]*(?:static\s+)?(?:const\s+)?([A-Za-z_][\w ]*?)\s+(\w+)\s*((?:\[[^\]]*\]\s*)+)(?:ATTRIBUTE_ALIGN\(\d+\)\s*)?=", re.M)
@@ -90,6 +93,16 @@ def read_map(path):
     anchor = None
     pending = None
     text = Path(path).read_text(encoding="utf-8", errors="replace")
+    if text.lstrip().startswith("VMA"):
+        for line in text.splitlines():
+            m = LLD_SECTION.match(line)
+            if m:
+                entries[(m.group(3), m.group(5))].append((int(m.group(1), 16), int(m.group(2), 16)))
+                continue
+            m = LLD_SYMBOL.match(line)
+            if m and m.group(2) == ANCHOR:
+                anchor = int(m.group(1), 16)
+        return entries, anchor
     # Skip the "Discarded input sections" list; only placed sections count
     start = text.find("Linker script and memory map")
     for line in text[start if start >= 0 else 0:].splitlines():
@@ -147,12 +160,17 @@ def main():
     for (obj, name) in entries:
         objects_by_name[name].append(obj)
 
+    # function-local statics: GCC names them VAR.N, Clang FUNCTION.VAR
     local_statics = defaultdict(list)
+    local_static_var = {}
     for key in objects_by_name:
-        stem, dot, num = key.rpartition(".")
-        if dot and num.isdigit():
-            local_statics[stem].append(key)
-    local_static_keys = {key for keys in local_statics.values() for key in keys}
+        stem, dot, last = key.rpartition(".")
+        if not dot:
+            continue
+        var = stem if last.isdigit() else last
+        local_statics[var].append(key)
+        local_static_var[key] = var
+    local_static_keys = set(local_static_var)
 
     decl_cache = {}
 
@@ -160,12 +178,14 @@ def main():
 
     def decl_type(obj, name):
         src = re.sub(r"\.(o|obj)$", "", obj)
-        m = re.match(r"CMakeFiles/[^/]+\.dir/(.*)$", src)
+        m = re.search(r"^(.*?)CMakeFiles/[^/]+\.dir/(.*)$", src)
         if not m:
             return None
-        rel = m.group(1)
-        # absolute sources keep their path minus the leading '/'
-        path = Path("/" + rel) if Path("/" + rel).exists() else build_dir / rel
+        rel = m.group(2)
+        # absolute sources keep their path minus the leading '/'; others are
+        # relative to the target's binary dir, with ".." written as "__"
+        target_dir = build_dir / m.group(1)
+        path = Path("/" + rel) if Path("/" + rel).exists() else (target_dir / rel.replace("__/", "../")).resolve()
         if path not in decl_cache:
             text = source_text(path)
             decls = {d.group(2): d.group(1).strip() for d in DECL_SCALAR.finditer(text)}
@@ -213,7 +233,7 @@ def main():
                 continue
             (obj, mapped), (vma, _) = sized[0]
             # a function-local static is declared without its .N suffix
-            t = decl_type(obj, mapped.rpartition(".")[0] if mapped in local_static_keys else mapped)
+            t = decl_type(obj, local_static_var.get(mapped, mapped))
             kind = TYPE_KINDS.get(t) if t else None
             if kind is None and t in STRUCT_KINDS:
                 kind = STRUCT_KINDS[t]
