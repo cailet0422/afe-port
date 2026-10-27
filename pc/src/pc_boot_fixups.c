@@ -92,6 +92,12 @@ static void apply_fixup(const PCDataFixup* fix) {
             break;
         }
 
+        case PC_FIX_VTX: {
+            static const u8 o16[] = { 0, 2, 4, 6, 8, 10 }; /* ob[3], flag, tc[2]; cn[4] are bytes */
+            swap_records(fix->data, fix->size, 16, o16, 6, NULL, 0);
+            break;
+        }
+
         case PC_FIX_HOUSE_POS: {
             static const u8 o16[] = { offsetof(mMP_HousePos_c, fgblock_name) };
             swap_records(fix->data, fix->size, sizeof(mMP_HousePos_c), o16, 1, NULL, 0);

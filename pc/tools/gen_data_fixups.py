@@ -32,6 +32,8 @@ KINDS = {
     "mNpc_Default_Data_c": "PC_FIX_NPC_DEFAULT",
     "mMP_HousePos_c": "PC_FIX_HOUSE_POS",
 }
+# Names of texture data, which stays in big-endian byte order
+TEXTURE_NAME = re.compile(r"tex|txt|TXT|_i4|_i8|_ia\d|_ci\d|_rgb|_rgba|_TA$", re.I)
 # Types that are byte data and need no swap
 BYTE_TYPES = {"u8", "s8", "char", "void", "mNW_original_tex_c"}
 
@@ -41,6 +43,9 @@ RAW_DEF = re.compile(
 )
 EXTERN = re.compile(r"\bextern\s+(?:const\s+)?([A-Za-z_]\w*)\s*(\*?)\s*(\w+)\s*(?:\[[^\]]*\]\s*)*;")
 TLUT = re.compile(r"\b[gG]s?DPLoadTLUT\w*\s*\(([^;]*?)\)\s*[,;]", re.S)
+# Raw blobs used directly as display lists or vertex buffers
+DLIST = re.compile(r"\b[gG]s?SP(?:DisplayList|BranchList)\s*\(([^;]*?)\)\s*[,;]", re.S)
+VERTEX = re.compile(r"\bgsSPVertex\w*\s*\(\s*&?\s*(\w+)|\bgSPVertex\w*\s*\([^,;]*,\s*&?\s*(\w+)", re.S)
 C_INCLUDE = re.compile(r'#include\s+"([^"]+\.(?:c_inc|c))"')
 SYMBOL = re.compile(r"^(\w+)\s*=\s*\.(\w+):(0x[0-9A-Fa-f]+);\s*//.*?size:(0x[0-9A-Fa-f]+)")
 
@@ -85,6 +90,8 @@ def main():
     raw = {}  # name -> (static, file)
     types = defaultdict(set)
     tlut_names = set()
+    dlist_names = set()
+    vertex_names = set()
     for path in files:
         text = path.read_text(encoding="utf-8", errors="replace")
         for m in RAW_DEF.finditer(text):
@@ -96,6 +103,12 @@ def main():
             args = [a.strip() for a in m.group(1).split(",")]
             if args:
                 tlut_names.add(re.sub(r"^[&(].*?(\w+)\W*$", r"\1", args[-1]))
+        for m in DLIST.finditer(text):
+            args = [a.strip() for a in m.group(1).split(",")]
+            if args:
+                dlist_names.add(re.sub(r"^[&(].*?(\w+)\W*$", r"\1", args[-1]))
+        for m in VERTEX.finditer(text):
+            vertex_names.add(m.group(1) or m.group(2))
     for path in (ROOT / "include").rglob("*.h"):
         for m in EXTERN.finditer(path.read_text(encoding="utf-8", errors="replace")):
             if not m.group(2):
@@ -105,8 +118,15 @@ def main():
     unknown = []
     for name, (is_static, path) in sorted(raw.items()):
         kinds = {KINDS[t] for t in types.get(name, ()) if t in KINDS}
+        if TEXTURE_NAME.search(name) and name not in dlist_names:
+            # Textures are sometimes declared as Gfx for segment use; they are bytes
+            kinds.discard(KINDS["Gfx"])
         if name in tlut_names:
             kinds.add("PC_FIX_U16")
+        if name in dlist_names:
+            kinds.add("PC_FIX_U32")
+        if name in vertex_names:
+            kinds.add("PC_FIX_VTX")
         unhandled = {t for t in types.get(name, ()) if t not in KINDS and t not in BYTE_TYPES}
         if unhandled:
             unknown.append((name, sorted(unhandled)))

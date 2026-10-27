@@ -10,6 +10,7 @@ typedef enum {
     PC_FIX_NPC_HOUSE,    /* mNpc_NpcHouseData_c[] */
     PC_FIX_NPC_DEFAULT,  /* mNpc_Default_Data_c[] */
     PC_FIX_HOUSE_POS,    /* mMP_HousePos_c[] */
+    PC_FIX_VTX,          /* Vtx[]: 16-bit position/flag/texcoord, byte colors */
 } PCDataFixupKind;
 
 typedef struct {
