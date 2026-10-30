@@ -7,7 +7,10 @@
 #include <ctype.h>
 #include <dirent.h>
 #include "types.h"
+#include "pc_platform.h"
 #include "pc_disc.h"
+#include "pc_rom_dir.h"
+#include "pc_settings.h"
 
 extern int g_pc_verbose;
 
@@ -51,11 +54,11 @@ static FSTFile g_fst_files[MAX_FST_FILES];
 static int g_fst_file_count = 0;
 
 /* ---- disc I/O ---- */
-static int disc_open(DiscFile* df, const char* path) {
+static int disc_open(DiscFile* df, FILE* fp) {
     u8 hdr[CISO_HDR_SIZE];
 
     memset(df, 0, sizeof(*df));
-    df->fp = fopen(path, "rb");
+    df->fp = fp;
     if (!df->fp) return 0;
 
     /* try CISO */
@@ -285,39 +288,110 @@ static int str_ends_ci(const char* s, const char* suffix) {
     return 1;
 }
 
-static int find_disc_image(char* out_path, int out_sz) {
+static int is_disc_name(const char* name) {
+    return str_ends_ci(name, ".ciso") || str_ends_ci(name, ".iso") || str_ends_ci(name, ".gcm");
+}
+
+static void join_path(char* out, int out_sz, const char* dir, const char* name) {
+    size_t len = strlen(dir);
+
+    if (strcmp(dir, ".") == 0) {
+        snprintf(out, out_sz, "%s", name);
+    } else if (len > 0 && (dir[len - 1] == '/' || dir[len - 1] == '\\')) {
+        snprintf(out, out_sz, "%s%s", dir, name);
+    } else {
+        snprintf(out, out_sz, "%s/%s", dir, name);
+    }
+}
+
+/* First disc image in dir (UTF-8 path; Windows names can hold any characters) */
+static int find_in_dir(const char* dir, char* out_path, int out_sz) {
+#ifdef _WIN32
+    char pattern[1100];
+    wchar_t wpattern[1100];
+    char name[MAX_PATH * 3];
+    WIN32_FIND_DATAW fd;
+    HANDLE h;
+
+    join_path(pattern, sizeof(pattern), dir, "*");
+    if (MultiByteToWideChar(CP_UTF8, 0, pattern, -1, wpattern, (int)(sizeof(wpattern) / sizeof(wpattern[0]))) == 0) {
+        return 0;
+    }
+    h = FindFirstFileW(wpattern, &fd);
+    if (h == INVALID_HANDLE_VALUE) return 0;
+    do {
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+        if (WideCharToMultiByte(CP_UTF8, 0, fd.cFileName, -1, name, sizeof(name), NULL, NULL) <= 0) continue;
+        if (is_disc_name(name)) {
+            join_path(out_path, out_sz, dir, name);
+            FindClose(h);
+            return 1;
+        }
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+    return 0;
+#else
+    DIR* dp = opendir(dir);
+    struct dirent* ent;
+
+    if (!dp) return 0;
+    while ((ent = readdir(dp)) != NULL) {
+        if (is_disc_name(ent->d_name)) {
+            join_path(out_path, out_sz, dir, ent->d_name);
+            closedir(dp);
+            return 1;
+        }
+    }
+    closedir(dp);
+    return 0;
+#endif
+}
+
+/* settings.ini's rom_dir: a folder, or the image itself */
+static FILE* open_chosen_image(char* out_path, int out_sz) {
+    const char* dir = g_pc_settings.rom_dir;
+
+    if (dir[0] == '\0') return NULL;
+    if (is_disc_name(dir)) {
+        snprintf(out_path, out_sz, "%s", dir);
+    } else if (!find_in_dir(dir, out_path, out_sz)) {
+        return NULL;
+    }
+    return pc_fopen_utf8(out_path, "rb");
+}
+
+/* The game's own folders */
+static FILE* open_default_image(char* out_path, int out_sz) {
     static const char* dirs[] = { ".", "orig", "rom", NULL };
     int d;
 
     for (d = 0; dirs[d]; d++) {
-        DIR* dp = opendir(dirs[d]);
-        struct dirent* ent;
-        if (!dp) continue;
-        while ((ent = readdir(dp)) != NULL) {
-            if (str_ends_ci(ent->d_name, ".ciso") ||
-                str_ends_ci(ent->d_name, ".iso")  ||
-                str_ends_ci(ent->d_name, ".gcm")) {
-                if (strcmp(dirs[d], ".") == 0)
-                    snprintf(out_path, out_sz, "%s", ent->d_name);
-                else
-                    snprintf(out_path, out_sz, "%s/%s", dirs[d], ent->d_name);
-                closedir(dp);
-                return 1;
-            }
+        if (find_in_dir(dirs[d], out_path, out_sz)) {
+            return pc_fopen_utf8(out_path, "rb");
         }
-        closedir(dp);
     }
-    return 0;
+    return NULL;
 }
 
 /* ---- public API ---- */
 
 int pc_disc_init(void) {
-    char path[512];
+    char path[1100];
+    FILE* fp;
 
     if (g_disc_open) return 1;
-    if (!find_disc_image(path, sizeof(path))) return 0;
-    if (!disc_open(&g_disc, path)) return 0;
+    /* the folder the player chose comes first */
+    fp = open_chosen_image(path, sizeof(path));
+#ifdef __ANDROID__
+    if (!fp) {
+        char name[256];
+
+        fp = pc_rom_dir_android_open(name, sizeof(name));
+        if (fp) snprintf(path, sizeof(path), "%s (chosen folder)", name);
+    }
+#endif
+    if (!fp) fp = open_default_image(path, sizeof(path));
+    if (!disc_open(&g_disc, fp)) return 0;
 
     if (!gcm_verify(&g_disc)) {
         if (g_pc_verbose) printf("[PC] %s: not a valid GC disc image\n", path);

@@ -61,7 +61,8 @@
    ninja -C pc/build32
    ```
    첫 configure는 foresti/foresto 생성 때문에 몇 분 걸린다.
-3. 실행: 디스크 이미지(`.ciso`/`.iso`/`.gcm`)를 `pc/build32/bin/rom/`에 두고
+3. 실행: 디스크 이미지(`.ciso`/`.iso`/`.gcm`)를 `pc/build32/bin/rom/`에 두거나 `settings.ini`의
+   `rom_dir`에 이미지가 있는 폴더(또는 이미지 파일)를 적고
    ```sh
    cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
    ```
@@ -76,7 +77,11 @@
   ninja -C pc/buildwin
   ```
   `pc/buildwin/bin/`에 exe, `SDL2.dll`(자동 복사), `shaders/`, `.relmap`이 생긴다. 이 폴더째 Windows로 옮기고
-  `rom/`에 디스크 이미지를 넣으면 된다. 필요한 DLL은 `SDL2.dll`뿐(그 밖은 Windows 기본).
+  `rom/`에 디스크 이미지를 넣거나, 실행했을 때 뜨는 안내에서 "폴더 선택"으로 이미지가 있는 폴더를 고른다.
+  필요한 DLL은 `SDL2.dll`뿐(그 밖은 Windows 기본).
+- 디스크 이미지 위치: `settings.ini` `[Paths]`의 `rom_dir`(폴더 또는 이미지 파일, UTF-8, 한글 폴더 이름 가능)을
+  먼저 보고, 없으면 게임 폴더와 `orig/`, `rom/`을 찾는다. Windows에서는 일시정지 메뉴(Esc) → Settings →
+  Disc → Folder에서 탐색기 폴더 선택 창으로 바꿀 수 있다(다시 실행하면 적용, `pc_rom_dir.c`).
 - MSYS2 **MINGW32** 셸: `pacman -S mingw-w64-i686-{gcc,cmake,ninja,SDL2,python}` 후 리눅스와 같은 순서(미검증).
 - Wine으로 실행 확인: 오프닝·한글 이름 입력·새 게임 → 마을 경로가 리눅스 빌드와 같은 결과.
 - Windows에서만 나던 것: emu64의 N64 형식 텍스처 변환 버퍼 끝을 다음 배열의 시작으로 잡고 있어(GC

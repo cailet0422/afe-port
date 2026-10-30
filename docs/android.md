@@ -34,11 +34,17 @@ Android Studio에서는 `pc/android`를 열면 된다. 첫 네이티브 빌드�
 
 ## 실행
 
-1. APK를 설치하고 한 번 실행하면 데이터 폴더가 생긴다:
-   `내부 저장소/Android/data/org.afedecomp.dobutsunomori/files/`
-2. 그 안의 `rom/`에 디스크 이미지(`.iso`/`.ciso`/`.gcm`, 한글패치 적용본 가능)를 넣는다. 최근 Android에서는
-   일반 파일 관리자가 `Android/data`에 접근하지 못할 수 있으니 PC에 USB로 연결해서 복사한다.
-3. 다시 실행한다. `settings.ini`, `save/`, `log.txt`(실행 로그)가 같은 폴더에 생긴다.
+1. 디스크 이미지(`.iso`/`.ciso`/`.gcm`, 한글패치 적용본 가능)를 폰의 아무 폴더에나 둔다(예: `Download/동물의숲`).
+2. APK를 설치하고 실행하면 디스크 이미지를 찾지 못했다는 안내가 뜬다. "폴더 선택"을 누르고 시스템 폴더
+   선택 화면에서 이미지가 있는 폴더를 고른 뒤 "이 폴더 사용"(허용)을 누른다. 고른 폴더는 기억되어 다음
+   실행부터 바로 시작한다. Android는 저장소 최상위와 `Download` 자체는 고르지 못하게 하므로 그 안에 폴더를
+   만들어 둔다. 클라우드(구글 드라이브 등)가 아닌 기기 안의 폴더여야 한다.
+3. 폴더는 일시정지 메뉴(뒤로 버튼) → Settings → Disc → Folder에서 바꾼다(다시 실행하면 적용).
+4. 예전처럼 앱 데이터 폴더 `내부 저장소/Android/data/org.afedecomp.dobutsunomori/files/rom/`에 넣어도 된다
+   (고른 폴더에 이미지가 없을 때 찾는다). `settings.ini`, `save/`, `log.txt`(실행 로그)는 이 데이터 폴더에 생긴다.
+
+앱은 고른 폴더를 시스템 폴더 선택(SAF)으로 받은 권한으로 읽는다(`MainActivity.java`, `pc_rom_dir.c`). 다른
+저장소 권한은 요청하지 않는다.
 
 ## 현재 상태
 

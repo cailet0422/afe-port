@@ -8,6 +8,7 @@
 #include "pc_settings.h"
 #include "pc_keybindings.h"
 #include "pc_disc.h"
+#include "pc_rom_dir.h"
 #include "pc_typing.h"
 #include "pc_touch.h"
 #ifdef _WIN32
@@ -390,23 +391,17 @@ int main(int argc, char* argv[]) {
     pc_settings_load();
     pc_keybindings_load();
     pc_platform_init();
-    if (!pc_disc_init()) {
+    while (!pc_disc_init()) {
         char cwd[512];
-        char msg[1024];
 
         if (getcwd(cwd, sizeof(cwd)) == NULL) {
             strcpy(cwd, ".");
         }
-        snprintf(msg, sizeof(msg),
-                 "No GameCube disc image (.iso, .ciso or .gcm) was found.\n"
-                 "Put your Doubutsu no Mori e+ disc image in:\n%s/rom\n\n"
-                 "디스크 이미지(.iso/.ciso/.gcm)를 찾지 못했습니다.\n"
-                 "위 폴더의 rom 안에 넣어 주세요.",
-                 cwd);
-        fprintf(stderr, "%s\n", msg);
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, PC_WINDOW_TITLE, msg, NULL);
-        pc_platform_shutdown();
-        return 1;
+        /* offers a folder picker where there is one; 0 = quit */
+        if (!pc_rom_dir_ask(cwd)) {
+            pc_platform_shutdown();
+            return 1;
+        }
     }
     pc_ko_init();
     pc_jfw_prepare_system_font();

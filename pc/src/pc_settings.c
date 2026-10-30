@@ -45,7 +45,9 @@ static void trim_end(char* s) {
 static void apply_setting(const char* key, const char* value) {
     int val = atoi(value);
 
-    if (strcmp(key, "window_width") == 0) {
+    if (strcmp(key, "rom_dir") == 0) {
+        snprintf(g_pc_settings.rom_dir, sizeof(g_pc_settings.rom_dir), "%s", value);
+    } else if (strcmp(key, "window_width") == 0) {
         if (val >= 640) g_pc_settings.window_width = val;
     } else if (strcmp(key, "window_height") == 0) {
         if (val >= 480) g_pc_settings.window_height = val;
@@ -113,6 +115,11 @@ void pc_settings_save(void) {
     fprintf(f, "\n");
     fprintf(f, "# On-screen controller for touch screens: 0 = off, 1 = on\n");
     fprintf(f, "touch_controls = %d\n", g_pc_settings.touch_controls);
+    fprintf(f, "\n");
+    fprintf(f, "[Paths]\n");
+    fprintf(f, "# Folder with the disc image (.iso/.ciso/.gcm), or the image file itself.\n");
+    fprintf(f, "# Empty = the rom folder next to the game. Pause menu > Settings > Disc changes it.\n");
+    fprintf(f, "rom_dir = %s\n", g_pc_settings.rom_dir);
     fclose(f);
     printf("[Settings] Saved %s\n", SETTINGS_FILE);
 }
@@ -265,7 +272,7 @@ void pc_settings_load(void) {
         return;
     }
 
-    char line[256];
+    char line[1200]; /* rom_dir can be a long path */
     while (fgets(line, sizeof(line), f)) {
         const char* p = skip_ws(line);
 

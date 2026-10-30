@@ -4,9 +4,10 @@
 
 #include "types.h"
 
-/* Initialize disc image reader. Searches for .ciso/.iso/.gcm in
- * current dir, orig/, rom/. Parses GCM filesystem into lookup table.
- * Returns 1 on success, 0 if no disc image found. */
+/* Initialize disc image reader. Opens the .ciso/.iso/.gcm in the folder the
+ * player chose (settings.ini rom_dir; on Android also the folder picked in
+ * the app, pc_rom_dir.h), else in the current dir, orig/ or rom/. Parses GCM
+ * filesystem into lookup table. Returns 1 on success, 0 if no disc image found. */
 int pc_disc_init(void);
 
 /* Check if a disc image is open. */

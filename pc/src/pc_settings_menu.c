@@ -1,5 +1,6 @@
 #include "pc_settings_menu.h"
 #include "pc_settings.h"
+#include "pc_rom_dir.h"
 #include "pc_text_draw.h"
 
 #include "graph.h"
@@ -20,6 +21,7 @@ enum {
     ITEM_RESETTI,
     ITEM_NES_ASPECT,
     ITEM_MASTER_VOLUME,
+    ITEM_ROM_DIR,
 };
 
 /* Per-item static metadata. restart=1 appends " *" and folds into the
@@ -47,6 +49,11 @@ static const Item tab_audio_items[] = {
     { "Master volume", ITEM_MASTER_VOLUME, 0 },
 };
 
+/* Picked with the system's folder dialog (pc_rom_dir.c); read at startup */
+static const Item tab_disc_items[] = {
+    { "Folder", ITEM_ROM_DIR, 1 },
+};
+
 typedef struct {
     const char* name;
     const Item* items;
@@ -58,6 +65,7 @@ static const Tab s_tabs[] = {
     { "Video",    TAB_ITEMS(tab_video_items) },
     { "Audio",    TAB_ITEMS(tab_audio_items) },
     { "Gameplay", TAB_ITEMS(tab_gameplay_items) },
+    { "Disc",     TAB_ITEMS(tab_disc_items) },
 };
 #define TAB_COUNT ((int)(sizeof(s_tabs) / sizeof(s_tabs[0])))
 
@@ -191,6 +199,9 @@ static void item_format(int id, char* buf, size_t n) {
         case ITEM_MASTER_VOLUME:
             snprintf(buf, n, "< %d%% >", s_pending.master_volume);
             break;
+        case ITEM_ROM_DIR:
+            pc_rom_dir_describe(buf, n);
+            break;
         default:
             buf[0] = '\0';
             break;
@@ -219,6 +230,7 @@ static int item_differs_from_startup(int id) {
     switch (id) {
         case ITEM_MSAA:     return g_pc_settings.msaa             != s_startup.msaa;
         case ITEM_TEXTURES: return g_pc_settings.preload_textures != s_startup.preload_textures;
+        case ITEM_ROM_DIR:  return pc_rom_dir_changed();
     }
     return 0;
 }
@@ -395,6 +407,12 @@ int pc_settings_menu_confirm(void) {
     if (s_sel == -1) {
         /* Confirm on the tab row — just hop into the first item. */
         s_sel = 0;
+    } else if (s_sel < cur_item_count() && s_tabs[s_tab].items[s_sel].id == ITEM_ROM_DIR) {
+        /* Saved right away; keep Apply from writing back the old folder */
+        if (pc_rom_dir_pick()) {
+            memcpy(s_pending.rom_dir, g_pc_settings.rom_dir, sizeof(s_pending.rom_dir));
+            recompute_restart_needed();
+        }
     } else if (s_sel < cur_item_count()) {
         item_cycle(s_tabs[s_tab].items[s_sel].id, +1);
     } else if (s_sel == idx_apply()) {
@@ -559,6 +577,11 @@ static void draw_settings_page(struct game_s* game) {
         draw_left(game, it->label, lx, y, r, g, b, a, s);
         value_colors(selected, changed, &r, &g, &b, &a);
         draw_left(game, value_buf, vx, y, r, g, b, a, s);
+
+        if (it->id == ITEM_ROM_DIR && selected) {
+            draw_left(game, pc_rom_dir_can_pick() ? "Enter: pick the folder" : "Set rom_dir in settings.ini",
+                      lx, y + line_h, 170, 170, 170, 200, 1.0f);
+        }
     }
 
     /* Anchor Apply/Back to the tallest tab's footprint so they don't

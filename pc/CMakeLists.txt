@@ -278,6 +278,7 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_stubs.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_stubs_cpp.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_disc.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_rom_dir.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_ime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_charset.c
     ${SYSTEM_FONT_C}
@@ -412,7 +413,7 @@ else()
 endif()
 
 if(WIN32)
-    target_link_libraries(afe_pc opengl32 winmm imm32 version setupapi)
+    target_link_libraries(afe_pc opengl32 winmm imm32 version setupapi ole32 uuid) # ole32/uuid: folder dialog (pc_rom_dir.c)
 elseif(ANDROID)
     target_link_libraries(afe_pc android log dl m)
 else()
