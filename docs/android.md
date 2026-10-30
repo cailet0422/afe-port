@@ -1,8 +1,9 @@
 # Android 빌드
 
-PC 포트를 SDL2 + OpenGL ES 3.0으로 Android에서 돌린다. 지금은 **32비트 ARM(armeabi-v7a)만** 빌드한다
-(디컴프가 포인터를 32비트 정수로 다루기 때문, README의 M4). 최신 일부 기기(Snapdragon 8 Gen 3 이후,
-Pixel 7 이후 등)는 32비트 앱을 실행하지 못한다.
+PC 포트를 SDL2 + OpenGL ES 3.0으로 Android에서 돌린다. APK 하나에 **32비트 ARM(armeabi-v7a)과
+64비트 ARM(arm64-v8a)** 라이브러리가 함께 들어가고, 기기가 맞는 쪽을 고른다. 최신 일부 기기(Snapdragon
+8 Gen 3 이후, Pixel 7 이후 등)는 32비트 앱을 실행하지 못하므로 64비트 쪽이 쓰인다(64비트 포팅은
+`64bit.md`).
 
 APK에는 매칭 빌드가 **본인 디스크에서 추출한 에셋**이 컴파일되어 들어가므로, 직접 빌드해서 본인 기기에만
 설치한다(배포하지 않는다).
@@ -26,8 +27,10 @@ gradle assembleDebug -PsdlDir=/path/to/SDL2-2.30.9
 # → app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Android Studio에서는 `pc/android`를 열면 된다. 첫 네이티브 빌드는 foresti/foresto 생성 때문에 몇 분 걸린다.
-네이티브 빌드가 셰이더와 REL 오버레이 표(`DobutsuNoMoriEPlus.relmap`)를 APK의 assets에 넣는다.
+Android Studio에서는 `pc/android`를 열면 된다. 첫 네이티브 빌드는 foresti/foresto 생성 때문에 몇 분 걸린다
+(ABI마다 한 번씩). 네이티브 빌드가 셰이더와 REL 오버레이 표를 APK의 assets에 넣는다. 오버레이 표는
+라이브러리의 배치에 따라 다르므로 ABI마다 따로 만든다(`DobutsuNoMoriEPlus-arm64-v8a.relmap` 등).
+한쪽만 필요하면 `app/build.gradle`의 `abiFilters`를 줄인다.
 
 ## 실행
 

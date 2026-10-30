@@ -376,6 +376,8 @@ if(ANDROID)
     # Shaders and the REL overlay table go into the APK's assets
     set(PC_ANDROID_ASSET_DIR "${CMAKE_BINARY_DIR}/assets" CACHE PATH "Where to put files for the APK's assets")
     set(PC_DATA_DIR "${PC_ANDROID_ASSET_DIR}")
+    # One APK carries several ABIs; each library has its own table
+    set(PC_RELMAP_NAME "DobutsuNoMoriEPlus-${ANDROID_ABI}.relmap")
 else()
     add_executable(afe_pc
         ${PC_SOURCES}
@@ -385,7 +387,10 @@ else()
         ${RC_FILE}
     )
     set(PC_DATA_DIR "${CMAKE_BINARY_DIR}/bin")
+    set(PC_RELMAP_NAME "DobutsuNoMoriEPlus.relmap")
 endif()
+set_source_files_properties(src/pc_rel_overlay.c src/pc_android.c PROPERTIES
+    COMPILE_DEFINITIONS "PC_RELMAP_NAME=\"${PC_RELMAP_NAME}\"")
 
 if(TARGET SDL2::SDL2)
     target_link_libraries(afe_pc SDL2::SDL2)
@@ -452,7 +457,7 @@ target_link_options(afe_pc PRIVATE -Wl,--gc-sections "-Wl,-Map=${CMAKE_BINARY_DI
 # Table that lets the game load REL data from the disc it runs from (pc_rel_overlay.c)
 add_custom_command(TARGET afe_pc POST_BUILD
     COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_rel_overlay.py" ${AFE_VERSION}
-            "${CMAKE_BINARY_DIR}/DobutsuNoMoriEPlus.map" -o "${PC_DATA_DIR}/DobutsuNoMoriEPlus.relmap"
+            "${CMAKE_BINARY_DIR}/DobutsuNoMoriEPlus.map" -o "${PC_DATA_DIR}/${PC_RELMAP_NAME}"
     COMMENT "Generating REL data overlay table"
 )
 if(NOT WIN32 AND NOT ANDROID)

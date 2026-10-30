@@ -16,7 +16,10 @@
 #include <unistd.h>
 #endif
 
-#define RELMAP_PATH "DobutsuNoMoriEPlus.relmap"
+#ifndef PC_RELMAP_NAME
+#define PC_RELMAP_NAME "DobutsuNoMoriEPlus.relmap"
+#endif
+#define RELMAP_PATH PC_RELMAP_NAME
 
 enum { KIND_BYTES, KIND_U16, KIND_U32, KIND_VTX };
 

@@ -21,13 +21,14 @@ android {
         versionCode 1
         versionName '0.1'
         ndk {
-            // The game code keeps pointers in 32-bit fields: 32-bit ARM only for now
-            abiFilters 'armeabi-v7a'
+            // Many recent phones run only 64-bit apps (docs/pc_port/64bit.md)
+            abiFilters 'armeabi-v7a', 'arm64-v8a'
         }
         externalNativeBuild {
             cmake {
                 arguments "-DSDL_SOURCE_DIR=${sdlDir}",
                           "-DPC_ANDROID_ASSET_DIR=${assetDir}",
+                          '-DPC_ALLOW_64BIT=ON',
                           '-DANDROID_STL=c++_shared'
             }
         }
