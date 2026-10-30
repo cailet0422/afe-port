@@ -21,6 +21,8 @@ typedef enum {
     SCRIPT_EDIT,
     SCRIPT_TEXT,
     SCRIPT_TOUCH,
+    SCRIPT_KEY,
+    SCRIPT_PAD,
 } ScriptKind;
 
 typedef struct {
@@ -141,6 +143,13 @@ int pc_input_script_load(const char* path) {
                 t[i] /= 100.0f; /* percent of the window */
             }
             ev.duration = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : SCRIPT_DEFAULT_HOLD;
+        } else if ((strcmp(word, "KEY") == 0 || strcmp(word, "PAD") == 0) && fields >= 3) {
+            /* a key press (SDL key name, '_' for spaces) or a gamepad button (SDL name) as an event */
+            ev.kind = word[0] == 'K' ? SCRIPT_KEY : SCRIPT_PAD;
+            snprintf(ev.name, sizeof(ev.name), "%s", arg);
+            for (char* p = ev.name; *p != '\0'; p++) {
+                if (*p == '_') *p = ' ';
+            }
         } else if ((strcmp(word, "EDIT") == 0 || strcmp(word, "TEXT") == 0) && fields >= 2) {
             /* the system input method's composition ("EDIT" alone ends it) or committed text */
             ev.kind = word[0] == 'E' ? SCRIPT_EDIT : SCRIPT_TEXT;
@@ -271,6 +280,40 @@ static void save_shot(const char* name) {
     free(pixels);
 }
 
+/* Queues the event for the next frame's pc_platform_poll_events */
+static void push_key_or_pad(const ScriptEvent* ev) {
+    SDL_Event e;
+
+    memset(&e, 0, sizeof(e));
+    if (ev->kind == SCRIPT_KEY) {
+        e.type = SDL_KEYDOWN;
+        e.key.state = SDL_PRESSED;
+        e.key.keysym.sym = SDL_GetKeyFromName(ev->name);
+        e.key.keysym.scancode = SDL_GetScancodeFromName(ev->name);
+        if (e.key.keysym.sym == SDLK_UNKNOWN) {
+            printf("[INPUT] unknown key '%s'\n", ev->name);
+            return;
+        }
+    } else {
+        SDL_GameControllerButton button = SDL_GameControllerGetButtonFromString(ev->name);
+        SDL_GameControllerAxis axis = SDL_GameControllerGetAxisFromString(ev->name);
+
+        if (button != SDL_CONTROLLER_BUTTON_INVALID) {
+            e.type = SDL_CONTROLLERBUTTONDOWN;
+            e.cbutton.button = (Uint8)button;
+            e.cbutton.state = SDL_PRESSED;
+        } else if (axis != SDL_CONTROLLER_AXIS_INVALID) {
+            e.type = SDL_CONTROLLERAXISMOTION;
+            e.caxis.axis = (Uint8)axis;
+            e.caxis.value = 32767;
+        } else {
+            printf("[INPUT] unknown gamepad input '%s'\n", ev->name);
+            return;
+        }
+    }
+    SDL_PushEvent(&e);
+}
+
 int pc_input_script_frame(u32 frame) {
     int keep_running = 1;
     int i;
@@ -303,6 +346,8 @@ int pc_input_script_frame(u32 frame) {
             pc_typing_system_editing(ev->name);
         } else if (ev->kind == SCRIPT_TEXT) {
             pc_typing_system_text(ev->name);
+        } else if (ev->kind == SCRIPT_KEY || ev->kind == SCRIPT_PAD) {
+            push_key_or_pad(ev);
         } else if (ev->kind == SCRIPT_QUIT) {
             printf("[INPUT] frame %u: quit\n", frame);
             keep_running = 0;

@@ -15,7 +15,7 @@
 static const char* const asset_files[] = {
     "shaders/default.vert",
     "shaders/default.frag",
-    "DobutsuNoMoriEPlus.relmap",
+    PC_RELMAP_NAME, /* DobutsuNoMoriEPlus-<ABI>.relmap */
 };
 
 static void copy_asset(const char* name) {

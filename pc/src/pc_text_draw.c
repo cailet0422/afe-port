@@ -10,6 +10,7 @@
  * start a new batch. */
 
 #include "pc_text_draw.h"
+#include "pc_ko.h"
 
 #include "game.h"
 #include "graph.h"
@@ -26,13 +27,73 @@
  * 4-bit intensity atlas). Keep in sync with m_font.c if mFont changes. */
 #define PC_TEXT_CC 0, 0, 0, PRIMITIVE, PRIMITIVE, 0, TEXEL0, 0
 
-#define FONT_ATLAS_W (mFont_TEX_CHAR_WIDTH * 16)
-#define FONT_ATLAS_H (mFont_TEX_CHAR_HEIGHT * 16)
+/* e+'s atlas holds 24x32 glyphs (16x16 of them), drawn at 12x16 on the
+ * 320x240 screen, as in mFont_gppLoadTexture / mFont_gppDrawCharPoly */
+#define FONT_ATLAS_W (mFont_TEX_CHAR_WIDTH_HIRES * 16)
+#define FONT_ATLAS_H (mFont_TEX_CHAR_HEIGHT_HIRES * 16)
 
 /* 5-bit indexing caps vertex cache index at 31. 7 glyphs × 4 verts = 28. */
 #define PC_TEXT_CHARS_PER_BATCH 7
 
 extern void mFont_gppSetMode(Gfx** gfx_pp);
+
+/* Ink columns of each glyph in atlas texels (24 per cell), read once from
+ * the atlas so menu text gets proportional spacing. The game's own width
+ * table (mFont_GetCodeWidth) leaves wide gaps around Latin letters. */
+static u8 s_ink_left[256];
+static u8 s_ink_right[256]; /* exclusive; 0 = no ink */
+static int s_ink_ready = 0;
+
+#define PC_TEXT_GAP_TEXELS 2   /* 1 screen pixel between glyphs */
+#define PC_TEXT_SPACE_TEXELS 8 /* advance of a glyph without ink (space) */
+
+static int atlas_texel(const u8* tex, int x, int y) {
+    /* I4, 8x8 texel blocks */
+    int block = (y >> 3) * (FONT_ATLAS_W >> 3) + (x >> 3);
+    u8 b = tex[block * 32 + (y & 7) * 4 + ((x & 7) >> 1)];
+
+    return (x & 1) ? (b & 0x0F) : (b >> 4);
+}
+
+static void measure_ink(void) {
+    for (int c = 0; c < 256; c++) {
+        int cx = (c & 0x0F) * mFont_TEX_CHAR_WIDTH_HIRES;
+        int cy = (c >> 4) * mFont_TEX_CHAR_HEIGHT_HIRES;
+        int left = mFont_TEX_CHAR_WIDTH_HIRES;
+        int right = 0;
+
+        for (int x = 0; x < mFont_TEX_CHAR_WIDTH_HIRES; x++) {
+            for (int y = 0; y < mFont_TEX_CHAR_HEIGHT_HIRES; y++) {
+                if (atlas_texel(FONT_tex_font1, cx + x, cy + y) > 2) {
+                    if (x < left) left = x;
+                    if (x + 1 > right) right = x + 1;
+                    break;
+                }
+            }
+        }
+        s_ink_left[c] = (u8)(right > 0 ? left : 0);
+        s_ink_right[c] = (u8)right;
+    }
+    s_ink_ready = 1;
+}
+
+/* Texels to draw and to advance for c */
+static int glyph_texels(int c, int* left) {
+    if (!s_ink_ready) measure_ink();
+    if (s_ink_right[c] == 0) {
+        *left = 0;
+        return 0;
+    }
+    *left = s_ink_left[c];
+    return s_ink_right[c] - s_ink_left[c];
+}
+
+static int advance_texels(int c) {
+    int left;
+    int w = glyph_texels(c, &left);
+
+    return w > 0 ? w + PC_TEXT_GAP_TEXELS : PC_TEXT_SPACE_TEXELS;
+}
 
 static inline void pc_trin_init_5b(Gfx** pp, int n,
     int v0, int v1, int v2,
@@ -100,18 +161,68 @@ static inline void pc_text_set_vtx(Vtx* v, int x, int y, int s, int t) {
     v->v.cn[3] = 0;
 }
 
+/* Text other than ASCII (a folder name, say) goes through the game's font
+ * code, which draws Hangul from the Korean patch's glyphs. Without the patch
+ * each such character shows as '?'. */
+static int has_non_ascii(const char* s) {
+    for (const u8* p = (const u8*)s; *p; p++) {
+        if (*p >= 0x80) return 1;
+    }
+    return 0;
+}
+
+static void to_ascii(const char* s, char* out, size_t n) {
+    size_t len = 0;
+
+    for (const u8* p = (const u8*)s; *p && len + 1 < n; p++) {
+        if (*p < 0x80) {
+            out[len++] = (char)*p;
+        } else if ((*p & 0xC0) != 0x80) {
+            out[len++] = '?';
+        }
+    }
+    out[len] = '\0';
+}
+
 int pc_text_width(const char* s) {
     if (!s) return 0;
+    if (has_non_ascii(s)) {
+        if (g_pc_ko_mode) {
+            u8 buf[256];
+            int len = pc_ko_encode_utf8(s, buf, sizeof(buf));
+
+            return mFont_GetStringWidth(buf, len, TRUE);
+        } else {
+            char ascii[256];
+
+            to_ascii(s, ascii, sizeof(ascii));
+            return pc_text_width(ascii);
+        }
+    }
     int w = 0;
     for (const u8* p = (const u8*)s; *p; p++) {
-        w += mFont_GetCodeWidth(*p, TRUE);
+        w += advance_texels(*p);
     }
-    return w;
+    return (w + 1) / 2; /* two texels per screen pixel */
 }
 
 void pc_text_draw(struct game_s* game, const char* s, f32 x, f32 y,
                   int r, int g, int b, int a, f32 scale) {
     if (!game || !game->graph || !s) return;
+    if (has_non_ascii(s)) {
+        if (g_pc_ko_mode) {
+            u8 buf[256];
+            int n = pc_ko_encode_utf8(s, buf, sizeof(buf));
+
+            mFont_SetLineStrings(game, buf, n, x, y, r, g, b, a, FALSE, TRUE, scale, scale, mFont_MODE_FONT);
+        } else {
+            char ascii[256];
+
+            to_ascii(s, ascii, sizeof(ascii));
+            pc_text_draw(game, ascii, x, y, r, g, b, a, scale);
+        }
+        return;
+    }
     int len = (int)strlen(s);
     if (len <= 0) return;
     if (fabsf(scale) < 0.001f) return;
@@ -136,7 +247,7 @@ void pc_text_draw(struct game_s* game, const char* s, f32 x, f32 y,
     /* --- Batched glyph emission --- */
     const f32 half_sw = (f32)SCREEN_WIDTH  * 0.5f;
     const f32 half_sh = (f32)SCREEN_HEIGHT * 0.5f;
-    const f32 inv_half_t = 0.5f / (f32)mFont_TEX_CHAR_HEIGHT; /* mFont uses t=16 */
+    const f32 inv_half_t = 0.5f / (f32)mFont_TEX_CHAR_HEIGHT_HIRES; /* mFont uses t=32 */
 
     f32 cur_x = x;
     int pos = 0;
@@ -149,29 +260,36 @@ void pc_text_draw(struct game_s* game, const char* s, f32 x, f32 y,
 
         for (int i = 0; i < batch_n; i++) {
             int c = (u8)s[pos + i];
-            int code_w = mFont_GetCodeWidth((u8)c, TRUE);
-            if (code_w <= 0) code_w = mFont_TEX_CHAR_WIDTH;
+            int ink_left;
+            int tex_w = glyph_texels(c, &ink_left);
+            f32 advance = (f32)advance_texels(c) * 0.5f * scale;
+
+            if (tex_w <= 0) {
+                /* nothing to draw: a degenerate quad keeps the batch layout */
+                tex_w = 1;
+            }
 
             /* UV rect in atlas — same formula as mFont_gppLoadTexture +
-             * the half-texel inset applied in mFont_gppDrawCharPoly. */
+             * the quarter-texel inset applied in mFont_gppDrawCharPoly
+             * (atlas texels are half a screen pixel). */
             int row = c >> 4;
             int col = c & 0x0F;
-            int uls_px = col * mFont_TEX_CHAR_WIDTH;
-            int ult_px = row * mFont_TEX_CHAR_HEIGHT;
-            int uls_fx = (uls_px << 6) + 32;
-            int ult_fx = (ult_px << 6) + 32;
-            int lrs_fx = ((uls_px + code_w) << 6) - 32;
-            int lrt_fx = ((ult_px + mFont_TEX_CHAR_HEIGHT) << 6) - 32;
+            int uls_px = col * mFont_TEX_CHAR_WIDTH_HIRES + ink_left;
+            int ult_px = row * mFont_TEX_CHAR_HEIGHT_HIRES;
+            int uls_fx = (uls_px << 6) + 16;
+            int ult_fx = (ult_px << 6) + 16;
+            int lrs_fx = ((uls_px + tex_w) << 6) - 16;
+            int lrt_fx = ((ult_px + mFont_TEX_CHAR_HEIGHT_HIRES) << 6) - 16;
 
             /* Screen-space quad corners. Match mFont_gppDrawCharPoly:
              * convert to centered/flipped coords, then inset by half texel. */
-            f32 char_w = (f32)code_w                        * scale;
+            f32 char_w = (f32)tex_w * 0.5f                  * scale;
             f32 char_h = (f32)mFont_TEX_CHAR_HEIGHT_F32     * scale;
             f32 vx_tl = cur_x - half_sw;
             f32 vy_tl = -(y - half_sh);
             f32 t0    = char_w;
             f32 t1    = -char_h;
-            f32 inv_half_s = 0.5f / (f32)code_w;
+            f32 inv_half_s = 0.5f / (f32)tex_w;
 
             f32 vx_br = vx_tl + t0 * (1.0f - inv_half_s);
             f32 vy_br = vy_tl + t1 * (1.0f - inv_half_t);
@@ -191,7 +309,7 @@ void pc_text_draw(struct game_s* game, const char* s, f32 x, f32 y,
             pc_text_set_vtx(v + 2, lrx, lry, lrs_fx, lrt_fx);
             pc_text_set_vtx(v + 3, lrx, uly, lrs_fx, ult_fx);
 
-            cur_x += char_w;
+            cur_x += advance;
         }
 
         /* One gSPVertex covers the whole batch. */

@@ -40,8 +40,9 @@
 - 원래 빅엔디언 원시 바이트(`u8[]`)로 들어 있는 데이터를 다른 곳에서 `u16`/구조체로 읽는
   경우가 있어, `pc/tools/gen_data_fixups.py`가 그런 블롭을 찾아 부팅 시 한 번 바이트 순서를
   바꾸는 표(`pc_data_fixups.c`)를 만든다.
-- 디컴프가 포인터를 `u32`로 다루는 곳이 많아 **32비트(x86) 빌드만** 지원한다. 64비트
-  (Android arm64 포함)는 M4에서 따로 다룬다.
+- 디컴프가 포인터를 `u32`로 다루는 곳이 많아 데스크톱은 **32비트(x86) 빌드**가 기본이다. 64비트
+  (Android arm64용)는 `TARGET_PC` 안에서 포인터 크기를 따르도록 고쳐 리눅스 x86_64에서 새 게임 진행까지
+  확인했다([64bit.md](64bit.md), CMake `-DPC_ALLOW_64BIT=ON`).
 
 ## 빌드 (Linux, 32비트)
 
@@ -60,7 +61,8 @@
    ninja -C pc/build32
    ```
    첫 configure는 foresti/foresto 생성 때문에 몇 분 걸린다.
-3. 실행: 디스크 이미지(`.ciso`/`.iso`/`.gcm`)를 `pc/build32/bin/rom/`에 두고
+3. 실행: 디스크 이미지(`.ciso`/`.iso`/`.gcm`)를 `pc/build32/bin/rom/`에 두거나 `settings.ini`의
+   `rom_dir`에 이미지가 있는 폴더(또는 이미지 파일)를 적고
    ```sh
    cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
    ```
@@ -75,26 +77,64 @@
   ninja -C pc/buildwin
   ```
   `pc/buildwin/bin/`에 exe, `SDL2.dll`(자동 복사), `shaders/`, `.relmap`이 생긴다. 이 폴더째 Windows로 옮기고
-  `rom/`에 디스크 이미지를 넣으면 된다. 필요한 DLL은 `SDL2.dll`뿐(그 밖은 Windows 기본).
+  `rom/`에 디스크 이미지를 넣거나, 실행했을 때 뜨는 안내에서 "폴더 선택"으로 이미지가 있는 폴더를 고른다.
+  필요한 DLL은 `SDL2.dll`뿐(그 밖은 Windows 기본).
+- 디스크 이미지 위치: `settings.ini` `[Paths]`의 `rom_dir`(폴더 또는 이미지 파일, UTF-8, 한글 폴더 이름 가능)을
+  먼저 보고, 없으면 게임 폴더와 `orig/`, `rom/`을 찾는다. Windows에서는 일시정지 메뉴(Esc) → Settings →
+  Disc → Folder에서 탐색기 폴더 선택 창으로 바꿀 수 있다(다시 실행하면 적용, `pc_rom_dir.c`).
 - MSYS2 **MINGW32** 셸: `pacman -S mingw-w64-i686-{gcc,cmake,ninja,SDL2,python}` 후 리눅스와 같은 순서(미검증).
 - Wine으로 실행 확인: 오프닝·한글 이름 입력·새 게임 → 마을 경로가 리눅스 빌드와 같은 결과.
+- Windows에서만 나던 것: emu64의 N64 형식 텍스처 변환 버퍼 끝을 다음 배열의 시작으로 잡고 있어(GC
+  링커 배치 가정) MinGW 배치에서는 변환이 전부 실패했다(타이틀의 "Press Start Button!" 자리에 다른
+  텍스처). 버퍼 끝을 배열 크기로 잡는다. exe는 `0x10000000`에 링크해 120MB가 넘는 이미지가 N64 세그먼트
+  주소(`0x03000000`–`0x0FFFFFFF`)와 겹치지 않게 한다.
 
 빌드하면 `bin/`에 `DobutsuNoMoriEPlus.relmap`이 함께 생긴다. 실행 파일은 이 표를 보고 REL 데이터를
 실행 중인 디스크에서 다시 읽으므로 두 파일을 같은 폴더에 둔다.
 
 ### 한국어(한글패치)로 실행
 
-1. 한글패치는 원 배포처(한식구, `https://cafe.naver.com/hansicgu`)에서 받는다. 이 저장소에는
-   패치 파일·번역문·글꼴 데이터를 넣지 않는다.
-2. 패치에 들어 있는 적용 도구로 **본인 디스크에서 추출한 Rev 1 ISO**에 패치를 적용한다.
-3. 만들어진 ISO를 `bin/rom/`에 넣고 실행한다. 실행 로그에 `Korean patch detected`가 나오면
-   한국어 모드다(글자 폭·한글 글리프·로고·이름표 등을 디스크에서 읽는다). 형식은
-   [korean_patch.md](korean_patch.md) 참고.
+한글패치는 원 배포처(한식구, `https://cafe.naver.com/hansicgu`)에서 받는다. 이 저장소에는
+패치 파일·번역문·글꼴 데이터를 넣지 않는다.
+
+**게임 안에서 적용** (Windows·Android·Linux 공통, `pc/src/pc_ko_patch.c`):
+
+1. 원래 디스크 이미지(일본판 Rev 1, `.iso`/`.ciso`/`.gcm`)로 게임을 실행한다.
+2. 일시정지 메뉴(Esc, Android는 뒤로 버튼) → Settings → **Disc** 탭 → **Korean patch: Install**에서 Enter.
+   - Windows: 탐색기 파일 선택 창이 뜬다. 받은 **zip을 그대로**(또는 그 안의 `.xdelta`) 고른다.
+   - Android: 시스템 파일 선택 창(다운로드 폴더 등)에서 zip을 고른다.
+   - 그 밖(Linux): 게임 폴더의 `patch/`에 zip을 넣어 두면 그것을 쓴다.
+3. 진행 막대가 끝나면(1초 안팎) "Restart now"를 고른다. 다시 시작하면 한국어로 나온다.
+   - 패치는 원래 이미지를 바꾸지 않고 게임 폴더의 `korean/`에 한글판 ISO(약 37MB)를 따로 만든다.
+     `settings.ini` `[Korean]`의 `korean = 1`, `ko_image`가 그것을 가리킨다.
+   - 결과는 패치의 `manifest.json`에 적힌 SHA-256과 맞아야 저장된다(zip 없이 `.xdelta`만 고르면 v0.9.2는
+     내장 해시로, 그 밖은 패치 안의 창별 Adler-32로 확인). 원본이 Rev 1이 아니면 "not the one the patch is
+     for"로 멈춘다.
+   - 같은 탭의 **Korean: < On / Off >**(Apply 후 다시 시작)로 한국어판과 원래 디스크를 오갈 수 있다.
+
+**직접 적용**: 패치에 들어 있는 도구(또는 `pc/tools/apply_ko_patch.py`)로 Rev 1 ISO에 적용한 뒤 그 ISO를
+`rom/`에 넣어도 된다. 어느 쪽이든 실행 로그에 `Korean patch detected`가 나오면 한국어 모드다(글자 폭·한글
+글리프·로고·이름표 등을 디스크에서 읽는다). 형식은 [korean_patch.md](korean_patch.md) 참고.
+
+### 조작키 바꾸기
+
+일시정지 메뉴 → Settings → **Controls** → **Buttons**에서 바꾼다(`pc_settings_menu.c`, `pc_keybindings.c`).
+
+- 게임큐브 버튼 20개(A B X Y Start Z L R, 스틱·C스틱·십자키 네 방향)마다 **Keyboard**와 **Gamepad** 칸이
+  있다. 위/아래로 줄, 왼쪽/오른쪽으로 칸을 고르고 Enter를 누른 뒤 원하는 키(마우스 버튼 포함)나 패드
+  버튼(LT/RT 트리거 포함)을 누른다. Esc 또는 6초 동안 입력이 없으면 취소.
+- 이미 다른 버튼에 쓰이던 키를 고르면 두 버튼의 키가 서로 바뀐다(겹치거나 빠지는 키가 없게).
+- 패드의 왼쪽/오른쪽 스틱은 항상 메인 스틱/C스틱이다. 스틱 방향에 패드 버튼을 더 붙일 수도 있다.
+- **Reset to defaults**로 처음 값. 바꾸면 바로 `keybindings.ini`에 저장된다(`[Keyboard]`, `[Gamepad]`,
+  패드는 한 줄에 두 개까지: `L = leftshoulder, lefttrigger`). 예전 `keybindings.ini`(키보드만)도 그대로 읽는다.
+- 일시정지 중에는 게임패드로도 메뉴를 움직인다(십자키, A = 결정, B/Start = 뒤로).
 
 ### 자동 테스트 입력
 
 `--input-script 파일`로 프레임 단위 입력·스크린샷·종료를 재생할 수 있다
 (형식은 `pc/include/pc_input_script.h`). `--no-framelimit`과 함께 쓰면 빠르게 돌릴 수 있다.
+`KEY Escape`, `PAD dpdown`처럼 키·패드 이벤트도 보낼 수 있어 일시정지·설정 메뉴(키 설정, 한글패치
+설치)를 시험할 수 있다.
 
 ## 마일스톤
 
@@ -104,8 +144,8 @@
 | M1 | Linux/Windows에서 타이틀 화면까지 부팅 | 완료: Linux, Windows(리눅스에서 MinGW 교차 빌드, Wine으로 실행 확인) |
 | M2 | 마을 플레이, 세이브(메모리 카드 파일), e+ 전용 기능(SD/e-Reader/GBA)은 우회 | 진행 중: 한글 디스크로 역 → 너굴 → 집 구경·선택 → 자유 이동 → 소지품 화면까지 크래시 없음(`pc/tools/make_newgame_script.py`). 저장은 집 문 왼쪽의 토용군(하니와)에게서 하는데 첫날은 너굴 상점(1구역 4번지) 아르바이트를 마쳐야 한다("조금만 더 아르바이트 힘내 주세용"). 아르바이트 경로·저장·불러오기 남음 |
 | M3 | 오디오 정상화, 패미컴(FixNES) | 예정 |
-| M4 | 64비트 정리(포인터↔u32), Android(arm64, SDL2 + GLES3, 터치 입력) | 진행 중: 렌더러 OpenGL ES 3.0 지원(`-DPC_GLES=ON`, 리눅스 Mesa GLES로 오프닝·마을 확인), Android(armeabi-v7a) APK 빌드, 화면 게임패드(터치)·Android 키보드 한글 입력([android.md](android.md)). 64비트: 컴파일·링크, x86_64에서 게임 루프 진입([64bit.md](64bit.md)). 남은 것: 64비트 오디오·라벨, arm64 APK, 실기기 확인 |
-| M5 | 한국어 패치 | 사용자 한글패치 디스크 지원: 대사·로고·이름표·글자 폭 표시, 키보드 한글 입력(이름·마을 이름·영어 이름 확인, 편지는 코드만 연결), 사전 코드·말버릇·조사 자동 선택, 패치가 옮긴 문자열·표, 게시판/일기/알림판 줄 폭. 남은 것: 시간·비밀번호 입력 등 UI 상수, 말소리, SD 경고 문구, 게임패드 화면 키보드 ([korean_patch.md](korean_patch.md)) |
+| M4 | 64비트 정리(포인터↔u32), Android(arm64, SDL2 + GLES3, 터치 입력) | 진행 중: 렌더러 OpenGL ES 3.0 지원(`-DPC_GLES=ON`, 리눅스 Mesa GLES로 오프닝·마을 확인), Android(armeabi-v7a) APK 빌드, 화면 게임패드(터치)·Android 키보드 한글 입력([android.md](android.md)). 64비트: x86_64에서 타이틀·오프닝·새 게임 진행이 32비트와 같은 화면, APK에 arm64-v8a 포함([64bit.md](64bit.md)). 남은 것: 64비트로 여러 장면 점검, 실기기 확인 |
+| M5 | 한국어 패치 | 사용자 한글패치 디스크 지원: 대사·로고·이름표·글자 폭 표시, 키보드 한글 입력(이름·마을 이름·영어 이름 확인, 편지는 코드만 연결), 사전 코드·말버릇·조사 자동 선택, 패치가 옮긴 문자열·표, 게시판/일기/알림판 줄 폭, 설정 메뉴에서 패치 zip을 골라 바로 적용(`korean/`에 한글판 이미지를 만들고 다시 시작). 남은 것: 시간·비밀번호 입력 등 UI 상수, 말소리, SD 경고 문구, 게임패드 화면 키보드 ([korean_patch.md](korean_patch.md)) |
 | M6 | 런타임 에셋 로더, 배포 패키징 | 예정 |
 
 ## 한국어 패치 설계
@@ -178,4 +218,3 @@
 - 정적(static)으로 선언된 TLUT 블롭 3개는 부팅 시 바이트 순서 보정을 못 하고 있음.
 - e+ 세이브 경로는 아직 ACGC의 `pc_card.c` 위에서 그대로 컴파일만 되는 상태.
 - SD 카드, e-Reader, GBA 연동은 "장치 없음"으로 응답.
-- 향상 메뉴(ACGC의 설정/일시정지 메뉴) 글자는 e+ 폰트 문자표와 맞지 않음.

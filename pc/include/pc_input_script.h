@@ -10,6 +10,10 @@
  *     <frame> TEXT <utf8>             system input method: committed text
  *     <frame> TOUCH x,y[:x2,y2] [n]   a finger on the screen (percent of the window),
  *                                     moved to x2,y2 the next frame, lifted after n frames
+ *     <frame> KEY <name>              a key press event (SDL key name, '_' for a space,
+ *                                     e.g. Escape, Return, Down, Left_Shift): menus
+ *     <frame> PAD <name>              a gamepad button or trigger event (SDL names: a,
+ *                                     dpdown, leftshoulder, lefttrigger ...)
  *
  * <frame> counts VI retraces (60 per second) from boot. <inputs> joins any of
  * A B X Y START Z L R UP DOWN LEFT RIGHT (D-pad) and SU SD SL SR (main stick)

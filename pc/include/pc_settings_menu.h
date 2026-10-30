@@ -28,6 +28,11 @@ int  pc_settings_menu_nav_right(void);
 int  pc_settings_menu_confirm(void);
 int  pc_settings_menu_cancel(void); /* Esc/B — reverts on res-confirm, else closes */
 
+/* While the bindings page waits for a key or button, it takes every input
+ * event (keys, mouse and gamepad buttons, triggers); returns 1 if it took e. */
+int  pc_settings_menu_handle_event(const SDL_Event* e);
+int  pc_settings_menu_capturing(void);
+
 /* Call once per frame while the revert menu is active. Auto-reverts if the 15s expires. */
 void pc_settings_menu_tick(void);
 

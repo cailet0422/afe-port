@@ -54,6 +54,14 @@ if(PC_BUILD_TESTS)
     target_include_directories(test_ko_charset PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
     target_compile_options(test_ko_charset PRIVATE -Wall -Wextra)
     add_test(NAME ko_charset COMMAND test_ko_charset)
+
+    add_executable(test_ko_patch
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_patch.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_ko_patch.c
+    )
+    target_include_directories(test_ko_patch PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_compile_options(test_ko_patch PRIVATE -Wall -Wextra)
+    add_test(NAME ko_patch COMMAND test_ko_patch)
 endif()
 
 # =============================================================================
@@ -278,8 +286,11 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_stubs.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_stubs_cpp.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_disc.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_rom_dir.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_ime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_charset.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_patch.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_ko_patch.c
     ${SYSTEM_FONT_C}
 )
 
@@ -376,6 +387,8 @@ if(ANDROID)
     # Shaders and the REL overlay table go into the APK's assets
     set(PC_ANDROID_ASSET_DIR "${CMAKE_BINARY_DIR}/assets" CACHE PATH "Where to put files for the APK's assets")
     set(PC_DATA_DIR "${PC_ANDROID_ASSET_DIR}")
+    # One APK carries several ABIs; each library has its own table
+    set(PC_RELMAP_NAME "DobutsuNoMoriEPlus-${ANDROID_ABI}.relmap")
 else()
     add_executable(afe_pc
         ${PC_SOURCES}
@@ -385,7 +398,10 @@ else()
         ${RC_FILE}
     )
     set(PC_DATA_DIR "${CMAKE_BINARY_DIR}/bin")
+    set(PC_RELMAP_NAME "DobutsuNoMoriEPlus.relmap")
 endif()
+set_source_files_properties(src/pc_rel_overlay.c src/pc_android.c PROPERTIES
+    COMPILE_DEFINITIONS "PC_RELMAP_NAME=\"${PC_RELMAP_NAME}\"")
 
 if(TARGET SDL2::SDL2)
     target_link_libraries(afe_pc SDL2::SDL2)
@@ -407,7 +423,7 @@ else()
 endif()
 
 if(WIN32)
-    target_link_libraries(afe_pc opengl32 winmm imm32 version setupapi)
+    target_link_libraries(afe_pc opengl32 winmm imm32 version setupapi ole32 uuid) # ole32/uuid: folder dialog (pc_rom_dir.c)
 elseif(ANDROID)
     target_link_libraries(afe_pc android log dl m)
 else()
@@ -452,7 +468,7 @@ target_link_options(afe_pc PRIVATE -Wl,--gc-sections "-Wl,-Map=${CMAKE_BINARY_DI
 # Table that lets the game load REL data from the disc it runs from (pc_rel_overlay.c)
 add_custom_command(TARGET afe_pc POST_BUILD
     COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_rel_overlay.py" ${AFE_VERSION}
-            "${CMAKE_BINARY_DIR}/DobutsuNoMoriEPlus.map" -o "${PC_DATA_DIR}/DobutsuNoMoriEPlus.relmap"
+            "${CMAKE_BINARY_DIR}/DobutsuNoMoriEPlus.map" -o "${PC_DATA_DIR}/${PC_RELMAP_NAME}"
     COMMENT "Generating REL data overlay table"
 )
 if(NOT WIN32 AND NOT ANDROID)
@@ -461,6 +477,10 @@ endif()
 
 if(MINGW)
     target_link_options(afe_pc PRIVATE -static-libgcc -static-libstdc++ -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic)
+    # The default base (0x00400000) puts the 120+ MB image over N64 segment
+    # addresses (0x03000000-0x0FFFFFFF), which emu64's seg2k0 then takes for
+    # raw pointers; keep the image above them
+    target_link_options(afe_pc PRIVATE -Wl,--image-base,0x10000000 -Wl,--disable-dynamicbase)
 endif()
 
 if(WIN32 AND NOT PC_CONSOLE)
