@@ -46,6 +46,7 @@ TYPE_KINDS = {
     "u32": KIND_U32, "s32": KIND_U32, "int": KIND_U32, "f32": KIND_U32, "float": KIND_U32,
     "Vtx": KIND_VTX,
 }
+ELEM_SIZES = {KIND_BYTES: 1, KIND_U16: 2, KIND_U32: 4, KIND_VTX: 16}
 # Structs made only of fields of one width
 STRUCT_KINDS = {
     "mCL_ftr_info_c": KIND_U16,
@@ -224,11 +225,13 @@ def main():
     build_dir = Path(args.map).resolve().parent
 
     def source_info(obj):
-        """({name: type}, {asset names}) of the source an object file was built from"""
+        """({name: type}, {asset names}, {name: [(type, bytes, element bytes)]}) of the
+        source an object file was built from; the last lists every declaration
+        of a name (function-local statics of one name in several functions)"""
         src = re.sub(r"\.(o|obj)$", "", obj)
         m = re.search(r"^(.*?)CMakeFiles/[^/]+\.dir/(.*)$", src)
         if not m:
-            return {}, {}
+            return {}, {}, {}
         rel = m.group(2)
         # absolute sources keep their path minus the leading '/'; others are
         # relative to the target's binary dir, with ".." written as "__"
@@ -238,6 +241,13 @@ def main():
             text = source_text(path)
             decls = {d.group(2): d.group(1).strip() for d in DECL_SCALAR.finditer(text)}
             decls.update({d.group(2): d.group(1).strip() for d in DECL.finditer(text)})
+            sized = defaultdict(list)
+            for d in DECL.finditer(text):
+                count = 1
+                for n in re.findall(r"\[\s*(\w*)\s*\]", d.group(3)):
+                    count = count * int(n) if count and n.isdigit() else None
+                elem = ELEM_SIZES.get(TYPE_KINDS.get(d.group(1).strip()))
+                sized[d.group(2)].append((d.group(1).strip(), count * elem if count and elem else None, elem))
             assets = ({name: None for name in decls} if EMBEDDED in text
                       else {d.group(1): d.group(2) for d in ASSET_DECL.finditer(text)})
             for d in DUP_DEFINE.finditer(text):
@@ -245,11 +255,20 @@ def main():
                     decls[d.group(2)] = decls[d.group(1)]
                 if d.group(1) in assets:
                     assets[d.group(2)] = assets[d.group(1)]
-            decl_cache[path] = (decls, assets)
+            decl_cache[path] = (decls, assets, sized)
         return decl_cache[path]
 
-    def decl_type(obj, name):
-        return source_info(obj)[0].get(name)
+    def decl_type(obj, name, size=None):
+        decls, _, sized = source_info(obj)
+        if len({TYPE_KINDS.get(t, t) for t, _, _ in sized.get(name, ())}) > 1:
+            # declared with types of several kinds: the one of that size, or else the
+            # one of no given size whose elements fit, if only one is
+            if size is None:
+                return None
+            fits = ({t for t, n, _ in sized[name] if n == size}
+                    or {t for t, n, elem in sized[name] if n is None and (elem is None or size % elem == 0)})
+            return fits.pop() if len({TYPE_KINDS.get(t, t) for t in fits}) == 1 else None
+        return decls.get(name)
 
     def is_asset(obj, name):
         return local_static_var.get(name, name) in source_info(obj)[1]
@@ -333,7 +352,7 @@ def main():
             if mod_id == 0 and not flags:
                 continue
             # a function-local static is declared without its .N suffix
-            t = decl_type(obj, local_static_var.get(mapped, mapped))
+            t = decl_type(obj, local_static_var.get(mapped, mapped), size)
             kind = TYPE_KINDS.get(t) if t else None
             if kind is None and t in STRUCT_KINDS:
                 kind = STRUCT_KINDS[t]
