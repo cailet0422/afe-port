@@ -442,6 +442,10 @@ static void log_positions(u32 frame) {
                    home->bx, home->bz, home_x(home), home_z(home));
         }
     }
+    printf("[POS] frame %u camera %d center %.0f,%.0f,%.0f eye %.0f,%.0f,%.0f dir %d,%d dist %.0f\n", (unsigned)frame,
+           play->camera.now_main_index, play->camera.lookat.center.x, play->camera.lookat.center.y,
+           play->camera.lookat.center.z, play->camera.lookat.eye.x, play->camera.lookat.eye.y, play->camera.lookat.eye.z,
+           play->camera.direction.x, play->camera.direction.y, play->camera.focus_distance);
     for (i = 0; i < (int)(sizeof(parts) / sizeof(parts[0])); i++) {
         ACTOR* actor;
 

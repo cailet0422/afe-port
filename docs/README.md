@@ -72,7 +72,10 @@ afe-decomp를 기반으로 한 PC(Windows/Linux)·Android 포트와 한국어 �
          -DCMAKE_TOOLCHAIN_FILE=$PWD/pc/cmake/Toolchain-multilib32.cmake
    ninja -C pc/build32
    ```
-   첫 configure는 foresti/foresto 생성 때문에 몇 분 걸린다.
+   첫 configure는 foresti/foresto 생성 때문에 몇 분 걸린다. 32비트 x86은 `-msse2 -mfpmath=sse`로 빌드한다:
+   x87로는 범위를 넘는 실수를 `s16`에 넣을 때 -32768이 되는데, 게임큐브는 32비트로 바꾼 뒤 아래 16비트를 남기고
+   게임 코드가 그것에 기댄다(각도 보간 `cKF_SkeletonInfo_subRotInterpolation` — 구역 경계를 넘는 동안 카메라가
+   땅높이에서 수평으로 보던 문제).
 3. 실행: 디스크 이미지(`.ciso`/`.iso`/`.gcm`)를 `pc/build32/bin/rom/`에 두거나 `settings.ini`의
    `rom_dir`에 이미지가 있는 폴더(또는 이미지 파일)를 적고
    ```sh
