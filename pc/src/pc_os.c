@@ -413,7 +413,7 @@ void OSInit(void) {
     main_thread_id = SDL_ThreadID();
     /* compute ticks from GC epoch (Jan 1, 2000) to now, with timezone */
     {
-        time_t unix_now = g_pc_deterministic ? (time_t)DETERMINISTIC_DATE : time(NULL);
+        time_t unix_now = g_pc_deterministic ? (time_t)DETERMINISTIC_DATE + g_pc_deterministic_days * 86400 : time(NULL);
 
         struct tm* gmt = gmtime(&unix_now);
         if (!gmt) { gc_epoch_offset_ticks = 0; return; }

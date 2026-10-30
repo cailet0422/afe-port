@@ -8,6 +8,13 @@
  *     <frame> POS                     print where the player and the villagers are
  *     <frame> SEEK <id>|<x>,<z> [n]   walk for up to n frames (default 600) to the
  *                                     villager with that hex id, or to a point
+ *     <frame> GIVE <item>             debug: put an item (hex id) in the first free pocket
+ *     <frame> LEDIT <type> [<id>]     debug: open the name editor of that mLE_TYPE (2 is a
+ *                                     catchphrase, of the villager with that hex id)
+ *     <frame> RESETS <n>              debug: the player quit n times without saving, and
+ *                                     the town just loaded is one (Resetti comes)
+ *     <frame> CATCH <id>              print a villager's catchphrase bytes
+ *     <frame> ITEM                    print the item a menu chose (a song requested of K.K.)
  *     <frame> TYPE <keys>             type into the text editor (pc_input_script.c)
  *     <frame> EDIT [<utf8>]           system input method: text being composed
  *     <frame> TEXT <utf8>             system input method: committed text

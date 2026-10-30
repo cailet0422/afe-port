@@ -8,6 +8,7 @@
 #include "m_play.h"
 #include "m_field_info.h"
 #include "m_random_field_h.h"
+#include "m_submenu.h"
 
 #include <ctype.h>
 #include <dolphin/pad.h>
@@ -33,6 +34,11 @@ typedef enum {
     SCRIPT_PAD,
     SCRIPT_POS,
     SCRIPT_SEEK,
+    SCRIPT_GIVE,
+    SCRIPT_LEDIT,
+    SCRIPT_RESETS,
+    SCRIPT_CATCH,
+    SCRIPT_ITEM,
 } ScriptKind;
 
 typedef struct {
@@ -46,6 +52,7 @@ typedef struct {
     int touch_moves;
     u16 seek_id;     /* SEEK: villager to walk to, or 0 for seek_pos */
     float seek_pos[2];
+    u32 value[2]; /* GIVE item; LEDIT type and villager; RESETS count; CATCH villager */
     char name[128];
 } ScriptEvent;
 
@@ -145,6 +152,21 @@ int pc_input_script_load(const char* path) {
                 ev.seek_id = (u16)strtoul(arg, NULL, 16);
             }
             ev.duration = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : SCRIPT_SEEK_FRAMES;
+        } else if (strcmp(word, "GIVE") == 0 && fields >= 3) {
+            ev.kind = SCRIPT_GIVE;
+            ev.value[0] = (u32)strtoul(arg, NULL, 16);
+        } else if (strcmp(word, "LEDIT") == 0 && fields >= 3) {
+            ev.kind = SCRIPT_LEDIT;
+            ev.value[0] = (u32)strtoul(arg, NULL, 10);
+            ev.value[1] = fields >= 4 ? (u32)strtoul(arg2, NULL, 16) : 0;
+        } else if (strcmp(word, "RESETS") == 0 && fields >= 3) {
+            ev.kind = SCRIPT_RESETS;
+            ev.value[0] = (u32)strtoul(arg, NULL, 10);
+        } else if (strcmp(word, "CATCH") == 0 && fields >= 3) {
+            ev.kind = SCRIPT_CATCH;
+            ev.value[0] = (u32)strtoul(arg, NULL, 16);
+        } else if (strcmp(word, "ITEM") == 0) {
+            ev.kind = SCRIPT_ITEM;
         } else if (strcmp(word, "TYPE") == 0 && fields >= 3) {
             ev.kind = SCRIPT_TYPE;
             snprintf(ev.name, sizeof(ev.name), "%s", arg);
@@ -482,6 +504,70 @@ static void log_positions(u32 frame) {
     }
 }
 
+static Animal_c* find_animal(u16 npc_id) {
+    int i;
+
+    for (i = 0; i < ANIMAL_NUM_MAX; i++) {
+        if (Save_Get(animals[i]).id.npc_id == npc_id) {
+            return &Save_Get(animals[i]);
+        }
+    }
+    return NULL;
+}
+
+/* Debug commands for testing what the game only does now and then (a
+ * villager asking for a new catchphrase, a stationery item in the pockets,
+ * Resetti's later visits) */
+static void debug_command(const ScriptEvent* ev) {
+    GAME_PLAY* play = (GAME_PLAY*)gamePT;
+    Animal_c* animal;
+    int i;
+
+    if (ev->kind == SCRIPT_RESETS) {
+        /* as when a town that was not saved again is loaded; repeated over
+         * the loading, which sets both */
+        if (Now_Private->reset_count != (u8)ev->value[0] || !Common_Get(reset_flag)) {
+            Now_Private->reset_count = (u8)ev->value[0];
+            Common_Set(reset_flag, TRUE);
+            printf("[INPUT] frame %u: reset count %u\n", (unsigned)s_frame, (unsigned)ev->value[0]);
+        }
+        return;
+    }
+    if (play == NULL || play->game.exec != play_main) {
+        printf("[INPUT] frame %u: not playing\n", (unsigned)s_frame);
+        return;
+    }
+    if (ev->kind == SCRIPT_GIVE) {
+        for (i = 0; i < mPr_POCKETS_SLOT_COUNT && Now_Private->inventory.pockets[i] != EMPTY_NO; i++) {
+        }
+        if (i < mPr_POCKETS_SLOT_COUNT) {
+            Now_Private->inventory.pockets[i] = (mActor_name_t)ev->value[0];
+        }
+        printf("[INPUT] frame %u: item %04X in pocket %d\n", (unsigned)s_frame, (unsigned)ev->value[0], i);
+    } else if (ev->kind == SCRIPT_LEDIT) {
+        /* the name editor; a catchphrase is the villager's (mLE_TYPE_EPHRASE
+         * = 2), anything else is typed into a scratch buffer */
+        static u8 scratch[32];
+
+        animal = ev->value[1] != 0 ? find_animal((u16)ev->value[1]) : NULL;
+        if (!play->submenu.open_flag) {
+            mSM_open_submenu_new(&play->submenu, mSM_OVL_LEDIT, (int)ev->value[0], 0,
+                                 animal != NULL ? (void*)animal->catchphrase : (void*)scratch);
+        }
+    } else if (ev->kind == SCRIPT_ITEM) {
+        /* what a menu chose, e.g. the song a request to K.K. named */
+        printf("[INPUT] frame %u: menu item %04X\n", (unsigned)s_frame,
+               play->submenu.item_p != NULL ? (unsigned)play->submenu.item_p->item : 0u);
+    } else if (ev->kind == SCRIPT_CATCH && (animal = find_animal((u16)ev->value[0])) != NULL) {
+        /* the field and the padding after it, where the Korean patch packs it */
+        printf("[INPUT] frame %u: catchphrase of %04X:", (unsigned)s_frame, (unsigned)ev->value[0]);
+        for (i = 0; i < 7; i++) {
+            printf(" %02X", animal->catchphrase[i]);
+        }
+        printf("\n");
+    }
+}
+
 int pc_input_script_frame(u32 frame) {
     int keep_running = 1;
     int i;
@@ -518,6 +604,8 @@ int pc_input_script_frame(u32 frame) {
             push_key_or_pad(ev);
         } else if (ev->kind == SCRIPT_POS) {
             log_positions(frame);
+        } else if (ev->kind >= SCRIPT_GIVE && ev->kind <= SCRIPT_ITEM) {
+            debug_command(ev);
         } else if (ev->kind == SCRIPT_QUIT) {
             printf("[INPUT] frame %u: quit\n", frame);
             keep_running = 0;
