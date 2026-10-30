@@ -530,6 +530,36 @@ if(NOT WIN32 AND NOT ANDROID)
     target_link_options(afe_pc PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/cmake/exe_exports.ver")
 endif()
 
+# dist: a zip of the game folder to pass on, from a build without the assets.
+# Only the files the game needs (bin/ also collects the player's rom/, save/
+# and settings when run from there); the debug info is left out, the symbol
+# names stay for crash reports.
+if(PC_STRIP_ASSETS AND NOT ANDROID)
+    set(PC_DIST_NAME "DobutsuNoMoriEPlus")
+    set(PC_DIST_DIR "${CMAKE_BINARY_DIR}/dist/${PC_DIST_NAME}")
+    set(PC_DIST_ZIP "${CMAKE_BINARY_DIR}/dist/${PC_DIST_NAME}-${CMAKE_SYSTEM_NAME}.zip")
+    set(PC_DIST_COMMANDS
+        COMMAND ${CMAKE_COMMAND} -E rm -rf "${CMAKE_BINARY_DIR}/dist"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${PC_DIST_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:afe_pc>" "${PC_DATA_DIR}/${PC_RELMAP_NAME}" "${PC_DIST_DIR}/"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${PC_DATA_DIR}/shaders" "${PC_DIST_DIR}/shaders"
+        COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE" "${PC_DIST_DIR}/LICENSE.txt")
+    if(WIN32 AND SDL2_DLL_PATH)
+        list(APPEND PC_DIST_COMMANDS COMMAND ${CMAKE_COMMAND} -E copy "${SDL2_DLL_PATH}" "${PC_DIST_DIR}/")
+    endif()
+    if(CMAKE_STRIP)
+        list(APPEND PC_DIST_COMMANDS COMMAND ${CMAKE_STRIP} --strip-debug "${PC_DIST_DIR}/$<TARGET_FILE_NAME:afe_pc>")
+    endif()
+    add_custom_target(dist
+        ${PC_DIST_COMMANDS}
+        COMMAND ${CMAKE_COMMAND} -E chdir "${CMAKE_BINARY_DIR}/dist"
+                ${CMAKE_COMMAND} -E tar cf "${PC_DIST_ZIP}" --format=zip "${PC_DIST_NAME}"
+        DEPENDS afe_pc
+        COMMENT "Packing ${PC_DIST_ZIP}"
+        VERBATIM
+    )
+endif()
+
 if(MINGW)
     target_link_options(afe_pc PRIVATE -static-libgcc -static-libstdc++ -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic)
     # The default base (0x00400000) puts the 120+ MB image over N64 segment

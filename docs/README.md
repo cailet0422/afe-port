@@ -117,6 +117,11 @@ ninja -C pc/build32strip
   261개가 이 실행 파일에서는 하나도 찾히지 않는다.
 - 빌드에는 여전히 본인 디스크가 필요하다(매칭 빌드와 foresti/foresto 소스를 디스크에서 만든다).
   Android는 `gradle assembleDebug -PstripAssets`.
+- `ninja -C pc/build32strip dist`가 게임 폴더를 `dist/DobutsuNoMoriEPlus-Linux.zip`(Windows 교차 빌드는
+  `-Windows.zip`, `SDL2.dll` 포함)으로 묶는다: 실행 파일(디버그 정보 없이, 크래시 기록용 심볼 이름은 남김),
+  relmap, `shaders/`, `LICENSE.txt`만 담는다(`bin/`에서 실행하면 생기는 `rom/`·`save/`·설정은 넣지 않는다).
+  Linux 약 4MB, Windows 약 6MB. 받은 사람은 압축을 풀고 `rom/`에 자기 디스크 이미지를 넣거나 실행해서 폴더를
+  고른다. 압축을 푼 Linux판과 Wine에서 실행한 Windows판 모두 원래 디스크 오프닝이 일반 빌드와 같은 화면이었다.
 
 ### 한국어(한글패치)로 실행
 
@@ -173,7 +178,7 @@ ninja -C pc/build32strip
 | M3 | 오디오 정상화, 패미컴(FixNES) | 예정 |
 | M4 | 64비트 정리(포인터↔u32), Android(arm64, SDL2 + GLES3, 터치 입력) | 진행 중: 렌더러 OpenGL ES 3.0 지원(`-DPC_GLES=ON`, 리눅스 Mesa GLES로 오프닝·마을 확인), Android(armeabi-v7a) APK 빌드, 화면 게임패드(터치)·Android 키보드 한글 입력([android.md](android.md)). 64비트: x86_64에서 타이틀·오프닝·새 게임 진행이 32비트와 같은 화면, APK에 arm64-v8a 포함([64bit.md](64bit.md)). 남은 것: 64비트로 여러 장면 점검, 실기기 확인 |
 | M5 | 한국어 패치 | 사용자 한글패치 디스크 지원: 대사·로고·이름표·글자 폭 표시, 키보드 한글 입력(이름·마을 이름·영어 이름 확인, 편지는 코드만 연결), 사전 코드·말버릇·조사 자동 선택, 패치가 옮긴 문자열·표, 게시판/일기/알림판 줄 폭, 설정 메뉴에서 패치 zip을 골라 바로 적용(`korean/`에 한글판 이미지를 만들고 다시 시작). 남은 것: 시간·비밀번호 입력 등 UI 상수, 말소리, SD 경고 문구, 게임패드 화면 키보드 ([korean_patch.md](korean_patch.md)) |
-| M6 | 런타임 에셋 로더, 배포 패키징 | 진행 중: 에셋 없는 빌드(`-DPC_STRIP_ASSETS=ON`) — 실행 파일에 디스크에서 꺼낸 에셋 없이, 시작할 때 디스크에서 읽는다. 일반 빌드와 스크린샷·세이브가 같다(위 "에셋 없는 빌드"). 남은 것: 배포 패키징, Windows·Android 실기 확인 |
+| M6 | 런타임 에셋 로더, 배포 패키징 | 진행 중: 에셋 없는 빌드(`-DPC_STRIP_ASSETS=ON`) — 실행 파일에 디스크에서 꺼낸 에셋 없이, 시작할 때 디스크에서 읽는다. 일반 빌드와 스크린샷·세이브가 같다. `dist` 타깃으로 Linux·Windows zip(Windows는 Wine에서 확인). 남은 것: 실제 Windows·Android 기기 확인, Android APK(`-PstripAssets`) 빌드 확인 |
 
 ## 한국어 패치 설계
 
