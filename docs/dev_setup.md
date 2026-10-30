@@ -11,7 +11,8 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y gcc-multilib g++-multilib libs
     binutils-powerpc-linux-gnu ninja-build cmake
 ```
 
-단위 테스트(한글 입력기·문자표·패치 적용기)는 게임 데이터 없이 돌아간다(CI와 같음):
+단위 테스트(한글 입력기·문자표·패치 적용기·메모리 카드)는 게임 데이터 없이 돌아간다(CI와 같음, 메모리 카드 테스트만
+`decomp/` 서브모듈의 헤더가 필요):
 
 ```sh
 cmake -S pc -B pc/build-tests -G Ninja -DPC_TESTS_ONLY=ON && ninja -C pc/build-tests && ctest --test-dir pc/build-tests
@@ -58,12 +59,18 @@ cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
   (`montage`로 묶어 보면 편하다). llvmpipe에서 약 30–60fps.
 - `--script-fast`를 더하면 스크린샷을 찍는 프레임만 그려서 약 400fps로 돈다(오프닝 6,000프레임이 16초).
   메뉴가 뒤에 깔아 두는 장면 복사본은 검게 나온다.
-- `--deterministic`: 게임 시계를 2026-11-01 정오(UTC)에서 시작해 프레임 수로만 진행시킨다. 새 게임의 마을
-  배치가 매번 같아져 걷기 경로를 스크립트로 재현할 수 있다(옷 색처럼 비동기 로딩 시점에 따라 달라지는
-  무작위는 남는다). `--time H`와 같이 쓰면 그 날의 H시.
+- `--deterministic`: 게임 시계를 2026-11-01 정오(UTC)에서 시작해 프레임 수로만 진행시키고, 오디오도 별도
+  스레드 대신 화면 프레임마다 1/60초 분량씩 만든다. 같은 스크립트를 돌리면 매번 같은 화면이 나온다(마을 배치,
+  옷, 주민 위치, 스크린샷까지). `--time H`와 같이 쓰면 그 날의 H시.
 - 새 게임 → 마을: `python3 pc/tools/make_newgame_script.py --korean [단계...] > /tmp/ng.txt` 후
   `./DobutsuNoMoriEPlus --no-framelimit --script-fast --deterministic --input-script /tmp/ng.txt`
-  (약 1분 반). 단계 형식은 스크립트 설명 참고. 자유 이동은 약 21,500프레임부터.
+  (약 1분 반). 단계 형식은 스크립트 설명 참고. 자유 이동은 약 29,000프레임부터. 길을 만들 때는 `--pos`로
+  스크린샷마다 플레이어·주민 위치를 찍고(`POS`), 주민이나 지점까지는 `SEEK:E038:600`처럼 걷게 한다
+  (막히면 옆으로 비켜 감).
+- 저장·불러오기 확인: `make_newgame_script.py --korean --save`가 옆집 주민(밀크)에게 인사하고 하니와에서
+  저장한다(첫날 하니와는 주민을 한 명도 만나지 않았으면 저장을 거절한다). `save/card_a/DobutsunomoriE_MURA`가
+  생기면 `make_opening_script.py 5200`으로 다시 실행해 이어하기 — 밀크가 맞이하고 집 앞에서 시작한다.
+  저장하지 않고 끝낸 세이브를 불러오면 도루묵씨(리셋씨)가 나온다(원래 동작).
 - 메모리 문제는 `-fsanitize=address -fsanitize-recover=address`로 별도 빌드 디렉터리를 만들어 본다
   (`ASAN_OPTIONS=detect_leaks=0:halt_on_error=0`). 원래 게임의 읽기 범위 초과
   (`mFM_LoadBGCommonTex` 등)는 무해한 것도 있다.

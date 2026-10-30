@@ -138,7 +138,8 @@ afe-decomp를 기반으로 한 PC(Windows/Linux)·Android 포트와 한국어 �
 `--input-script 파일`로 프레임 단위 입력·스크린샷·종료를 재생할 수 있다
 (형식은 `pc/include/pc_input_script.h`). `--no-framelimit`과 함께 쓰면 빠르게 돌릴 수 있다.
 `KEY Escape`, `PAD dpdown`처럼 키·패드 이벤트도 보낼 수 있어 일시정지·설정 메뉴(키 설정, 한글패치
-설치)를 시험할 수 있다.
+설치)를 시험할 수 있다. `POS`는 플레이어·주민 위치를 찍고, `SEEK`은 주민이나 지점까지 걷는다.
+`--deterministic`과 함께 쓰면 같은 스크립트가 매번 같은 화면을 낸다.
 
 ## 마일스톤
 
@@ -146,7 +147,7 @@ afe-decomp를 기반으로 한 PC(Windows/Linux)·Android 포트와 한국어 �
 |---|---|---|
 | M0 | `TARGET_PC` 훅 병합, 매칭 유지 검증, PC 빌드 링크 | 완료 |
 | M1 | Linux/Windows에서 타이틀 화면까지 부팅 | 완료: Linux, Windows(리눅스에서 MinGW 교차 빌드, Wine으로 실행 확인) |
-| M2 | 마을 플레이, 세이브(메모리 카드 파일), e+ 전용 기능(SD/e-Reader/GBA)은 우회 | 진행 중: 한글 디스크로 역 → 너굴 → 집 구경·선택 → 자유 이동 → 소지품 화면까지 크래시 없음(`pc/tools/make_newgame_script.py`). 저장은 집 문 왼쪽의 토용군(하니와)에게서 하는데 첫날은 너굴 상점(1구역 4번지) 아르바이트를 마쳐야 한다("조금만 더 아르바이트 힘내 주세용"). 아르바이트 경로·저장·불러오기 남음 |
+| M2 | 마을 플레이, 세이브(메모리 카드 파일), e+ 전용 기능(SD/e-Reader/GBA)은 우회 | 진행 중: 한글 디스크로 역 → 너굴 → 집 구경·선택 → 자유 이동 → 소지품 화면까지 크래시 없음(`pc/tools/make_newgame_script.py`). 저장·불러오기: 토용군(하니와)에게서 첫 저장(첫날은 주민 한 명에게 인사해야 받아 줌), 이어하기, 덮어쓰기 저장, 저장 없이 끈 뒤 도루묵씨까지 확인(`make_newgame_script.py --save`, 메모리 카드 계층 테스트 `pc/tests/test_pc_card.c`). 남은 것: 아르바이트 전체, 여러 날에 걸친 플레이 |
 | M3 | 오디오 정상화, 패미컴(FixNES) | 예정 |
 | M4 | 64비트 정리(포인터↔u32), Android(arm64, SDL2 + GLES3, 터치 입력) | 진행 중: 렌더러 OpenGL ES 3.0 지원(`-DPC_GLES=ON`, 리눅스 Mesa GLES로 오프닝·마을 확인), Android(armeabi-v7a) APK 빌드, 화면 게임패드(터치)·Android 키보드 한글 입력([android.md](android.md)). 64비트: x86_64에서 타이틀·오프닝·새 게임 진행이 32비트와 같은 화면, APK에 arm64-v8a 포함([64bit.md](64bit.md)). 남은 것: 64비트로 여러 장면 점검, 실기기 확인 |
 | M5 | 한국어 패치 | 사용자 한글패치 디스크 지원: 대사·로고·이름표·글자 폭 표시, 키보드 한글 입력(이름·마을 이름·영어 이름 확인, 편지는 코드만 연결), 사전 코드·말버릇·조사 자동 선택, 패치가 옮긴 문자열·표, 게시판/일기/알림판 줄 폭, 설정 메뉴에서 패치 zip을 골라 바로 적용(`korean/`에 한글판 이미지를 만들고 다시 시작). 남은 것: 시간·비밀번호 입력 등 UI 상수, 말소리, SD 경고 문구, 게임패드 화면 키보드 ([korean_patch.md](korean_patch.md)) |
@@ -217,8 +218,13 @@ afe-decomp를 기반으로 한 PC(Windows/Linux)·Android 포트와 한국어 �
 - 자동 테스트: `--input-script`의 `TYPE`(내장 입력기 키), `EDIT`/`TEXT`(시스템 입력기의 조합 중·확정
   텍스트) 명령(`pc/src/pc_input_script.c`), `make_opening_script.py --korean`.
 
-## 알려진 문제 (M1 기준)
+## 알려진 문제
 
-- 정적(static)으로 선언된 TLUT 블롭 3개는 부팅 시 바이트 순서 보정을 못 하고 있음.
-- e+ 세이브 경로는 아직 ACGC의 `pc_card.c` 위에서 그대로 컴파일만 되는 상태.
+- 정적(static)으로 선언된 데이터 3개(`int_iid_diary`, `int_ike_molcenter_locker`, `int_ike_molcenter_wall`)는
+  부팅 시 바이트 순서 보정을 못 하고 있음(빌드할 때 `gen_data_fixups.py`가 경고).
+- 세이브는 PC의 바이트 순서 그대로 `save/card_a/`에 파일로 저장된다. 게임큐브 메모리 카드에서 꺼낸 세이브(GCI)와는
+  호환되지 않는다(`pc_m_card.c`·`pc_save_bswap.c`는 ACGC에서 온 변환 코드로, 아직 빌드에 들어가지 않음).
+- 보통 실행에서는 오디오가 별도 스레드(`pc_audio.c`의 생산 스레드)에서 게임 스레드와 잠금 없이 같은 데이터를
+  다룬다(PC의 `OSDisableInterrupts`는 아무것도 하지 않음). 간헐적인 크래시의 원인일 수 있다.
+  `--deterministic`에서는 오디오를 게임 스레드에서 돌려 이 문제가 없다.
 - SD 카드, e-Reader, GBA 연동은 "장치 없음"으로 응답.
