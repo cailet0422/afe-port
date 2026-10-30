@@ -466,6 +466,10 @@ endif()
 
 if(MINGW)
     target_link_options(afe_pc PRIVATE -static-libgcc -static-libstdc++ -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic)
+    # The default base (0x00400000) puts the 120+ MB image over N64 segment
+    # addresses (0x03000000-0x0FFFFFFF), which emu64's seg2k0 then takes for
+    # raw pointers; keep the image above them
+    target_link_options(afe_pc PRIVATE -Wl,--image-base,0x10000000 -Wl,--disable-dynamicbase)
 endif()
 
 if(WIN32 AND NOT PC_CONSOLE)
