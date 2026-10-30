@@ -3,6 +3,9 @@
 
 1 RT_MANIFEST "app.manifest"
 
+/* The first icon group is the one Explorer and the taskbar show */
+1 ICON "icon.ico"
+
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION     0,9,0,1
 PRODUCTVERSION  0,9,0,1
