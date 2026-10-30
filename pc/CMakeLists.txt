@@ -25,6 +25,7 @@ else()
     set(PC_GLES_DEFAULT OFF)
 endif()
 option(PC_GLES "Render with OpenGL ES 3.0 instead of OpenGL 3.3 core" ${PC_GLES_DEFAULT})
+option(PC_STRIP_ASSETS "Leave the extracted assets out of the executable; it reads them from the disc at boot" OFF)
 
 set(AFE_VERSION "GAEJ01_01" CACHE STRING "Game version to build (GAEJ01_00 or GAEJ01_01)")
 if(AFE_VERSION STREQUAL "GAEJ01_00")
@@ -258,6 +259,24 @@ include("${MODULE_DATA_DIR}/module_data.cmake")
 include_directories(BEFORE "${MODULE_DATA_DIR}/include")
 list(APPEND DECOMP_C_SOURCES ${GENERATED_DATA_SOURCES})
 
+# Without the assets: every .inc as zeros of the same shape, found first, so
+# the executable can be passed on (pc_rel_overlay.c reads them from the disc)
+if(PC_STRIP_ASSETS)
+    set(STRIPPED_INCLUDE_DIR "${CMAKE_BINARY_DIR}/stripped/include")
+    execute_process(
+        COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/strip_assets.py"
+                "${STRIPPED_INCLUDE_DIR}" "${DECOMP_BUILD_DIR}/include" "${MODULE_DATA_DIR}/include"
+        RESULT_VARIABLE STRIP_RESULT
+    )
+    if(NOT STRIP_RESULT EQUAL 0)
+        message(FATAL_ERROR "strip_assets.py failed")
+    endif()
+    include_directories(BEFORE "${STRIPPED_INCLUDE_DIR}")
+    add_compile_definitions(PC_STRIP_ASSETS)
+    set(PC_BIN2C_ZERO --zero)
+    set(PC_RELMAP_REQUIRE --require-assets)
+endif()
+
 # Raw big-endian blobs that game code reads as typed data, swapped at boot.
 set(DATA_FIXUPS_C "${MODULE_DATA_DIR}/pc_data_fixups.c")
 execute_process(
@@ -276,7 +295,7 @@ set(SYSTEM_FONT_BFN "${DECOMP_BUILD_DIR}/bin/assets/JSystem/JUtility/FontData/As
 set(SYSTEM_FONT_C "${CMAKE_BINARY_DIR}/gen/pc_system_font.c")
 add_custom_command(
     OUTPUT "${SYSTEM_FONT_C}"
-    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin2c.py"
+    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin2c.py" ${PC_BIN2C_ZERO}
             "${SYSTEM_FONT_BFN}" "${SYSTEM_FONT_C}" JUTResFONT_Ascfont_fix12 32
     DEPENDS "${SYSTEM_FONT_BFN}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin2c.py"
     COMMENT "Embedding system font"
@@ -504,7 +523,7 @@ target_link_options(afe_pc PRIVATE -Wl,--gc-sections "-Wl,-Map=${CMAKE_BINARY_DI
 add_custom_command(TARGET afe_pc POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E env "AFE_DECOMP_ROOT=${DECOMP_ROOT}"
             ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_rel_overlay.py" ${AFE_VERSION}
-            "${CMAKE_BINARY_DIR}/DobutsuNoMoriEPlus.map" -o "${PC_DATA_DIR}/${PC_RELMAP_NAME}"
+            "${CMAKE_BINARY_DIR}/DobutsuNoMoriEPlus.map" ${PC_RELMAP_REQUIRE} -o "${PC_DATA_DIR}/${PC_RELMAP_NAME}"
     COMMENT "Generating REL data overlay table"
 )
 if(NOT WIN32 AND NOT ANDROID)

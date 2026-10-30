@@ -37,8 +37,10 @@ afe-decomp를 기반으로 한 PC(Windows/Linux)·Android 포트와 한국어 �
 - 4개의 REL 모듈(foresta/forestd/foresti/foresto)은 PC에서 실행 파일 하나로 정적 링크된다.
   foresti/foresto는 아직 C 소스가 없으므로 `pc/tools/gen_module_data.py`가 디컴프의
   `decomp/tools/converters/batch_assetdis.py`로 dtk 어셈블리에서 C 소스와 에셋을 생성한다.
-- 에셋은 지금은 매칭 빌드가 추출한 `.inc`를 컴파일 시점에 포함한다(그래서 실행 파일 자체가
-  배포 불가). 배포 전에 런타임 에셋 로더(디스크 이미지에서 읽기)로 바꿔야 한다.
+- 에셋은 기본적으로 매칭 빌드가 추출한 `.inc`를 컴파일 시점에 포함한다. `-DPC_STRIP_ASSETS=ON`으로 빌드하면
+  `.inc`(18,070개)와 시스템 글꼴을 같은 모양의 0으로 바꿔 넣고, 시작할 때 디스크의 main.dol·REL에서 전부 읽어
+  채운다(`pc_rel_overlay.c`, 아래 "에셋 없는 빌드"). foresti/foresto를 dtk 어셈블리에서 만든 C 소스의 구조
+  (디스플레이 리스트, 표)는 어느 쪽이든 그대로 들어간다.
 - 원래 빅엔디언 원시 바이트(`u8[]`)로 들어 있는 데이터를 다른 곳에서 `u16`/구조체로 읽는
   경우가 있어, `pc/tools/gen_data_fixups.py`가 그런 블롭을 찾아 부팅 시 한 번 바이트 순서를
   바꾸는 표(`pc_data_fixups.c`)를 만든다.
@@ -93,8 +95,28 @@ afe-decomp를 기반으로 한 PC(Windows/Linux)·Android 포트와 한국어 �
   텍스처). 버퍼 끝을 배열 크기로 잡는다. exe는 `0x10000000`에 링크해 120MB가 넘는 이미지가 N64 세그먼트
   주소(`0x03000000`–`0x0FFFFFFF`)와 겹치지 않게 한다.
 
-빌드하면 `bin/`에 `DobutsuNoMoriEPlus.relmap`이 함께 생긴다. 실행 파일은 이 표를 보고 REL 데이터를
-실행 중인 디스크에서 다시 읽으므로 두 파일을 같은 폴더에 둔다.
+빌드하면 `bin/`에 `DobutsuNoMoriEPlus.relmap`이 함께 생긴다. 실행 파일은 이 표를 보고 main.dol·REL의 데이터를
+실행 중인 디스크에서 다시 읽으므로(한글패치 디스크의 바뀐 데이터도 이렇게 들어온다) 두 파일을 같은 폴더에 둔다.
+
+### 에셋 없는 빌드 (PC_STRIP_ASSETS)
+
+```sh
+cmake -S pc -B pc/build32strip -G Ninja -DCMAKE_TOOLCHAIN_FILE=$PWD/pc/cmake/Toolchain-multilib32.cmake \
+      -DPC_STRIP_ASSETS=ON
+ninja -C pc/build32strip
+```
+
+- 실행 파일에는 에셋 자리만 0으로 남고(`.bss`라 파일도 그만큼 작다), 시작할 때 relmap 표를 따라 디스크에서
+  에셋 17,693개를 채운다(글꼴처럼 게임이 시작하기 전에 쓰는 것이 있어 `pc_main.c`가 디스크를 연 직후에 한다).
+  relmap이 없거나 디스크에서 다 채우지 못하면 오류 창을 띄우고 끝난다.
+- 빌드할 때 `gen_rel_overlay.py --require-assets`가 실행 파일에 든 에셋이 모두 표에 있는지 보고, 하나라도
+  빠지면 빌드가 실패한다. 같은 이름의 에셋이 여러 곳에 있으면 `config.yml`의 `extract`(디스크 위치)와
+  foresti/foresto의 구간별 심볼로 짝을 정한다.
+- 일반 빌드와 같은 결과다: `--deterministic` 스크립트로 비교해 한글 디스크 새 게임 → 저장(스크린샷 202장, 세이브
+  파일), 원래 디스크 오프닝(52장)이 모두 같다. 에셋에서 고른 바이트 조각 400개 중 일반 실행 파일에서 찾히는
+  261개가 이 실행 파일에서는 하나도 찾히지 않는다.
+- 빌드에는 여전히 본인 디스크가 필요하다(매칭 빌드와 foresti/foresto 소스를 디스크에서 만든다).
+  Android는 `gradle assembleDebug -PstripAssets`.
 
 ### 한국어(한글패치)로 실행
 
@@ -151,7 +173,7 @@ afe-decomp를 기반으로 한 PC(Windows/Linux)·Android 포트와 한국어 �
 | M3 | 오디오 정상화, 패미컴(FixNES) | 예정 |
 | M4 | 64비트 정리(포인터↔u32), Android(arm64, SDL2 + GLES3, 터치 입력) | 진행 중: 렌더러 OpenGL ES 3.0 지원(`-DPC_GLES=ON`, 리눅스 Mesa GLES로 오프닝·마을 확인), Android(armeabi-v7a) APK 빌드, 화면 게임패드(터치)·Android 키보드 한글 입력([android.md](android.md)). 64비트: x86_64에서 타이틀·오프닝·새 게임 진행이 32비트와 같은 화면, APK에 arm64-v8a 포함([64bit.md](64bit.md)). 남은 것: 64비트로 여러 장면 점검, 실기기 확인 |
 | M5 | 한국어 패치 | 사용자 한글패치 디스크 지원: 대사·로고·이름표·글자 폭 표시, 키보드 한글 입력(이름·마을 이름·영어 이름 확인, 편지는 코드만 연결), 사전 코드·말버릇·조사 자동 선택, 패치가 옮긴 문자열·표, 게시판/일기/알림판 줄 폭, 설정 메뉴에서 패치 zip을 골라 바로 적용(`korean/`에 한글판 이미지를 만들고 다시 시작). 남은 것: 시간·비밀번호 입력 등 UI 상수, 말소리, SD 경고 문구, 게임패드 화면 키보드 ([korean_patch.md](korean_patch.md)) |
-| M6 | 런타임 에셋 로더, 배포 패키징 | 예정 |
+| M6 | 런타임 에셋 로더, 배포 패키징 | 진행 중: 에셋 없는 빌드(`-DPC_STRIP_ASSETS=ON`) — 실행 파일에 디스크에서 꺼낸 에셋 없이, 시작할 때 디스크에서 읽는다. 일반 빌드와 스크린샷·세이브가 같다(위 "에셋 없는 빌드"). 남은 것: 배포 패키징, Windows·Android 실기 확인 |
 
 ## 한국어 패치 설계
 
