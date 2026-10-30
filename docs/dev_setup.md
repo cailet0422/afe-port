@@ -66,7 +66,8 @@ cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
 - 새 게임 → 마을: `python3 pc/tools/make_newgame_script.py --korean [단계...] > /tmp/ng.txt` 후
   `./DobutsuNoMoriEPlus --no-framelimit --script-fast --deterministic --input-script /tmp/ng.txt`
   (약 1분 반). 단계 형식은 스크립트 설명 참고. 자유 이동은 약 29,000프레임부터. 길을 만들 때는 `--pos`로
-  스크린샷마다 플레이어·주민 위치와 카메라(모드, 중심, 눈, 각도)를 찍고(`POS`, `--verbose`일 때 나옴),
+  스크린샷마다 플레이어·주민 위치, 카메라(모드, 중심, 눈, 각도), 가게·박물관·우체국 등이 있는 구역과 근처 건물
+  액터의 위치를 찍고(`POS`, `--verbose`일 때 나옴; 한 구역은 640),
   주민이나 지점까지는 `SEEK:E038:600`처럼 걷게 한다(막히면 옆으로 비켜 감).
 - 보통 속도 확인: `--no-framelimit` 없이(필요하면 `--script-fast`만) 돌리면 소리가 별도 스레드에서 돈다.
   `--deterministic`이 아니면 마을이 매번 달라 `--save` 경로가 저장까지 가지 못할 수 있지만 끝까지 크래시·멈춤
