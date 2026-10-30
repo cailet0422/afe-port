@@ -48,7 +48,30 @@ static int pc_audio_producer_func(void* data) {
     return 0;
 }
 
+/* --deterministic: the game makes as much sound per retrace as plays in a
+ * 60th of a second, on the game's thread, so nothing that waits on the sound
+ * system depends on how fast the frames go by */
+static int audio_frame_driven = 0;
+static u32 audio_produced = 0; /* samples, both channels */
+
+void pc_audio_frame(void) {
+    static u64 due = 0;
+
+    if (!audio_frame_driven) return;
+    due += PC_AUDIO_SAMPLE_RATE * 2; /* samples due, times 60 */
+    while ((u64)audio_produced * 60 < due) {
+        u32 before = audio_produced;
+
+        pc_audio_process_frame();
+        if (audio_produced == before) break;
+    }
+}
+
 void pc_audio_start_producer_thread(void) {
+    if (g_pc_deterministic) {
+        audio_frame_driven = 1;
+        return;
+    }
     if (audio_producer_thread) return;
     SDL_AtomicSet(&audio_thread_running, 1);
     audio_producer_thread = SDL_CreateThread(pc_audio_producer_func, "AudioProducer", NULL);
@@ -124,6 +147,7 @@ void AIInitDMA(uintptr_t addr, u32 size) {
     s16* src = (s16*)addr;
     u32 n_samples = size / sizeof(s16);
     n_samples &= ~1u; /* whole stereo frames */
+    audio_produced += n_samples;
 
     u32 wp = (u32)SDL_AtomicGet(&ring_write_pos);
     u32 rp = (u32)SDL_AtomicGet(&ring_read_pos);
