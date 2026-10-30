@@ -1,6 +1,6 @@
 /* pc_ko.h - support for discs carrying the community Korean patch
  *
- * The patch (see docs/pc_port/korean_patch.md) encodes a Hangul syllable as
+ * The patch (see docs/korean_patch.md) encodes a Hangul syllable as
  * two bytes and stores 24x32 2bpp glyphs inside the message resource. The PC
  * port reads everything from the user's patched disc at runtime. */
 #ifndef PC_KO_H
@@ -64,7 +64,7 @@ void pc_ko_fix_josa(u8* text, int len);
 /* Strings the patch moved into its own code section (foresta.rel section 7).
  * pc_ko_patched_str returns the patch's text at s7_offset in Korean mode and
  * original otherwise. Offsets are those of v0.9.2, found with
- * `pc/tools/reldis.py retarget` (docs/pc_port/korean_patch.md). */
+ * `pc/tools/reldis.py retarget` (docs/korean_patch.md). */
 #define PC_KO_S7_BIRTHDAY_FOOTER 0xC124 /* footer_str$510 in mBm_init_BDMsg_Mail, 4 bytes */
 #define PC_KO_S7_FISH_LAND 0xC12C       /* l_name$544 in mEv_fishRecord_local, 6 bytes */
 #define PC_KO_S7_LAND_SUFFIX 0xC134     /* land_name_end in m_notice.c, 4 bytes */

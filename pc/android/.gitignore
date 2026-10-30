@@ -3,5 +3,5 @@ build/
 app/build/
 app/.cxx/
 local.properties
-# SDL2 source (see docs/pc_port/android.md)
+# SDL2 source (see docs/android.md)
 SDL/

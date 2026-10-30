@@ -1,4 +1,4 @@
-/* pc_android.c - Android startup (see docs/pc_port/android.md)
+/* pc_android.c - Android startup (see docs/android.md)
  *
  * The game reads and writes everything relative to its working directory
  * (settings.ini, rom/, save/, shaders/, the REL overlay table). On Android

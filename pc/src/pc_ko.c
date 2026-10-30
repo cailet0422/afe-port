@@ -1,4 +1,4 @@
-/* pc_ko.c - see pc_ko.h and docs/pc_port/korean_patch.md */
+/* pc_ko.c - see pc_ko.h and docs/korean_patch.md */
 #include "pc_ko.h"
 
 #include "pc_platform.h"

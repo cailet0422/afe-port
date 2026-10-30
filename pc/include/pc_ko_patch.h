@@ -6,7 +6,7 @@
  * disc image (the one the game would start from, pc_disc_open_original) into
  * korean/<name>.iso, checks it against the patch's manifest.json and, once
  * the menu polls the result, records it in settings.ini (korean = 1,
- * ko_image), so the next start runs in Korean. docs/pc_port/korean_patch.md */
+ * ko_image), so the next start runs in Korean. docs/korean_patch.md */
 #ifndef PC_KO_PATCH_H
 #define PC_KO_PATCH_H
 
