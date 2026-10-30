@@ -20,11 +20,12 @@ cmake -S pc -B pc/build-tests -G Ninja -DPC_TESTS_ONLY=ON && ninja -C pc/build-t
 
 ## 2. 디스크 이미지
 
-사용자가 제공한 CISO(구글 드라이브, 네트워크 허용 필요: `drive.google.com`, `drive.usercontent.google.com`):
+디스크 이미지(일본판 Rev 1, CISO 약 33MB)는 사용자가 세션에 직접 올려준다. 저장소·문서에 다운로드 링크를
+두지 않는다. Claude Code 세션에 올린 파일은 `/root/.claude/uploads/<세션>/` 아래에 이름 앞에 접두어가 붙어
+생긴다(`.iso`라면 `game.iso`로 복사한다):
 
 ```sh
-mkdir -p /tmp/disc && curl -L -o /tmp/disc/game.ciso \
-  "https://drive.usercontent.google.com/download?id=17KXSC8sp9Gl8rNrm5se79nWTlaW2ZDZI&export=download&confirm=t"
+mkdir -p /tmp/disc && cp /root/.claude/uploads/*/*.ciso /tmp/disc/game.ciso
 python3 pc/tools/gcdisc.py extract-orig /tmp/disc/game.ciso decomp/orig/GAEJ01_01
 ```
 
