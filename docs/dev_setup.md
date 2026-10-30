@@ -11,7 +11,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y gcc-multilib g++-multilib libs
     binutils-powerpc-linux-gnu ninja-build cmake
 ```
 
-단위 테스트(한글 입력기·문자표·패치 적용기·메모리 카드)는 게임 데이터 없이 돌아간다(CI와 같음, 메모리 카드 테스트만
+단위 테스트(한글 입력기·화면 키보드·문자표·패치 적용기·메모리 카드)는 게임 데이터 없이 돌아간다(CI와 같음, 메모리 카드 테스트만
 `decomp/` 서브모듈의 헤더가 필요):
 
 ```sh

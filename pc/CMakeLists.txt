@@ -61,6 +61,15 @@ if(PC_BUILD_TESTS)
     target_compile_options(test_ko_charset PRIVATE -Wall -Wextra)
     add_test(NAME ko_charset COMMAND test_ko_charset)
 
+    add_executable(test_ko_osk
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_osk.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_ime.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_ko_osk.c
+    )
+    target_include_directories(test_ko_osk PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_compile_options(test_ko_osk PRIVATE -Wall -Wextra)
+    add_test(NAME ko_osk COMMAND test_ko_osk)
+
     add_executable(test_ko_patch
         ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_patch.c
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_ko_patch.c
@@ -351,6 +360,7 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_disc.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_rom_dir.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_ime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_osk.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_charset.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_patch.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_ko_patch.c

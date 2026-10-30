@@ -3,6 +3,7 @@
 #include "pc_pause_menu.h"
 #include "pc_settings.h"
 #include "pc_typing.h"
+#include "pc_ko.h"
 
 #include <dolphin/pad.h>
 #include <math.h>
@@ -171,6 +172,9 @@ void pc_touch_finger_down(s64 id, float x, float y) {
     Finger* f = find_finger(id);
     int i;
 
+    if (pc_ko_osk_touch(1, x, y)) {
+        return; /* a key of the editor's on-screen keyboard */
+    }
     if (!enabled()) {
         return;
     }
@@ -229,6 +233,8 @@ void pc_touch_finger_move(s64 id, float x, float y) {
 
 void pc_touch_finger_up(s64 id) {
     Finger* f = find_finger(id);
+
+    pc_ko_osk_touch(0, 0.0f, 0.0f);
 
     if (f != NULL) {
         f->active = 0;

@@ -4,6 +4,7 @@
 #include "pc_keybindings.h"
 #include "pc_input_script.h"
 #include "pc_touch.h"
+#include "pc_ko.h"
 #include <dolphin/pad.h>
 
 /* analog stick constants */
@@ -162,6 +163,7 @@ u32 PADRead(PADStatus* status) {
 
     pc_touch_read(&buttons, &stickX, &stickY);
     pc_input_script_apply(&buttons, &stickX, &stickY);
+    pc_ko_osk_pad(&buttons, &stickX, &stickY);
 
     status[0].button = buttons;
     status[0].stickX = stickX;

@@ -53,6 +53,10 @@ void pc_typing_editor_close(void);
 /* Takes the next operation; returns 0 when the queue is empty. */
 int pc_typing_pop(int* op);
 
+/* The editor has been asking for operations (it is taking input, not
+ * sliding in or waiting for another menu) */
+int pc_typing_editor_listening(void);
+
 /* The editor could not insert the text being composed (the field is full),
  * so the input method drops it. */
 void pc_typing_preedit_rejected(void);
@@ -71,6 +75,14 @@ int pc_typing_system_ime(void);
  * typing is off. */
 int pc_typing_key(int key);
 int pc_typing_toggle_korean(void);
+
+/* The same from the on-screen keyboard (pc_ko_editor.c): always through the
+ * built-in input method, whether or not keyboard typing is on */
+int pc_typing_osk_key(int key);
+int pc_typing_osk_toggle_korean(void);
+
+/* The built-in input method is in Korean (for the on-screen keyboard) */
+int pc_typing_ime_korean(void);
 
 /* The system input method's text: being composed (replaces the previous
  * composition; "" ends it) or committed. UTF-8. Also used by

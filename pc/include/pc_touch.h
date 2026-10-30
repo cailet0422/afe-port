@@ -7,9 +7,10 @@
  * on the next touch.
  *
  * While the pause menu is open the pad drives it like the keyboard (D-pad =
- * arrows, A = Enter, B/START = Esc). Touching the screen outside the
- * controls while the text editor uses the system input method shows the
- * on-screen keyboard again. */
+ * arrows, A = Enter, B/START = Esc). In the text editor on a Korean patch
+ * disc a touch on the editor's own keyboard presses that key first
+ * (pc_ko_editor.c). Touching the screen outside the controls while the text
+ * editor uses the system input method shows the system's keyboard again. */
 #ifndef PC_TOUCH_H
 #define PC_TOUCH_H
 
