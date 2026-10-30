@@ -103,22 +103,6 @@ BOOL AICheckInit(void) {
     return TRUE;
 }
 
-/* --- CARD ---------------------------------------------------------------- */
-
-s32 __CARDGetStatusEx(s32 chan, s32 fileNo, CARDDir* dirent) {
-    (void)chan;
-    (void)fileNo;
-    memset(dirent, 0, sizeof(*dirent));
-    return CARD_RESULT_NOFILE;
-}
-
-s32 __CARDSetStatusEx(s32 chan, s32 fileNo, CARDDir* dirent) {
-    (void)chan;
-    (void)fileNo;
-    (void)dirent;
-    return CARD_RESULT_READY;
-}
-
 /* --- EXI SD card / GBA (not present) ------------------------------------- */
 
 BOOL EXISelectSD(long chan, unsigned long dev, unsigned long freq) {

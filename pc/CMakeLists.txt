@@ -35,8 +35,12 @@ else()
     message(FATAL_ERROR "Unknown AFE_VERSION '${AFE_VERSION}'")
 endif()
 
+# The decompilation (with the TARGET_PC hooks) is the decomp/ submodule
+set(DECOMP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../decomp" CACHE PATH "afe-decomp checkout the port builds from")
+get_filename_component(DECOMP_ROOT "${DECOMP_ROOT}" ABSOLUTE)
+
 # =============================================================================
-# Unit tests (host architecture, no game code)
+# Unit tests (host architecture, no game code or disc)
 # =============================================================================
 if(PC_BUILD_TESTS)
     enable_testing()
@@ -63,16 +67,29 @@ if(PC_BUILD_TESTS)
     target_include_directories(test_ko_patch PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
     target_compile_options(test_ko_patch PRIVATE -Wall -Wextra)
     add_test(NAME ko_patch COMMAND test_ko_patch)
+
+    # The memory card layer uses the SDK's card types from the decomp
+    if(EXISTS "${DECOMP_ROOT}/include/dolphin/card.h")
+        add_executable(test_pc_card
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_card.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_pc_card.c
+        )
+        target_compile_definitions(test_pc_card PRIVATE TARGET_PC)
+        target_include_directories(test_pc_card PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+        target_include_directories(test_pc_card SYSTEM PRIVATE ${DECOMP_ROOT}/include)
+        target_compile_options(test_pc_card PRIVATE -Wall -Wextra "SHELL:-idirafter ${DECOMP_ROOT}/include/dolphin")
+        add_test(NAME pc_card COMMAND test_pc_card)
+    else()
+        message(STATUS "afe-decomp not found: skipping the memory card test")
+    endif()
 endif()
 
-# CI: the tests need neither the decomp nor a disc
+# CI: the tests need no disc (and only the card test needs the decomp)
 if(PC_TESTS_ONLY)
     return()
 endif()
 
-# The decompilation (with the TARGET_PC hooks) is the decomp/ submodule
-set(DECOMP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../decomp" CACHE PATH "afe-decomp checkout the port builds from")
-get_filename_component(DECOMP_ROOT "${DECOMP_ROOT}" ABSOLUTE)
+# The game itself builds from the decomp
 if(NOT EXISTS "${DECOMP_ROOT}/configure.py")
     message(FATAL_ERROR
         "afe-decomp not found in ${DECOMP_ROOT}.\n"
