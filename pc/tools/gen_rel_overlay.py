@@ -18,13 +18,15 @@ Only objects whose element type is known to be plain data are listed.
 usage: gen_rel_overlay.py VERSION MAP SOURCES_CMAKE [...] -o OUT
 """
 import argparse
+import os
 import re
 import struct
 import sys
 from collections import defaultdict
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+# The afe-decomp checkout: the decomp/ submodule unless CMake passes another
+ROOT = Path(os.environ.get("AFE_DECOMP_ROOT") or Path(__file__).resolve().parents[2] / "decomp")
 MODULES = {"foresta": 1, "forestd": 2, "foresti": 3, "foresto": 4}
 DATA_SECTIONS = (".data", ".rodata")
 ANCHOR = "pc_rel_overlay_anchor"

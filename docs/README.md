@@ -1,13 +1,15 @@
 # 동물의 숲 e+ PC 포트 / 한국어 패치
 
-이 디렉터리는 afe-decomp를 기반으로 한 PC(Windows/Linux) 포트와, 이후 Android 포트 및
-한국어 패치의 계획과 진행 상황을 정리한다.
+afe-decomp를 기반으로 한 PC(Windows/Linux)·Android 포트와 한국어 패치 지원의 계획과 진행 상황을
+정리한다. 이 저장소에는 포트 계층(`pc/`)과 문서만 있고, 디컴프(게임 코드와 그 안의 `TARGET_PC` 훅)는
+`decomp/` 서브모듈([cailet0422/afe-decomp](https://github.com/cailet0422/afe-decomp))이다.
 
 ## 원칙
 
-- **매칭 빌드는 절대 깨지지 않는다.** 디컴프 소스(`src/`, `include/`)의 PC 관련 수정은 전부
-  `#ifdef TARGET_PC`(일부 `BUGFIXES`, `PC_ENHANCEMENTS`) 안에만 들어간다. 소스를 고친 뒤에는
-  `ninja`로 매칭 빌드를 다시 돌려 아래 SHA-1이 그대로인지 확인한다.
+- **매칭 빌드는 절대 깨지지 않는다.** 디컴프 소스(`decomp/src/`, `decomp/include/`)의 PC 관련 수정은 전부
+  `#ifdef TARGET_PC`(일부 `BUGFIXES`, `PC_ENHANCEMENTS`) 안에만 들어간다. 그 수정은 afe-decomp에
+  커밋하고 이 저장소에서는 서브모듈 커밋을 올린다. 소스를 고친 뒤에는 `decomp/`에서 `ninja`로 매칭 빌드를
+  다시 돌려 아래 SHA-1이 그대로인지 확인한다.
 
   | 파일 | SHA-1 |
   |---|---|
@@ -18,7 +20,7 @@
   | foresto.rel | `73ddcf0d1e979720c575f7ab0c5df2e9ff04eee0` |
 
 - **게임 데이터는 저장소에 넣지 않는다.** 디스크 이미지, 디스크에서 추출한 에셋, 그것을
-  포함한 빌드 결과물(`orig/*`, `build/`, `pc/build*/`)은 커밋/배포하지 않는다. 배포는 코드와
+  포함한 빌드 결과물(`decomp/orig/*`, `decomp/build/`, `pc/build*/`)은 커밋/배포하지 않는다. 배포는 코드와
   패치(차분)만 하고, 사용자가 자기 디스크 이미지를 준비한다.
 - PC 플랫폼 계층(`pc/`)은 [ACGC-PC-Port](https://github.com/FlyingMeta/ACGC-PC-Port)
   (MIT)의 것을 가져와 e+에 맞게 고쳤다. 라이선스 고지는 `pc/LICENSE`.
@@ -26,7 +28,7 @@
 ## 구조
 
 ```
-게임 코드 (src/, 디컴프 그대로)  ── N64 디스플레이 리스트 ──▶ emu64 ──▶ GX ──▶ pc_gx (OpenGL 3.3)
+게임 코드 (decomp/src/, 디컴프 그대로)  ── N64 디스플레이 리스트 ──▶ emu64 ──▶ GX ──▶ pc_gx (OpenGL 3.3)
         │                                                          SDL2: 창/입력/오디오
         ├─ Dolphin SDK / OS 호출 ─▶ pc_os, pc_dvd(디스크 이미지 직접 읽기), pc_card, pc_aram, pc_sdk_extra ...
         └─ 패미컴 ─▶ FixNES
@@ -34,7 +36,7 @@
 
 - 4개의 REL 모듈(foresta/forestd/foresti/foresto)은 PC에서 실행 파일 하나로 정적 링크된다.
   foresti/foresto는 아직 C 소스가 없으므로 `pc/tools/gen_module_data.py`가 디컴프의
-  `tools/converters/batch_assetdis.py`로 dtk 어셈블리에서 C 소스와 에셋을 생성한다.
+  `decomp/tools/converters/batch_assetdis.py`로 dtk 어셈블리에서 C 소스와 에셋을 생성한다.
 - 에셋은 지금은 매칭 빌드가 추출한 `.inc`를 컴파일 시점에 포함한다(그래서 실행 파일 자체가
   배포 불가). 배포 전에 런타임 에셋 로더(디스크 이미지에서 읽기)로 바꿔야 한다.
 - 원래 빅엔디언 원시 바이트(`u8[]`)로 들어 있는 데이터를 다른 곳에서 `u16`/구조체로 읽는
@@ -48,11 +50,13 @@
 
 필요: `gcc-multilib g++-multilib cmake ninja-build python3 libsdl2-dev:i386 libgl-dev:i386`
 
+0. 서브모듈까지 받는다: `git clone --recursive <이 저장소>` (이미 받았으면 `git submodule update --init --recursive`).
+   디컴프를 다른 곳에 두었다면 cmake에 `-DDECOMP_ROOT=<afe-decomp 경로>`.
 1. 매칭 빌드 준비 (에셋 추출과 dtk split에 필요)
    ```sh
-   # orig/GAEJ01_01/ 에 디스크에서 추출한 sys/main.dol 과 files/*.rel 을 둔다
-   python3 configure.py --version GAEJ01_01
-   ninja
+   # decomp/orig/GAEJ01_01/ 에 디스크에서 추출한 sys/main.dol 과 files/*.rel 을 둔다
+   # (python3 pc/tools/gcdisc.py extract-orig 디스크.ciso decomp/orig/GAEJ01_01)
+   cd decomp && python3 configure.py --version GAEJ01_01 && ninja && cd ..
    ```
 2. PC 빌드
    ```sh
@@ -186,7 +190,7 @@
   조합 중인 낱자모는 패치의 자모 글리프(초성 19 + 중성 21)로 보인다. KS X 1001에 없는 음절(예: 똠)은
   조합 중에는 초성으로 보이고 확정하면 버려진다(패치 글꼴에 글리프가 없음).
 
-#### 편집기 연결 (`pc/src/pc_typing.c`, `src/game/m_editor_ovl.c`의 TARGET_PC)
+#### 편집기 연결 (`pc/src/pc_typing.c`, `decomp/src/game/m_editor_ovl.c`의 TARGET_PC)
 
 - 편집기가 열리면 키 입력이 편집 동작 큐(1바이트 글자, 한글 2바이트 글자, 조합 중 글자 교체·확정,
   커서, 백스페이스, Enter)로 바뀌고, 편집기가 다음 프레임에 원래의 명령 경로(`mED_edit_func_*`)로

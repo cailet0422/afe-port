@@ -10,12 +10,14 @@ script scans the sources the PC build compiles and writes a C table of
 
 usage: gen_data_fixups.py VERSION OUT_C SOURCES_CMAKE [SOURCES_CMAKE ...]
 """
+import os
 import re
 import sys
 from collections import defaultdict
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+# The afe-decomp checkout: the decomp/ submodule unless CMake passes another
+ROOT = Path(os.environ.get("AFE_DECOMP_ROOT") or Path(__file__).resolve().parents[2] / "decomp")
 
 # Element type -> fixup kind (see pc_boot_fixups.c)
 KINDS = {

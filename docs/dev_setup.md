@@ -18,16 +18,17 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y gcc-multilib g++-multilib libs
 ```sh
 mkdir -p /tmp/disc && curl -L -o /tmp/disc/game.ciso \
   "https://drive.usercontent.google.com/download?id=17KXSC8sp9Gl8rNrm5se79nWTlaW2ZDZI&export=download&confirm=t"
-python3 pc/tools/gcdisc.py extract-orig /tmp/disc/game.ciso orig/GAEJ01_01
+python3 pc/tools/gcdisc.py extract-orig /tmp/disc/game.ciso decomp/orig/GAEJ01_01
 ```
 
-디스크 이미지·추출 파일은 커밋하지 않는다(`orig/*/*`, `pc/build*/`는 무시됨).
+디스크 이미지·추출 파일은 커밋하지 않는다(`decomp/orig/*/*`, `pc/build*/`는 무시됨). 서브모듈이 비어 있으면
+먼저 `git submodule update --init --recursive`.
 
 ## 3. 매칭 빌드 (에셋 추출 겸 검증)
 
 ```sh
-python3 configure.py --version GAEJ01_01 && ninja
-sha1sum build/GAEJ01_01/static.dol build/GAEJ01_01/*/*.rel
+cd decomp && python3 configure.py --version GAEJ01_01 && ninja
+sha1sum build/GAEJ01_01/static.dol build/GAEJ01_01/*/*.rel && cd ..
 ```
 
 반드시 다음과 같아야 한다(디컴프 소스를 고칠 때마다 확인):

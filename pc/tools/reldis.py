@@ -8,6 +8,7 @@
 Needs powerpc-linux-gnu-objdump (apt install binutils-powerpc-linux-gnu) for `dis`.
 """
 import bisect
+import os
 import re
 import struct
 import subprocess
@@ -15,7 +16,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+# The afe-decomp checkout: the decomp/ submodule unless CMake passes another
+ROOT = Path(os.environ.get("AFE_DECOMP_ROOT") or Path(__file__).resolve().parents[2] / "decomp")
 CFG = ROOT / "config" / "GAEJ01_01"
 SECTION_NAMES = {1: ".text", 2: ".ctors", 3: ".dtors", 4: ".rodata", 5: ".data", 6: ".bss"}
 

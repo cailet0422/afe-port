@@ -31,8 +31,17 @@ else()
     message(FATAL_ERROR "Unknown AFE_VERSION '${AFE_VERSION}'")
 endif()
 
-set(DECOMP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/..")
+# The decompilation (with the TARGET_PC hooks) is the decomp/ submodule
+set(DECOMP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../decomp" CACHE PATH "afe-decomp checkout the port builds from")
+get_filename_component(DECOMP_ROOT "${DECOMP_ROOT}" ABSOLUTE)
+if(NOT EXISTS "${DECOMP_ROOT}/configure.py")
+    message(FATAL_ERROR
+        "afe-decomp not found in ${DECOMP_ROOT}.\n"
+        "Run: git submodule update --init --recursive (or pass -DDECOMP_ROOT=<afe-decomp checkout>)")
+endif()
 set(DECOMP_BUILD_DIR "${DECOMP_ROOT}/build/${AFE_VERSION}")
+# for pc/tools/*.py run at configure time
+set(ENV{AFE_DECOMP_ROOT} "${DECOMP_ROOT}")
 
 # =============================================================================
 # Unit tests (host architecture, no game code)
@@ -78,12 +87,12 @@ endif()
 # Extracted game assets
 # =============================================================================
 # Data sources #include the assets dtk extracts from the user's disc image.
-# They are produced by the matching build's extraction step:
+# They are produced by the matching build's extraction step, in decomp/:
 #     python configure.py --version GAEJ01_01 && ninja
 if(NOT EXISTS "${DECOMP_BUILD_DIR}/include/assets")
     message(FATAL_ERROR
         "Extracted assets not found in ${DECOMP_BUILD_DIR}/include/assets.\n"
-        "Place your disc files in orig/${AFE_VERSION}/ and run, from the repository root:\n"
+        "Place your disc files in ${DECOMP_ROOT}/orig/${AFE_VERSION}/ and run, in ${DECOMP_ROOT}:\n"
         "    python configure.py --version ${AFE_VERSION}\n"
         "    ninja\n")
 endif()
@@ -467,7 +476,8 @@ endif()
 target_link_options(afe_pc PRIVATE -Wl,--gc-sections "-Wl,-Map=${CMAKE_BINARY_DIR}/DobutsuNoMoriEPlus.map")
 # Table that lets the game load REL data from the disc it runs from (pc_rel_overlay.c)
 add_custom_command(TARGET afe_pc POST_BUILD
-    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_rel_overlay.py" ${AFE_VERSION}
+    COMMAND ${CMAKE_COMMAND} -E env "AFE_DECOMP_ROOT=${DECOMP_ROOT}"
+            ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_rel_overlay.py" ${AFE_VERSION}
             "${CMAKE_BINARY_DIR}/DobutsuNoMoriEPlus.map" -o "${PC_DATA_DIR}/${PC_RELMAP_NAME}"
     COMMENT "Generating REL data overlay table"
 )

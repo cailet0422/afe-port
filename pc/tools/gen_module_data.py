@@ -20,12 +20,14 @@ Requires the matching build's split step (build/VERSION/MODULE/asm).
 usage: gen_module_data.py VERSION OUT_DIR
 """
 import importlib.util
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+# The afe-decomp checkout: the decomp/ submodule unless CMake passes another
+ROOT = Path(os.environ.get("AFE_DECOMP_ROOT") or Path(__file__).resolve().parents[2] / "decomp")
 MODULES = ("foresti", "foresto")
 DATA_SECTIONS = {".data", ".rodata", ".sdata", ".sdata2"}
 # Modules whose objects are already compiled from src/ in the PC build.

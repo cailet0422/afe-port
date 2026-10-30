@@ -13,7 +13,7 @@ APK에는 매칭 빌드가 **본인 디스크에서 추출한 에셋**이 컴파
 - JDK 17 이상, Android SDK(platform 34, build-tools 34), NDK `27.2.12479018`, CMake `3.22.1`
   (Android Studio의 SDK Manager 또는 `sdkmanager`), Gradle 8.7 이상(또는 Android Studio)
 - Python 3 (네이티브 빌드가 PC 빌드와 같은 생성 스크립트를 돌린다)
-- 매칭 빌드를 한 번 해 둔다(`python configure.py --version GAEJ01_01 && ninja`, README 참고)
+- 매칭 빌드를 한 번 해 둔다(`decomp/`에서 `python configure.py --version GAEJ01_01 && ninja`, README 참고)
 - SDL2 소스(2.30.x): `https://github.com/libsdl-org/SDL/releases`의 `SDL2-2.30.9.tar.gz`를 풀어
   `pc/android/SDL`에 두거나 빌드할 때 `-PsdlDir=경로`로 알려 준다. SDL의 Java 코드(`SDLActivity`)와
   `libSDL2.so`가 여기서 나온다.

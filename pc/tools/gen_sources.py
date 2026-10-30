@@ -15,11 +15,13 @@ of its matching status, since the PC build compiles the C sources only.
 
 usage: gen_sources.py VERSION OUT_CMAKE
 """
+import os
 import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+# The afe-decomp checkout: the decomp/ submodule unless CMake passes another
+ROOT = Path(os.environ.get("AFE_DECOMP_ROOT") or Path(__file__).resolve().parents[2] / "decomp")
 
 # Libraries replaced by the PC port layer.
 EXCLUDED_LIBS = {
