@@ -66,6 +66,8 @@ Settings → Controls → Buttons에서 블루투스 게임패드의 버튼(과 
 
 ## 현재 상태
 
+- 앱 아이콘: `res/mipmap-*/ic_launcher.png`(48–192px)와 적응형 아이콘(`mipmap-anydpi-v26`, 전경은 108dp 판의
+  가운데 80dp, 배경색 `#5AAB49`). 원본은 `pc/res/icon.png`.
 - 빌드(컴파일·링크·APK 패키징)까지 확인했다. 이 작업 환경에는 Android 기기·에뮬레이터가 없어 실제
   실행은 확인하지 못했다. 같은 렌더러는 리눅스에서 OpenGL ES 3.0 컨텍스트로 확인했다(dev_setup.md 7).
 - 입력: 게임패드(블루투스 등)와 물리 키보드는 SDL이 처리한다. 글자 입력 화면(이름·편지 등)이 열리면

@@ -168,6 +168,19 @@ void pc_platform_init(void) {
         SDL_Quit();
         exit(1);
     }
+#ifndef __ANDROID__
+    {
+        /* title bar and taskbar; 64x64 RGBA bytes from pc/res/icon64.rgba */
+        extern unsigned char pc_window_icon_rgba[64 * 64 * 4];
+        SDL_Surface* icon = SDL_CreateRGBSurfaceWithFormatFrom(pc_window_icon_rgba, 64, 64, 32, 64 * 4,
+                                                               SDL_PIXELFORMAT_RGBA32);
+
+        if (icon != NULL) {
+            SDL_SetWindowIcon(g_pc_window, icon);
+            SDL_FreeSurface(icon);
+        }
+    }
+#endif
 
     g_pc_gl_context = SDL_GL_CreateContext(g_pc_window);
     if (!g_pc_gl_context) {

@@ -295,6 +295,17 @@ if(PC_STRIP_ASSETS)
     set(PC_RELMAP_REQUIRE --require-assets)
 endif()
 
+# Window icon (title bar, taskbar): 64x64 RGBA cut from res/icon.png; the
+# Windows .exe also carries res/icon.ico, Android its mipmaps.
+set(WINDOW_ICON_C "${CMAKE_BINARY_DIR}/gen/pc_window_icon.c")
+add_custom_command(
+    OUTPUT "${WINDOW_ICON_C}"
+    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin2c.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/res/icon64.rgba" "${WINDOW_ICON_C}" pc_window_icon_rgba 4
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/res/icon64.rgba" "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin2c.py"
+    COMMENT "Embedding window icon"
+)
+
 # Raw big-endian blobs that game code reads as typed data, swapped at boot.
 set(DATA_FIXUPS_C "${MODULE_DATA_DIR}/pc_data_fixups.c")
 execute_process(
@@ -365,6 +376,7 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_patch.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_ko_patch.c
     ${SYSTEM_FONT_C}
+    ${WINDOW_ICON_C}
 )
 
 # =============================================================================

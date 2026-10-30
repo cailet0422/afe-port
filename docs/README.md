@@ -104,6 +104,10 @@ afe-decomp를 기반으로 한 PC(Windows/Linux)·Android 포트와 한국어 �
   텍스처). 버퍼 끝을 배열 크기로 잡는다. exe는 `0x10000000`에 링크해 120MB가 넘는 이미지가 N64 세그먼트
   주소(`0x03000000`–`0x0FFFFFFF`)와 겹치지 않게 한다.
 
+아이콘: `pc/res/icon.png`(흰 배경을 뺀 512px 원본)에서 만든 `icon.ico`(7가지 크기, Windows 실행 파일 리소스),
+`icon64.rgba`(64×64 RGBA, 빌드 때 `bin2c.py`로 넣어 `SDL_SetWindowIcon`으로 창·작업 표시줄에 표시), Android
+`res/mipmap-*`(런처 아이콘과 Android 8+ 적응형 아이콘, 배경은 테두리의 초록 `#5AAB49`)를 쓴다.
+
 빌드하면 `bin/`에 `DobutsuNoMoriEPlus.relmap`이 함께 생긴다. 실행 파일은 이 표를 보고 main.dol·REL의 데이터를
 실행 중인 디스크에서 다시 읽으므로(한글패치 디스크의 바뀐 데이터도 이렇게 들어온다) 두 파일을 같은 폴더에 둔다.
 
