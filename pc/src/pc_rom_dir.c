@@ -288,7 +288,6 @@ int pc_rom_dir_ask(const char* default_dir) {
 
 void pc_rom_dir_describe(char* buf, size_t n) {
     char raw[1024];
-    char ascii[1024];
     size_t i;
     size_t len = 0;
 
@@ -312,8 +311,8 @@ void pc_rom_dir_describe(char* buf, size_t n) {
     snprintf(raw, sizeof(raw), "%s", g_pc_settings.rom_dir);
 #endif
 
-    /* Only the folder's own name: the menu font has no '/' (that slot is a
-     * note), and is ASCII: one '?' per other character */
+    /* Only the folder's own name ('/' is a note in the menu font), kept in
+     * UTF-8: the menu draws Hangul with the Korean patch's glyphs */
     len = strlen(raw);
     while (len > 1 && (raw[len - 1] == '/' || raw[len - 1] == '\\')) {
         raw[--len] = '\0';
@@ -322,21 +321,31 @@ void pc_rom_dir_describe(char* buf, size_t n) {
     while (i > 0 && raw[i - 1] != '/' && raw[i - 1] != '\\' && raw[i - 1] != ':') {
         i--;
     }
-    len = 0;
-    for (; raw[i] != '\0' && len + 1 < sizeof(ascii); i++) {
-        unsigned char c = (unsigned char)raw[i];
 
-        if (c < 0x80) {
-            ascii[len++] = (char)c;
-        } else if ((c & 0xC0) != 0x80) {
-            ascii[len++] = '?';
+    /* About 14 letters wide; a Hangul syllable counts as two */
+    {
+        size_t out = 0;
+        int cols = 0;
+        int cut = 0;
+
+        while (raw[i] != '\0') {
+            unsigned char c = (unsigned char)raw[i];
+            size_t clen = c < 0x80 ? 1 : (c >= 0xF0 ? 4 : (c >= 0xE0 ? 3 : 2));
+            int w = c < 0x80 ? 1 : 2;
+
+            if (cols + w > 14 || out + clen + 3 > n) {
+                cut = 1;
+                break;
+            }
+            memcpy(buf + out, raw + i, clen);
+            out += clen;
+            i += clen;
+            cols += w;
         }
-    }
-    ascii[len] = '\0';
-
-    if (len > 14) {
-        snprintf(buf, n, "%.12s..", ascii);
-    } else {
-        snprintf(buf, n, "%s", ascii);
+        if (cut && out + 3 <= n) {
+            memcpy(buf + out, "..", 2);
+            out += 2;
+        }
+        buf[out] = '\0';
     }
 }

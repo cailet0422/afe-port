@@ -28,7 +28,7 @@ int pc_rom_dir_changed(void);
  * 1 to look again, or 0 to quit. */
 int pc_rom_dir_ask(const char* default_dir);
 
-/* The chosen folder as short ASCII text for the settings menu */
+/* The chosen folder's name, shortened, as UTF-8 for the settings menu */
 void pc_rom_dir_describe(char* buf, size_t n);
 
 /* fopen for UTF-8 paths (Windows paths can hold any characters) */

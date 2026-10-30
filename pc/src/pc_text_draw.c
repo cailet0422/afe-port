@@ -10,6 +10,7 @@
  * start a new batch. */
 
 #include "pc_text_draw.h"
+#include "pc_ko.h"
 
 #include "game.h"
 #include "graph.h"
@@ -160,8 +161,44 @@ static inline void pc_text_set_vtx(Vtx* v, int x, int y, int s, int t) {
     v->v.cn[3] = 0;
 }
 
+/* Text other than ASCII (a folder name, say) goes through the game's font
+ * code, which draws Hangul from the Korean patch's glyphs. Without the patch
+ * each such character shows as '?'. */
+static int has_non_ascii(const char* s) {
+    for (const u8* p = (const u8*)s; *p; p++) {
+        if (*p >= 0x80) return 1;
+    }
+    return 0;
+}
+
+static void to_ascii(const char* s, char* out, size_t n) {
+    size_t len = 0;
+
+    for (const u8* p = (const u8*)s; *p && len + 1 < n; p++) {
+        if (*p < 0x80) {
+            out[len++] = (char)*p;
+        } else if ((*p & 0xC0) != 0x80) {
+            out[len++] = '?';
+        }
+    }
+    out[len] = '\0';
+}
+
 int pc_text_width(const char* s) {
     if (!s) return 0;
+    if (has_non_ascii(s)) {
+        if (g_pc_ko_mode) {
+            u8 buf[256];
+            int len = pc_ko_encode_utf8(s, buf, sizeof(buf));
+
+            return mFont_GetStringWidth(buf, len, TRUE);
+        } else {
+            char ascii[256];
+
+            to_ascii(s, ascii, sizeof(ascii));
+            return pc_text_width(ascii);
+        }
+    }
     int w = 0;
     for (const u8* p = (const u8*)s; *p; p++) {
         w += advance_texels(*p);
@@ -172,6 +209,20 @@ int pc_text_width(const char* s) {
 void pc_text_draw(struct game_s* game, const char* s, f32 x, f32 y,
                   int r, int g, int b, int a, f32 scale) {
     if (!game || !game->graph || !s) return;
+    if (has_non_ascii(s)) {
+        if (g_pc_ko_mode) {
+            u8 buf[256];
+            int n = pc_ko_encode_utf8(s, buf, sizeof(buf));
+
+            mFont_SetLineStrings(game, buf, n, x, y, r, g, b, a, FALSE, TRUE, scale, scale, mFont_MODE_FONT);
+        } else {
+            char ascii[256];
+
+            to_ascii(s, ascii, sizeof(ascii));
+            pc_text_draw(game, ascii, x, y, r, g, b, a, scale);
+        }
+        return;
+    }
     int len = (int)strlen(s);
     if (len <= 0) return;
     if (fabsf(scale) < 0.001f) return;

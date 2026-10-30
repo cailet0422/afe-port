@@ -5,7 +5,9 @@
  * per 7-char chunk. This bypasses mFont's per-character sub-DL emission
  * (one draw call per glyph) and the control-code machinery none of the PC
  * UI needs. mFont itself stays untouched for dialogs and scenes that do
- * need control codes / streaming reveal / voice-SE. */
+ * need control codes / streaming reveal / voice-SE.
+ * Strings with other UTF-8 characters (Hangul in a folder name) are drawn by
+ * mFont from the Korean patch's glyphs, or with '?' for them without it. */
 
 #ifndef PC_TEXT_DRAW_H
 #define PC_TEXT_DRAW_H
