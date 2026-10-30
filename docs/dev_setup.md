@@ -11,6 +11,12 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y gcc-multilib g++-multilib libs
     binutils-powerpc-linux-gnu ninja-build cmake
 ```
 
+단위 테스트(한글 입력기·문자표·패치 적용기)는 게임 데이터 없이 돌아간다(CI와 같음):
+
+```sh
+cmake -S pc -B pc/build-tests -G Ninja -DPC_TESTS_ONLY=ON && ninja -C pc/build-tests && ctest --test-dir pc/build-tests
+```
+
 ## 2. 디스크 이미지
 
 사용자가 제공한 CISO(구글 드라이브, 네트워크 허용 필요: `drive.google.com`, `drive.usercontent.google.com`):

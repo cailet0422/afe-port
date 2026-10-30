@@ -15,6 +15,10 @@ else()
     set(PC_BUILD_TESTS_DEFAULT ON)
 endif()
 option(PC_BUILD_TESTS "Build unit tests for the PC port layer" ${PC_BUILD_TESTS_DEFAULT})
+option(PC_TESTS_ONLY "Configure only the unit tests (no decomp or game data needed)" OFF)
+if(PC_TESTS_ONLY)
+    set(PC_BUILD_TESTS ON)
+endif()
 if(ANDROID)
     set(PC_GLES_DEFAULT ON)
 else()
@@ -30,18 +34,6 @@ elseif(AFE_VERSION STREQUAL "GAEJ01_01")
 else()
     message(FATAL_ERROR "Unknown AFE_VERSION '${AFE_VERSION}'")
 endif()
-
-# The decompilation (with the TARGET_PC hooks) is the decomp/ submodule
-set(DECOMP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../decomp" CACHE PATH "afe-decomp checkout the port builds from")
-get_filename_component(DECOMP_ROOT "${DECOMP_ROOT}" ABSOLUTE)
-if(NOT EXISTS "${DECOMP_ROOT}/configure.py")
-    message(FATAL_ERROR
-        "afe-decomp not found in ${DECOMP_ROOT}.\n"
-        "Run: git submodule update --init --recursive (or pass -DDECOMP_ROOT=<afe-decomp checkout>)")
-endif()
-set(DECOMP_BUILD_DIR "${DECOMP_ROOT}/build/${AFE_VERSION}")
-# for pc/tools/*.py run at configure time
-set(ENV{AFE_DECOMP_ROOT} "${DECOMP_ROOT}")
 
 # =============================================================================
 # Unit tests (host architecture, no game code)
@@ -72,6 +64,23 @@ if(PC_BUILD_TESTS)
     target_compile_options(test_ko_patch PRIVATE -Wall -Wextra)
     add_test(NAME ko_patch COMMAND test_ko_patch)
 endif()
+
+# CI: the tests need neither the decomp nor a disc
+if(PC_TESTS_ONLY)
+    return()
+endif()
+
+# The decompilation (with the TARGET_PC hooks) is the decomp/ submodule
+set(DECOMP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../decomp" CACHE PATH "afe-decomp checkout the port builds from")
+get_filename_component(DECOMP_ROOT "${DECOMP_ROOT}" ABSOLUTE)
+if(NOT EXISTS "${DECOMP_ROOT}/configure.py")
+    message(FATAL_ERROR
+        "afe-decomp not found in ${DECOMP_ROOT}.\n"
+        "Run: git submodule update --init --recursive (or pass -DDECOMP_ROOT=<afe-decomp checkout>)")
+endif()
+set(DECOMP_BUILD_DIR "${DECOMP_ROOT}/build/${AFE_VERSION}")
+# for pc/tools/*.py run at configure time
+set(ENV{AFE_DECOMP_ROOT} "${DECOMP_ROOT}")
 
 # =============================================================================
 # 32-bit enforcement (the decomp casts pointers to u32 throughout)

@@ -22,7 +22,7 @@ afe-decomp를 기반으로 한 PC(Windows/Linux)·Android 포트와 한국어 �
 - **게임 데이터는 저장소에 넣지 않는다.** 디스크 이미지, 디스크에서 추출한 에셋, 그것을
   포함한 빌드 결과물(`decomp/orig/*`, `decomp/build/`, `pc/build*/`)은 커밋/배포하지 않는다. 배포는 코드와
   패치(차분)만 하고, 사용자가 자기 디스크 이미지를 준비한다.
-- PC 플랫폼 계층(`pc/`)은 [ACGC-PC-Port](https://github.com/FlyingMeta/ACGC-PC-Port)
+- PC 플랫폼 계층(`pc/`)은 [ACGC-PC-Port](https://github.com/flyngmt/ACGC-PC-Port)
   (MIT)의 것을 가져와 e+에 맞게 고쳤다. 라이선스 고지는 `pc/LICENSE`.
 
 ## 구조
