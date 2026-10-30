@@ -1,0 +1,5 @@
+/* Keep the game's symbols (malloc, memcpy, sprintf, ...) out of the dynamic symbol
+   table so they don't interpose the ones SDL and the GL driver use. */
+{
+    local: *;
+};
