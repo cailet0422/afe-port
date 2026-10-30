@@ -1,4 +1,4 @@
-// Android build of the PC port (docs/pc_port/android.md).
+// Android build of the PC port (docs/android.md).
 //
 // Needs the SDL2 source tree (its Java glue and native library): put it in
 // pc/android/SDL or pass -PsdlDir=/path/to/SDL2-2.30.x.
@@ -7,6 +7,9 @@ plugins {
 }
 
 def sdlDir = file(project.findProperty('sdlDir') ?: "${rootDir}/SDL")
+// -PstripAssets: leave the extracted assets out of the library; it reads them
+// from the disc at start (PC_STRIP_ASSETS, docs/README.md)
+def stripAssets = project.hasProperty('stripAssets') ? 'ON' : 'OFF'
 def assetDir = file("${buildDir}/generated/afe_assets")
 
 android {
@@ -21,7 +24,7 @@ android {
         versionCode 1
         versionName '0.1'
         ndk {
-            // Many recent phones run only 64-bit apps (docs/pc_port/64bit.md)
+            // Many recent phones run only 64-bit apps (docs/64bit.md)
             abiFilters 'armeabi-v7a', 'arm64-v8a'
         }
         externalNativeBuild {
@@ -29,6 +32,7 @@ android {
                 arguments "-DSDL_SOURCE_DIR=${sdlDir}",
                           "-DPC_ANDROID_ASSET_DIR=${assetDir}",
                           '-DPC_ALLOW_64BIT=ON',
+                          "-DPC_STRIP_ASSETS=${stripAssets}",
                           '-DANDROID_STL=c++_shared'
             }
         }

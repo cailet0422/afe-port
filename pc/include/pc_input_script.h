@@ -5,6 +5,9 @@
  *     <frame> <inputs> [<duration>]   hold inputs for duration frames (default 6)
  *     <frame> SHOT <name>             save the framebuffer as shots/<name>.ppm
  *     <frame> QUIT                    exit the game
+ *     <frame> POS                     print where the player and the villagers are
+ *     <frame> SEEK <id>|<x>,<z> [n]   walk for up to n frames (default 600) to the
+ *                                     villager with that hex id, or to a point
  *     <frame> TYPE <keys>             type into the text editor (pc_input_script.c)
  *     <frame> EDIT [<utf8>]           system input method: text being composed
  *     <frame> TEXT <utf8>             system input method: committed text

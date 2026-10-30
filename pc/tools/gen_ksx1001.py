@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Write the 2,350 Hangul syllables of KS X 1001 in code order.
 
-The Korean patch numbers its glyphs in this order (docs/pc_port/korean_patch.md),
+The Korean patch numbers its glyphs in this order (docs/korean_patch.md),
 which is also Unicode order. The syllables are rows 0x30-0x48 of KS X 1001
 (EUC-KR 0xB0A1-0xC8FE).
 

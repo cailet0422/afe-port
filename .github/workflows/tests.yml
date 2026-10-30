@@ -1,0 +1,30 @@
+name: Tests
+
+# The game itself needs a disc image to build, so CI only runs what does not:
+# the unit tests of the port layer and a syntax check of the tools.
+on:
+  push:
+  pull_request:
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        submodules: true # the decomp, for the SDK types the card test uses
+
+    - name: Install
+      run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+    - name: Build
+      run: |
+        cmake -S pc -B build-tests -G Ninja -DPC_TESTS_ONLY=ON
+        ninja -C build-tests
+
+    - name: Test
+      run: ctest --test-dir build-tests --output-on-failure
+
+    - name: Tools
+      run: python3 -m py_compile pc/tools/*.py

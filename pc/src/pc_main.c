@@ -348,6 +348,7 @@ void pc_request_restart(void) {
 /* game's main() renamed to ac_entry via -Dmain=ac_entry, boot.c's to boot_main */
 extern void ac_entry(void);
 extern int boot_main(int argc, const char** argv);
+extern void pc_rel_overlay_apply(void);
 extern void pc_jfw_prepare_system_font(void);
 
 int main(int argc, char* argv[]) {
@@ -463,6 +464,8 @@ int main(int argc, char* argv[]) {
         }
     }
     pc_ko_init();
+    /* The disc's data (and with PC_STRIP_ASSETS all the assets) before anything uses it */
+    pc_rel_overlay_apply();
     pc_jfw_prepare_system_font();
 
     ac_entry();                         /* sets HotStartEntry = &entry */

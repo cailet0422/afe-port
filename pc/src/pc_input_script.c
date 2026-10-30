@@ -3,6 +3,10 @@
 #include "pc_touch.h"
 #include "pc_typing.h"
 
+#include "game.h"
+#include "m_common_data.h"
+#include "m_play.h"
+
 #include <ctype.h>
 #include <dolphin/pad.h>
 #include <sys/stat.h>
@@ -12,6 +16,8 @@
 
 #define SCRIPT_STICK 80
 #define SCRIPT_DEFAULT_HOLD 6
+#define SCRIPT_SEEK_FRAMES 600
+#define SCRIPT_SEEK_NEAR 45.0f /* close enough to talk */
 
 typedef enum {
     SCRIPT_INPUT,
@@ -23,6 +29,8 @@ typedef enum {
     SCRIPT_TOUCH,
     SCRIPT_KEY,
     SCRIPT_PAD,
+    SCRIPT_POS,
+    SCRIPT_SEEK,
 } ScriptKind;
 
 typedef struct {
@@ -34,6 +42,8 @@ typedef struct {
     s8 stick_y;
     float touch[4]; /* TOUCH: where the finger lands, then where it moves (0-1) */
     int touch_moves;
+    u16 seek_id;     /* SEEK: villager to walk to, or 0 for seek_pos */
+    float seek_pos[2];
     char name[128];
 } ScriptEvent;
 
@@ -125,6 +135,14 @@ int pc_input_script_load(const char* path) {
             snprintf(ev.name, sizeof(ev.name), "%s", fields >= 3 ? arg : "shot");
         } else if (strcmp(word, "QUIT") == 0) {
             ev.kind = SCRIPT_QUIT;
+        } else if (strcmp(word, "POS") == 0) {
+            ev.kind = SCRIPT_POS;
+        } else if (strcmp(word, "SEEK") == 0 && fields >= 3) {
+            ev.kind = SCRIPT_SEEK;
+            if (sscanf(arg, "%f,%f", &ev.seek_pos[0], &ev.seek_pos[1]) != 2) {
+                ev.seek_id = (u16)strtoul(arg, NULL, 16);
+            }
+            ev.duration = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : SCRIPT_SEEK_FRAMES;
         } else if (strcmp(word, "TYPE") == 0 && fields >= 3) {
             ev.kind = SCRIPT_TYPE;
             snprintf(ev.name, sizeof(ev.name), "%s", arg);
@@ -176,12 +194,104 @@ int pc_input_script_load(const char* path) {
     return 1;
 }
 
+/* World position of a villager's house (one block is 16 units of 40) */
+static float home_x(const Anmhome_c* home) {
+    return home->bx * 640.0f + home->ux * 40.0f + 20.0f;
+}
+
+static float home_z(const Anmhome_c* home) {
+    return home->bz * 640.0f + home->uz * 40.0f + 20.0f;
+}
+
+static ACTOR* find_actor(int part, u16 npc_id) {
+    GAME_PLAY* play = (GAME_PLAY*)gamePT;
+    ACTOR* actor;
+
+    if (play == NULL || play->game.exec != play_main) {
+        return NULL;
+    }
+    for (actor = play->actor_info.list[part].actor; actor != NULL; actor = actor->next_actor) {
+        if (part == ACTOR_PART_PLAYER || actor->npc_id == npc_id) {
+            return actor;
+        }
+    }
+    return NULL;
+}
+
+/* Steers the stick toward a villager (wherever this run put them) or a
+ * point and lets go once close; the player is left facing it. When the
+ * player stops moving (a tree, a fence) it sidesteps for a while, to the
+ * other side each time. */
+static void seek(const ScriptEvent* ev, s8* stick_x, s8* stick_y) {
+    static const ScriptEvent* s_ev = NULL;
+    static float s_last[2];
+    static int s_still, s_detour, s_side;
+    ACTOR* player = find_actor(ACTOR_PART_PLAYER, 0);
+    ACTOR* target = ev->seek_id != 0 ? find_actor(ACTOR_PART_NPC, ev->seek_id) : NULL;
+    float tx, tz, dx, dz, dist, moved;
+
+    if (player == NULL) {
+        return;
+    }
+    tx = ev->seek_pos[0];
+    tz = ev->seek_pos[1];
+    if (target != NULL) {
+        tx = target->world.position.x;
+        tz = target->world.position.z;
+    } else if (ev->seek_id != 0) {
+        /* not loaded yet: head for their house */
+        int i;
+
+        for (i = 0; i < ANIMAL_NUM_MAX && Save_Get(animals[i]).id.npc_id != ev->seek_id; i++) {
+        }
+        if (i == ANIMAL_NUM_MAX) {
+            return;
+        }
+        tx = home_x(&Save_Get(animals[i]).home_info);
+        tz = home_z(&Save_Get(animals[i]).home_info);
+    }
+    dx = tx - player->world.position.x;
+    dz = tz - player->world.position.z;
+    dist = sqrtf(dx * dx + dz * dz);
+    if (dist < (target != NULL ? SCRIPT_SEEK_NEAR : 4.0f)) {
+        return;
+    }
+    if (s_ev != ev) {
+        s_ev = ev;
+        s_still = s_detour = 0;
+        s_side = 1;
+    } else {
+        moved = fabsf(player->world.position.x - s_last[0]) + fabsf(player->world.position.z - s_last[1]);
+        s_still = moved < 0.5f ? s_still + 1 : 0;
+    }
+    s_last[0] = player->world.position.x;
+    s_last[1] = player->world.position.z;
+    if (s_still > 8) {
+        s_still = 0;
+        s_detour = 40;
+        s_side = -s_side;
+    }
+    if (s_detour > 0) {
+        float t = dx;
+
+        s_detour--;
+        dx = -dz * s_side;
+        dz = t * s_side;
+    }
+    /* stick up walks toward -z */
+    *stick_x = (s8)(SCRIPT_STICK * dx / dist);
+    *stick_y = (s8)(-SCRIPT_STICK * dz / dist);
+}
+
 void pc_input_script_apply(u16* buttons, s8* stick_x, s8* stick_y) {
     int i;
 
     for (i = 0; i < s_count; i++) {
         const ScriptEvent* ev = &s_events[i];
 
+        if (ev->kind == SCRIPT_SEEK && s_frame >= ev->frame && s_frame < ev->frame + ev->duration) {
+            seek(ev, stick_x, stick_y);
+        }
         if (ev->kind == SCRIPT_INPUT && s_frame >= ev->frame && s_frame < ev->frame + ev->duration) {
             *buttons |= ev->buttons;
             if (ev->stick_x != 0) {
@@ -314,6 +424,34 @@ static void push_key_or_pad(const ScriptEvent* ev) {
     SDL_PushEvent(&e);
 }
 
+/* Where the player and the villagers are (outside, x/z in world units; one
+ * block is 640), for writing routes */
+static void log_positions(u32 frame) {
+    static const int parts[] = { ACTOR_PART_PLAYER, ACTOR_PART_NPC };
+    GAME_PLAY* play = (GAME_PLAY*)gamePT;
+    int i;
+
+    if (play == NULL || play->game.exec != play_main) {
+        return;
+    }
+    for (i = 0; i < ANIMAL_NUM_MAX; i++) {
+        const Anmhome_c* home = &Save_Get(animals[i]).home_info;
+
+        if (Save_Get(animals[i]).id.npc_id != EMPTY_NO) {
+            printf("[POS] frame %u home %04X block %u,%u x %.0f z %.0f\n", (unsigned)frame, Save_Get(animals[i]).id.npc_id,
+                   home->bx, home->bz, home_x(home), home_z(home));
+        }
+    }
+    for (i = 0; i < (int)(sizeof(parts) / sizeof(parts[0])); i++) {
+        ACTOR* actor;
+
+        for (actor = play->actor_info.list[parts[i]].actor; actor != NULL; actor = actor->next_actor) {
+            printf("[POS] frame %u %s %04X x %.0f z %.0f\n", (unsigned)frame, parts[i] == ACTOR_PART_PLAYER ? "player" : "npc",
+                   actor->npc_id, actor->world.position.x, actor->world.position.z);
+        }
+    }
+}
+
 int pc_input_script_frame(u32 frame) {
     int keep_running = 1;
     int i;
@@ -348,6 +486,8 @@ int pc_input_script_frame(u32 frame) {
             pc_typing_system_text(ev->name);
         } else if (ev->kind == SCRIPT_KEY || ev->kind == SCRIPT_PAD) {
             push_key_or_pad(ev);
+        } else if (ev->kind == SCRIPT_POS) {
+            log_positions(frame);
         } else if (ev->kind == SCRIPT_QUIT) {
             printf("[INPUT] frame %u: quit\n", frame);
             keep_running = 0;

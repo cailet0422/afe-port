@@ -1,6 +1,7 @@
-/* pc_rel_overlay.c - load REL data objects from the disc at boot
+/* pc_rel_overlay.c - load data objects of main.dol and the RELs from the disc at boot
  *
- * The executable carries the REL data that the build extracted. At boot this
+ * The executable carries the data that the build extracted, or, built with
+ * PC_STRIP_ASSETS, zeros in place of the extracted assets. At boot this
  * replaces it with the data of the disc being played (see
  * pc/tools/gen_rel_overlay.py for the table format). Pointer fields, found
  * through the REL's relocations, keep their native values. */
@@ -22,6 +23,7 @@
 #define RELMAP_PATH PC_RELMAP_NAME
 
 enum { KIND_BYTES, KIND_U16, KIND_U32, KIND_VTX };
+#define FLAG_ASSET 1 /* filled from an extracted asset: always loaded */
 
 /* Address reference for the table (its link-time address is in the header) */
 u32 pc_rel_overlay_anchor = 0x52454C4F;
@@ -32,7 +34,7 @@ typedef struct {
 } RelModule;
 
 static const RelModule rel_modules[] = {
-    { NULL, 0 },
+    { NULL, 0 }, /* main.dol */
     { "foresta.rel.szs", 0 },
     { "forestd.rel.szs", 1 },
     { "foresti.rel.szs", 1 },
@@ -180,11 +182,26 @@ static void convert(u8 kind, const u8* src, u8* out, u32 elem) {
     }
 }
 
+/* main.dol's bytes at a load address, through the header's section table */
+static const u8* dol_at(const u8* dol, u32 addr, u32 size) {
+    int i;
+
+    for (i = 0; i < 18; i++) { /* 7 text and 11 data sections */
+        u32 off = rd32(dol + i * 4);
+        u32 start = rd32(dol + 0x48 + i * 4);
+        u32 len = rd32(dol + 0x90 + i * 4);
+
+        if (off != 0 && addr >= start && addr - start + size <= len) {
+            return dol + off + (addr - start);
+        }
+    }
+    return NULL;
+}
+
 /* Copies one object element by element, skipping elements that contain a
- * relocated pointer, and only writes elements that differ. */
-static void apply(const LoadedRel* r, u8 sec, u8 kind, u32 off, u32 size, u8* dst) {
-    const u8* src = r->rel + r->sec_offset[sec] + off;
-    const u8* reloc = r->relocated[sec] + off;
+ * relocated pointer (reloc may be NULL), and only writes elements that
+ * differ. */
+static void apply(const u8* src, const u8* reloc, u8 kind, u32 size, u8* dst) {
     u32 elem = kind == KIND_U16 ? 2 : (kind == KIND_U32 ? 4 : (kind == KIND_VTX ? 16 : 1));
     int writable = 0;
     u32 i, j;
@@ -193,7 +210,7 @@ static void apply(const LoadedRel* r, u8 sec, u8 kind, u32 off, u32 size, u8* ds
         u8 native[16];
         int skip = 0;
 
-        for (j = 0; j < elem; j++) {
+        for (j = 0; reloc != NULL && j < elem; j++) {
             skip |= reloc[i + j];
         }
         if (skip) {
@@ -205,8 +222,8 @@ static void apply(const LoadedRel* r, u8 sec, u8 kind, u32 off, u32 size, u8* ds
         }
         if (!writable) {
             if (getenv("PC_RELOVL_DEBUG") != NULL) {
-                printf("[RELOVL] sec %u off %#x size %#x kind %u dst %p differs at +%#x\n", sec, off, size, kind,
-                       (void*)dst, i);
+                printf("[RELOVL] size %#x kind %u dst %p differs at +%#x\n", (unsigned)size, kind, (void*)dst,
+                       (unsigned)i);
             }
             make_writable(dst, size);
             writable = 1;
@@ -215,20 +232,36 @@ static void apply(const LoadedRel* r, u8 sec, u8 kind, u32 off, u32 size, u8* ds
     }
 }
 
+/* A build without the assets cannot run without them */
+static void assets_missing(const char* why) {
+#ifdef PC_STRIP_ASSETS
+    char msg[256];
+
+    snprintf(msg, sizeof(msg), "The game's pictures and models could not be read from the disc image (%s).", why);
+    printf("[PC] %s\n", msg);
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, PC_WINDOW_TITLE, msg, NULL);
+    exit(1);
+#else
+    (void)why;
+#endif
+}
+
 void pc_rel_overlay_apply(void) {
     FILE* f = fopen(RELMAP_PATH, "rb");
     u8 header[16];
-    u32 count, anchor_vma, n, applied = 0;
+    u32 count, anchor_vma, n, applied = 0, assets = 0, assets_done = 0;
     uintptr_t slide;
     int module;
     u8* table;
 
     if (f == NULL) {
+        assets_missing(RELMAP_PATH " is missing");
         printf("[PC] %s not found; using the data built into the executable\n", RELMAP_PATH);
         return;
     }
     if (fread(header, 1, sizeof(header), f) != sizeof(header) || memcmp(header, "RELO", 4) != 0) {
         fclose(f);
+        assets_missing(RELMAP_PATH " is damaged");
         return;
     }
     memcpy(&count, header + 8, 4);
@@ -237,42 +270,71 @@ void pc_rel_overlay_apply(void) {
     if (table == NULL || fread(table, 16, count, f) != count) {
         free(table);
         fclose(f);
+        assets_missing(RELMAP_PATH " is damaged");
         return;
     }
     fclose(f);
     slide = (uintptr_t)&pc_rel_overlay_anchor - anchor_vma;
+    for (n = 0; n < count; n++) {
+        assets += (table[n * 16 + 3] & FLAG_ASSET) != 0;
+    }
 
-    for (module = 1; module < REL_MODULE_COUNT; module++) {
+    for (module = 0; module < REL_MODULE_COUNT; module++) {
         LoadedRel rel;
+        u8* dol = NULL;
 
-        if (!rel_modules[module].overlay_all && !g_pc_ko_mode) {
-            continue;
-        }
-        if (!load_rel(&rel, rel_modules[module].file)) {
+        if (module == 0) {
+            dol = pc_disc_extract_dol();
+            if (dol == NULL) {
+                continue;
+            }
+        } else if (!load_rel(&rel, rel_modules[module].file)) {
             free_rel(&rel);
             continue;
         }
         for (n = 0; n < count; n++) {
             const u8* e = table + n * 16;
+            int asset = (e[3] & FLAG_ASSET) != 0;
+            const u8* src;
             u32 off, size, vma;
 
             if (e[0] != module) {
                 continue;
             }
-            if (!rel_modules[module].overlay_all && e[2] != KIND_BYTES && e[2] != KIND_U16) {
+            /* foresta (code) only gets its assets, and in Korean mode its text */
+            if (!asset && !rel_modules[module].overlay_all &&
+                (!g_pc_ko_mode || (e[2] != KIND_BYTES && e[2] != KIND_U16))) {
                 continue;
             }
             memcpy(&off, e + 4, 4);
             memcpy(&size, e + 8, 4);
             memcpy(&vma, e + 12, 4);
-            if (e[1] >= rel.num_sections || rel.relocated[e[1]] == NULL || off + size > rel.sec_size[e[1]]) {
-                continue;
+            if (module == 0) {
+                src = dol_at(dol, off, size);
+                if (src == NULL) {
+                    continue;
+                }
+                apply(src, NULL, e[2], size, (u8*)(uintptr_t)(vma + slide));
+            } else {
+                if (e[1] >= rel.num_sections || rel.relocated[e[1]] == NULL || off + size > rel.sec_size[e[1]]) {
+                    continue;
+                }
+                src = rel.rel + rel.sec_offset[e[1]] + off;
+                apply(src, rel.relocated[e[1]] + off, e[2], size, (u8*)(uintptr_t)(vma + slide));
             }
-            apply(&rel, e[1], e[2], off, size, (u8*)(uintptr_t)(vma + slide));
             applied++;
+            assets_done += asset;
         }
-        free_rel(&rel);
+        if (module == 0) {
+            free(dol);
+        } else {
+            free_rel(&rel);
+        }
     }
     free(table);
-    printf("[PC] loaded %u data objects from the disc\n", applied);
+    printf("[PC] loaded %u data objects from the disc (%u of %u assets)\n", (unsigned)applied, (unsigned)assets_done,
+           (unsigned)assets);
+    if (assets_done != assets) {
+        assets_missing("some are not on it");
+    }
 }

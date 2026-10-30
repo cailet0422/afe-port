@@ -1,6 +1,6 @@
 /* ko_charset.h - Unicode <-> Korean patch text encoding
  *
- * The community Korean patch (docs/pc_port/korean_patch.md) stores a Hangul
+ * The community Korean patch (docs/korean_patch.md) stores a Hangul
  * syllable as two bytes that select one of its glyphs:
  *   glyphs 0-2349     KS X 1001 syllables in code order
  *   glyphs 2350-2368  the 19 initial consonants (ㄱ ㄲ ㄴ ... ㅎ)

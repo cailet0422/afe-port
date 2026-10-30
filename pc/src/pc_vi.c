@@ -39,6 +39,7 @@ void VIWaitForRetrace(void) {
         return;
     }
 
+    pc_audio_frame();
     pc_touch_draw();
     if (!pc_input_script_frame(pc_frame_counter)) {
         g_pc_running = 0;

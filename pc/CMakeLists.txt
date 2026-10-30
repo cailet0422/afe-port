@@ -15,12 +15,17 @@ else()
     set(PC_BUILD_TESTS_DEFAULT ON)
 endif()
 option(PC_BUILD_TESTS "Build unit tests for the PC port layer" ${PC_BUILD_TESTS_DEFAULT})
+option(PC_TESTS_ONLY "Configure only the unit tests (no decomp or game data needed)" OFF)
+if(PC_TESTS_ONLY)
+    set(PC_BUILD_TESTS ON)
+endif()
 if(ANDROID)
     set(PC_GLES_DEFAULT ON)
 else()
     set(PC_GLES_DEFAULT OFF)
 endif()
 option(PC_GLES "Render with OpenGL ES 3.0 instead of OpenGL 3.3 core" ${PC_GLES_DEFAULT})
+option(PC_STRIP_ASSETS "Leave the extracted assets out of the executable; it reads them from the disc at boot" OFF)
 
 set(AFE_VERSION "GAEJ01_01" CACHE STRING "Game version to build (GAEJ01_00 or GAEJ01_01)")
 if(AFE_VERSION STREQUAL "GAEJ01_00")
@@ -34,17 +39,9 @@ endif()
 # The decompilation (with the TARGET_PC hooks) is the decomp/ submodule
 set(DECOMP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../decomp" CACHE PATH "afe-decomp checkout the port builds from")
 get_filename_component(DECOMP_ROOT "${DECOMP_ROOT}" ABSOLUTE)
-if(NOT EXISTS "${DECOMP_ROOT}/configure.py")
-    message(FATAL_ERROR
-        "afe-decomp not found in ${DECOMP_ROOT}.\n"
-        "Run: git submodule update --init --recursive (or pass -DDECOMP_ROOT=<afe-decomp checkout>)")
-endif()
-set(DECOMP_BUILD_DIR "${DECOMP_ROOT}/build/${AFE_VERSION}")
-# for pc/tools/*.py run at configure time
-set(ENV{AFE_DECOMP_ROOT} "${DECOMP_ROOT}")
 
 # =============================================================================
-# Unit tests (host architecture, no game code)
+# Unit tests (host architecture, no game code or disc)
 # =============================================================================
 if(PC_BUILD_TESTS)
     enable_testing()
@@ -71,7 +68,37 @@ if(PC_BUILD_TESTS)
     target_include_directories(test_ko_patch PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
     target_compile_options(test_ko_patch PRIVATE -Wall -Wextra)
     add_test(NAME ko_patch COMMAND test_ko_patch)
+
+    # The memory card layer uses the SDK's card types from the decomp
+    if(EXISTS "${DECOMP_ROOT}/include/dolphin/card.h")
+        add_executable(test_pc_card
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_card.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_pc_card.c
+        )
+        target_compile_definitions(test_pc_card PRIVATE TARGET_PC)
+        target_include_directories(test_pc_card PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+        target_include_directories(test_pc_card SYSTEM PRIVATE ${DECOMP_ROOT}/include)
+        target_compile_options(test_pc_card PRIVATE -Wall -Wextra "SHELL:-idirafter ${DECOMP_ROOT}/include/dolphin")
+        add_test(NAME pc_card COMMAND test_pc_card)
+    else()
+        message(STATUS "afe-decomp not found: skipping the memory card test")
+    endif()
 endif()
+
+# CI: the tests need no disc (and only the card test needs the decomp)
+if(PC_TESTS_ONLY)
+    return()
+endif()
+
+# The game itself builds from the decomp
+if(NOT EXISTS "${DECOMP_ROOT}/configure.py")
+    message(FATAL_ERROR
+        "afe-decomp not found in ${DECOMP_ROOT}.\n"
+        "Run: git submodule update --init --recursive (or pass -DDECOMP_ROOT=<afe-decomp checkout>)")
+endif()
+set(DECOMP_BUILD_DIR "${DECOMP_ROOT}/build/${AFE_VERSION}")
+# for pc/tools/*.py run at configure time
+set(ENV{AFE_DECOMP_ROOT} "${DECOMP_ROOT}")
 
 # =============================================================================
 # 32-bit enforcement (the decomp casts pointers to u32 throughout)
@@ -232,6 +259,24 @@ include("${MODULE_DATA_DIR}/module_data.cmake")
 include_directories(BEFORE "${MODULE_DATA_DIR}/include")
 list(APPEND DECOMP_C_SOURCES ${GENERATED_DATA_SOURCES})
 
+# Without the assets: every .inc as zeros of the same shape, found first, so
+# the executable can be passed on (pc_rel_overlay.c reads them from the disc)
+if(PC_STRIP_ASSETS)
+    set(STRIPPED_INCLUDE_DIR "${CMAKE_BINARY_DIR}/stripped/include")
+    execute_process(
+        COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/strip_assets.py"
+                "${STRIPPED_INCLUDE_DIR}" "${DECOMP_BUILD_DIR}/include" "${MODULE_DATA_DIR}/include"
+        RESULT_VARIABLE STRIP_RESULT
+    )
+    if(NOT STRIP_RESULT EQUAL 0)
+        message(FATAL_ERROR "strip_assets.py failed")
+    endif()
+    include_directories(BEFORE "${STRIPPED_INCLUDE_DIR}")
+    add_compile_definitions(PC_STRIP_ASSETS)
+    set(PC_BIN2C_ZERO --zero)
+    set(PC_RELMAP_REQUIRE --require-assets)
+endif()
+
 # Raw big-endian blobs that game code reads as typed data, swapped at boot.
 set(DATA_FIXUPS_C "${MODULE_DATA_DIR}/pc_data_fixups.c")
 execute_process(
@@ -250,7 +295,7 @@ set(SYSTEM_FONT_BFN "${DECOMP_BUILD_DIR}/bin/assets/JSystem/JUtility/FontData/As
 set(SYSTEM_FONT_C "${CMAKE_BINARY_DIR}/gen/pc_system_font.c")
 add_custom_command(
     OUTPUT "${SYSTEM_FONT_C}"
-    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin2c.py"
+    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin2c.py" ${PC_BIN2C_ZERO}
             "${SYSTEM_FONT_BFN}" "${SYSTEM_FONT_C}" JUTResFONT_Ascfont_fix12 32
     DEPENDS "${SYSTEM_FONT_BFN}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin2c.py"
     COMMENT "Embedding system font"
@@ -478,11 +523,41 @@ target_link_options(afe_pc PRIVATE -Wl,--gc-sections "-Wl,-Map=${CMAKE_BINARY_DI
 add_custom_command(TARGET afe_pc POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E env "AFE_DECOMP_ROOT=${DECOMP_ROOT}"
             ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_rel_overlay.py" ${AFE_VERSION}
-            "${CMAKE_BINARY_DIR}/DobutsuNoMoriEPlus.map" -o "${PC_DATA_DIR}/${PC_RELMAP_NAME}"
+            "${CMAKE_BINARY_DIR}/DobutsuNoMoriEPlus.map" ${PC_RELMAP_REQUIRE} -o "${PC_DATA_DIR}/${PC_RELMAP_NAME}"
     COMMENT "Generating REL data overlay table"
 )
 if(NOT WIN32 AND NOT ANDROID)
     target_link_options(afe_pc PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/cmake/exe_exports.ver")
+endif()
+
+# dist: a zip of the game folder to pass on, from a build without the assets.
+# Only the files the game needs (bin/ also collects the player's rom/, save/
+# and settings when run from there); the debug info is left out, the symbol
+# names stay for crash reports.
+if(PC_STRIP_ASSETS AND NOT ANDROID)
+    set(PC_DIST_NAME "DobutsuNoMoriEPlus")
+    set(PC_DIST_DIR "${CMAKE_BINARY_DIR}/dist/${PC_DIST_NAME}")
+    set(PC_DIST_ZIP "${CMAKE_BINARY_DIR}/dist/${PC_DIST_NAME}-${CMAKE_SYSTEM_NAME}.zip")
+    set(PC_DIST_COMMANDS
+        COMMAND ${CMAKE_COMMAND} -E rm -rf "${CMAKE_BINARY_DIR}/dist"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${PC_DIST_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:afe_pc>" "${PC_DATA_DIR}/${PC_RELMAP_NAME}" "${PC_DIST_DIR}/"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${PC_DATA_DIR}/shaders" "${PC_DIST_DIR}/shaders"
+        COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE" "${PC_DIST_DIR}/LICENSE.txt")
+    if(WIN32 AND SDL2_DLL_PATH)
+        list(APPEND PC_DIST_COMMANDS COMMAND ${CMAKE_COMMAND} -E copy "${SDL2_DLL_PATH}" "${PC_DIST_DIR}/")
+    endif()
+    if(CMAKE_STRIP)
+        list(APPEND PC_DIST_COMMANDS COMMAND ${CMAKE_STRIP} --strip-debug "${PC_DIST_DIR}/$<TARGET_FILE_NAME:afe_pc>")
+    endif()
+    add_custom_target(dist
+        ${PC_DIST_COMMANDS}
+        COMMAND ${CMAKE_COMMAND} -E chdir "${CMAKE_BINARY_DIR}/dist"
+                ${CMAKE_COMMAND} -E tar cf "${PC_DIST_ZIP}" --format=zip "${PC_DIST_NAME}"
+        DEPENDS afe_pc
+        COMMENT "Packing ${PC_DIST_ZIP}"
+        VERBATIM
+    )
 endif()
 
 if(MINGW)

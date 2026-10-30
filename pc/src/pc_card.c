@@ -1,7 +1,19 @@
 /* pc_card.c - memory card API → local file I/O
  * Channel 0 (Slot A) → save/card_a/
- * Channel 1 (Slot B) → save/card_b/ */
-#include "pc_platform.h"
+ * Channel 1 (Slot B) → save/card_b/
+ *
+ * Each card file is a plain file holding the data only. The card directory
+ * (file numbers, status, permissions) is kept in memory: file numbers are
+ * given out when a file is first seen and stay put while the game runs, as
+ * the game looks files up by number between calls. */
+#include "pc_types.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include "dolphin/os/OSContext.h"
+#include "dolphin/os/OSSemaphore.h"
+#include "dolphin/card.h"
 #include <sys/stat.h>   /* mkdir (Linux), stat */
 #ifdef _WIN32
 #include <direct.h>  /* _mkdir */
@@ -10,55 +22,33 @@
 #include <dirent.h>
 #endif
 
-#define CARD_RESULT_READY     0
-#define CARD_RESULT_BUSY     -1
-#define CARD_RESULT_WRONGDEVICE -2
-#define CARD_RESULT_NOCARD   -3
-#define CARD_RESULT_NOFILE   -4
-#define CARD_RESULT_IOERROR  -5
-#define CARD_RESULT_BROKEN   -6
-#define CARD_RESULT_EXIST    -7
-#define CARD_RESULT_NOENT    -8
-#define CARD_RESULT_INSSPACE -9
-#define CARD_RESULT_NOPERM   -10
-#define CARD_RESULT_LIMIT    -11
-#define CARD_RESULT_NAMETOOLONG -12
-#define CARD_RESULT_ENCODING -13
-#define CARD_RESULT_CANCELED -14
-#define CARD_RESULT_FATAL_ERROR -128
+#define CARD_SECTOR_SIZE 8192
+#define CARD_USER_BLOCKS 1019 /* a "Memory Card 1019" (64 Mbit) */
+#define CARD_MEM_SIZE_MBIT 64
 
-/* must match card.h layout (20 bytes); extra state goes in side table */
-typedef struct {
-    s32   chan;
-    s32   fileNo;
-    s32   offset;
-    s32   length;
-    u16   iBlock;
-} CARDFileInfo_PC;
+/* Seconds from 1970-01-01 to 2000-01-01, the card's epoch */
+#define CARD_EPOCH_OFFSET 946684800u
 
-#define CARD_MAX_OPEN 4
+/* Files on the cards are this game's own */
+static const u8 card_game_name[4] = { 'G', 'A', 'E', 'J' };
+static const u8 card_company[2] = { '0', '1' };
+
 typedef struct {
-    CARDFileInfo_PC* owner;   /* NULL = slot free */
-    FILE*            fp;
-    char             filename[64];
+    int     used;
+    CARDDir dir; /* fileName, permission, banner/icon/comment fields */
+} CARDEntry;
+
+static CARDEntry card_entries[2][CARD_MAX_FILE];
+
+typedef struct {
+    CARDFileInfo* owner; /* NULL = slot free */
+    FILE*         fp;
 } CARDOpenSlot;
 
+#define CARD_MAX_OPEN 8
 static CARDOpenSlot card_slots[CARD_MAX_OPEN];
 
-static CARDOpenSlot* card_slot_alloc(CARDFileInfo_PC* fi) {
-    int i;
-    for (i = 0; i < CARD_MAX_OPEN; i++) {
-        if (card_slots[i].owner == NULL) {
-            card_slots[i].owner = fi;
-            card_slots[i].fp = NULL;
-            card_slots[i].filename[0] = '\0';
-            return &card_slots[i];
-        }
-    }
-    return NULL;
-}
-
-static CARDOpenSlot* card_slot_find(CARDFileInfo_PC* fi) {
+static CARDOpenSlot* card_slot_find(CARDFileInfo* fi) {
     int i;
     for (i = 0; i < CARD_MAX_OPEN; i++) {
         if (card_slots[i].owner == fi) return &card_slots[i];
@@ -66,35 +56,154 @@ static CARDOpenSlot* card_slot_find(CARDFileInfo_PC* fi) {
     return NULL;
 }
 
-static void card_slot_free(CARDFileInfo_PC* fi) {
+/* A file info being reopened without a close drops its old handle */
+static CARDOpenSlot* card_slot_alloc(CARDFileInfo* fi) {
+    CARDOpenSlot* slot = card_slot_find(fi);
     int i;
+
+    if (slot != NULL) {
+        if (slot->fp) fclose(slot->fp);
+        slot->fp = NULL;
+        return slot;
+    }
     for (i = 0; i < CARD_MAX_OPEN; i++) {
-        if (card_slots[i].owner == fi) {
-            card_slots[i].owner = NULL;
+        if (card_slots[i].owner == NULL) {
+            card_slots[i].owner = fi;
             card_slots[i].fp = NULL;
-            return;
+            return &card_slots[i];
         }
+    }
+    return NULL;
+}
+
+static void card_slot_free(CARDFileInfo* fi) {
+    CARDOpenSlot* slot = card_slot_find(fi);
+    if (slot) {
+        if (slot->fp) fclose(slot->fp);
+        slot->owner = NULL;
+        slot->fp = NULL;
     }
 }
 
 /* Per-channel directory: chan 0 = card_a, chan 1 = card_b */
 static const char* card_dir[2] = { "save/card_a", "save/card_b" };
-static int card_mounted[2] = {0, 0};
 
-static const char* get_card_dir(s32 chan) {
-    if (chan >= 0 && chan <= 1) return card_dir[chan];
-    return card_dir[0];
+static int card_chan_valid(s32 chan) {
+    return chan >= 0 && chan <= 1;
 }
 
-/* reject path traversal */
+/* Card file names are at most 32 bytes; reject path traversal */
 static int card_filename_safe(const char* name) {
     if (!name || !name[0]) return 0;
+    if (strlen(name) > CARD_FILENAME_MAX) return 0;
     if (strstr(name, "..")) return 0;
-    if (strchr(name, '/') || strchr(name, '\\')) return 0;
+    if (strchr(name, '/') || strchr(name, '\\') || strchr(name, ':')) return 0;
     return 1;
 }
 
-#define CARD_SECTOR_SIZE 8192
+static void card_path(char* out, size_t size, s32 chan, const char* name) {
+    snprintf(out, size, "%s/%s", card_dir[chan], name);
+}
+
+static void card_entry_name(const CARDEntry* e, char* out) {
+    memcpy(out, e->dir.fileName, CARD_FILENAME_MAX);
+    out[CARD_FILENAME_MAX] = '\0';
+}
+
+/* Size in bytes and modification time (card epoch) of a card file */
+static int card_file_stat(s32 chan, const char* name, u32* size, u32* time_out) {
+    char path[512];
+    struct stat st;
+
+    card_path(path, sizeof(path), chan, name);
+    if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) return 0;
+    if (size) *size = (u32)st.st_size;
+    if (time_out) *time_out = (u32)st.st_mtime > CARD_EPOCH_OFFSET ? (u32)st.st_mtime - CARD_EPOCH_OFFSET : 0;
+    return 1;
+}
+
+static u32 card_now(void) {
+    time_t t = time(NULL);
+    return (u32)t > CARD_EPOCH_OFFSET ? (u32)t - CARD_EPOCH_OFFSET : 0;
+}
+
+static int card_find(s32 chan, const char* name) {
+    char entry_name[CARD_FILENAME_MAX + 1];
+    int i;
+
+    for (i = 0; i < CARD_MAX_FILE; i++) {
+        if (!card_entries[chan][i].used) continue;
+        card_entry_name(&card_entries[chan][i], entry_name);
+        if (strcmp(entry_name, name) == 0) return i;
+    }
+    return -1;
+}
+
+static int card_add(s32 chan, const char* name) {
+    int i;
+
+    for (i = 0; i < CARD_MAX_FILE; i++) {
+        CARDEntry* e = &card_entries[chan][i];
+
+        if (e->used) continue;
+        memset(e, 0, sizeof(*e));
+        e->used = 1;
+        memcpy(e->dir.gameName, card_game_name, sizeof(e->dir.gameName));
+        memcpy(e->dir.company, card_company, sizeof(e->dir.company));
+        strncpy((char*)e->dir.fileName, name, CARD_FILENAME_MAX);
+        e->dir.iconAddr = 0xFFFFFFFF;
+        e->dir.commentAddr = 0xFFFFFFFF;
+        e->dir.permission = CARD_ATTR_PUBLIC;
+        e->dir.time = card_now();
+        return i;
+    }
+    return -1;
+}
+
+/* Brings the directory in line with the files on disk (copied in or deleted
+ * while the game runs) without renumbering the files it already knows. */
+static void card_sync(s32 chan) {
+    int i;
+
+    for (i = 0; i < CARD_MAX_FILE; i++) {
+        char name[CARD_FILENAME_MAX + 1];
+
+        if (!card_entries[chan][i].used) continue;
+        card_entry_name(&card_entries[chan][i], name);
+        if (!card_file_stat(chan, name, NULL, NULL)) card_entries[chan][i].used = 0;
+    }
+
+#ifdef _WIN32
+    {
+        WIN32_FIND_DATAA fd;
+        HANDLE h;
+        char search[300];
+
+        snprintf(search, sizeof(search), "%s\\*", card_dir[chan]);
+        h = FindFirstFileA(search, &fd);
+        if (h == INVALID_HANDLE_VALUE) return;
+        do {
+            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+            if (!card_filename_safe(fd.cFileName) || card_find(chan, fd.cFileName) >= 0) continue;
+            card_add(chan, fd.cFileName);
+        } while (FindNextFileA(h, &fd));
+        FindClose(h);
+    }
+#else
+    {
+        DIR* d = opendir(card_dir[chan]);
+        struct dirent* ent;
+
+        if (!d) return;
+        while ((ent = readdir(d)) != NULL) {
+            if (ent->d_name[0] == '.' || !card_filename_safe(ent->d_name)) continue;
+            if (card_find(chan, ent->d_name) >= 0 || !card_file_stat(chan, ent->d_name, NULL, NULL)) continue;
+            card_add(chan, ent->d_name);
+        }
+        closedir(d);
+    }
+#endif
+}
 
 static void ensure_dirs(void) {
 #ifdef _WIN32
@@ -112,279 +221,414 @@ void CARDInit(void) {
     ensure_dirs();
 }
 
-s32 CARDMount(s32 chan, void* workArea, void* detachCallback) {
+s32 CARDMount(s32 chan, void* workArea, CARDCallback detachCallback) {
     (void)workArea; (void)detachCallback;
-    if (chan < 0 || chan > 1) return CARD_RESULT_NOCARD;
-    card_mounted[chan] = 1;
+    if (!card_chan_valid(chan)) return CARD_RESULT_NOCARD;
+    ensure_dirs();
+    card_sync(chan);
     return CARD_RESULT_READY;
 }
 
-s32 CARDMountAsync(s32 chan, void* workArea, void* detachCb, void* attachCb) {
-    s32 result = CARDMount(chan, workArea, detachCb);
-    if (attachCb) ((void (*)(s32, s32))attachCb)(chan, result);
+s32 CARDMountAsync(s32 chan, void* workArea, CARDCallback detachCallback, CARDCallback attachCallback) {
+    s32 result = CARDMount(chan, workArea, detachCallback);
+    if (attachCallback) attachCallback(chan, result);
     return result;
 }
 
 s32 CARDUnmount(s32 chan) {
-    if (chan >= 0 && chan <= 1) card_mounted[chan] = 0;
-    return CARD_RESULT_READY;
+    return card_chan_valid(chan) ? CARD_RESULT_READY : CARD_RESULT_NOCARD;
 }
 
-s32 CARDOpen(s32 chan, const char* fileName, CARDFileInfo_PC* fileInfo) {
+static s32 card_open_no(s32 chan, s32 fileNo, CARDFileInfo* fileInfo) {
+    char name[CARD_FILENAME_MAX + 1];
     char path[512];
     CARDOpenSlot* slot;
-    if (!card_filename_safe(fileName)) return CARD_RESULT_NAMETOOLONG;
-    snprintf(path, sizeof(path), "%s/%s", get_card_dir(chan), fileName);
+    u32 size;
 
-    fileInfo->chan = chan;
-    fileInfo->offset = 0;
-
+    card_entry_name(&card_entries[chan][fileNo], name);
+    if (!card_file_stat(chan, name, &size, NULL)) return CARD_RESULT_NOFILE;
     slot = card_slot_alloc(fileInfo);
-    if (!slot) return CARD_RESULT_IOERROR;
+    if (!slot) return CARD_RESULT_LIMIT;
 
-    strncpy(slot->filename, fileName, sizeof(slot->filename) - 1);
-    slot->filename[sizeof(slot->filename) - 1] = '\0';
+    card_path(path, sizeof(path), chan, name);
     slot->fp = fopen(path, "r+b");
     if (!slot->fp) {
         card_slot_free(fileInfo);
-        return CARD_RESULT_NOFILE;
+        return CARD_RESULT_IOERROR;
     }
-    fseek(slot->fp, 0, SEEK_END);
-    fileInfo->length = (s32)ftell(slot->fp);
-    fseek(slot->fp, 0, SEEK_SET);
+    fileInfo->chan = chan;
+    fileInfo->fileNo = fileNo;
+    fileInfo->offset = 0;
+    fileInfo->length = (s32)size;
+    fileInfo->iBlock = 0;
     return CARD_RESULT_READY;
 }
 
-s32 CARDClose(CARDFileInfo_PC* fileInfo) {
-    CARDOpenSlot* slot = card_slot_find(fileInfo);
-    if (slot && slot->fp) {
-        fclose(slot->fp);
-        slot->fp = NULL;
-    }
+s32 CARDOpen(s32 chan, const char* fileName, CARDFileInfo* fileInfo) {
+    int no;
+
+    if (!card_chan_valid(chan)) return CARD_RESULT_NOCARD;
+    if (!card_filename_safe(fileName)) return CARD_RESULT_NOFILE;
+    card_sync(chan);
+    no = card_find(chan, fileName);
+    if (no < 0) return CARD_RESULT_NOFILE;
+    return card_open_no(chan, no, fileInfo);
+}
+
+s32 CARDFastOpen(s32 chan, s32 fileNo, CARDFileInfo* fileInfo) {
+    if (!card_chan_valid(chan)) return CARD_RESULT_NOCARD;
+    if (fileNo < 0 || fileNo >= CARD_MAX_FILE) return CARD_RESULT_FATAL_ERROR;
+    if (!card_entries[chan][fileNo].used) return CARD_RESULT_NOFILE;
+    return card_open_no(chan, fileNo, fileInfo);
+}
+
+s32 CARDClose(CARDFileInfo* fileInfo) {
     card_slot_free(fileInfo);
     return CARD_RESULT_READY;
 }
 
-s32 CARDCreate(s32 chan, const char* fileName, u32 size, CARDFileInfo_PC* fileInfo) {
+static u32 card_used_blocks(s32 chan, int* files) {
+    u32 blocks = 0;
+    int i;
+
+    *files = 0;
+    for (i = 0; i < CARD_MAX_FILE; i++) {
+        char name[CARD_FILENAME_MAX + 1];
+        u32 size;
+
+        if (!card_entries[chan][i].used) continue;
+        card_entry_name(&card_entries[chan][i], name);
+        if (card_file_stat(chan, name, &size, NULL)) blocks += (size + CARD_SECTOR_SIZE - 1) / CARD_SECTOR_SIZE;
+        (*files)++;
+    }
+    return blocks;
+}
+
+s32 CARDCreate(s32 chan, const char* fileName, u32 size, CARDFileInfo* fileInfo) {
     char path[512];
     CARDOpenSlot* slot;
-    if (!card_filename_safe(fileName)) return CARD_RESULT_NAMETOOLONG;
-    snprintf(path, sizeof(path), "%s/%s", get_card_dir(chan), fileName);
+    int files, no;
+    u8* zeros;
 
-    fileInfo->chan = chan;
-    fileInfo->offset = 0;
-    fileInfo->length = size;
+    if (!card_chan_valid(chan)) return CARD_RESULT_NOCARD;
+    if (!card_filename_safe(fileName)) return CARD_RESULT_NAMETOOLONG;
+    if (size == 0 || size % CARD_SECTOR_SIZE != 0) return CARD_RESULT_FATAL_ERROR;
+    card_sync(chan);
+    if (card_find(chan, fileName) >= 0) return CARD_RESULT_EXIST;
+    if (card_used_blocks(chan, &files) + size / CARD_SECTOR_SIZE > CARD_USER_BLOCKS) return CARD_RESULT_INSSPACE;
+    no = card_add(chan, fileName);
+    if (no < 0) return CARD_RESULT_NOENT;
 
     slot = card_slot_alloc(fileInfo);
-    if (!slot) return CARD_RESULT_IOERROR;
-
-    strncpy(slot->filename, fileName, sizeof(slot->filename) - 1);
-    slot->filename[sizeof(slot->filename) - 1] = '\0';
-
-    slot->fp = fopen(path, "w+b");
-    if (!slot->fp) { card_slot_free(fileInfo); return CARD_RESULT_IOERROR; }
-
-    {
-        u8* zeros = (u8*)calloc(1, size);
-        if (!zeros) { fclose(slot->fp); slot->fp = NULL; card_slot_free(fileInfo); return CARD_RESULT_IOERROR; }
-        size_t written = fwrite(zeros, 1, size, slot->fp);
-        free(zeros);
-        if (written != size) { fclose(slot->fp); slot->fp = NULL; card_slot_free(fileInfo); return CARD_RESULT_IOERROR; }
-        fseek(slot->fp, 0, SEEK_SET);
+    if (!slot) {
+        card_entries[chan][no].used = 0;
+        return CARD_RESULT_LIMIT;
     }
+    card_path(path, sizeof(path), chan, fileName);
+    zeros = (u8*)calloc(1, size);
+    slot->fp = zeros ? fopen(path, "w+b") : NULL;
+    if (!slot->fp || fwrite(zeros, 1, size, slot->fp) != size || fflush(slot->fp) != 0) {
+        free(zeros);
+        card_slot_free(fileInfo);
+        remove(path);
+        card_entries[chan][no].used = 0;
+        return CARD_RESULT_IOERROR;
+    }
+    free(zeros);
 
+    fileInfo->chan = chan;
+    fileInfo->fileNo = no;
+    fileInfo->offset = 0;
+    fileInfo->length = (s32)size;
+    fileInfo->iBlock = 0;
     return CARD_RESULT_READY;
 }
 
-s32 CARDCreateAsync(s32 chan, const char* fileName, u32 size, void* fileInfo, void* callback) {
-    s32 result = CARDCreate(chan, fileName, size, (CARDFileInfo_PC*)fileInfo);
-    if (callback) ((void (*)(s32, s32))callback)(chan, result);
+s32 CARDCreateAsync(s32 chan, const char* fileName, u32 size, CARDFileInfo* fileInfo, CARDCallback callback) {
+    s32 result = CARDCreate(chan, fileName, size, fileInfo);
+    if (callback) callback(chan, result);
     return result;
 }
 
-s32 CARDRead(CARDFileInfo_PC* fileInfo, void* buf, s32 length, s32 offset) {
+s32 CARDRead(CARDFileInfo* fileInfo, void* buf, s32 length, s32 offset) {
     CARDOpenSlot* slot = card_slot_find(fileInfo);
     if (!slot || !slot->fp) return CARD_RESULT_NOFILE;
-    fseek(slot->fp, offset, SEEK_SET);
+    if (offset < 0 || length < 0 || offset + length > fileInfo->length) return CARD_RESULT_LIMIT;
+    if (fseek(slot->fp, offset, SEEK_SET) != 0) return CARD_RESULT_IOERROR;
     if ((s32)fread(buf, 1, length, slot->fp) != length) return CARD_RESULT_IOERROR;
     return CARD_RESULT_READY;
 }
 
-s32 CARDReadAsync(void* fileInfo, void* buf, s32 length, s32 offset, void* callback) {
-    s32 result = CARDRead((CARDFileInfo_PC*)fileInfo, buf, length, offset);
-    if (callback) ((void (*)(s32, s32))callback)(0, result);
+s32 CARDReadAsync(CARDFileInfo* fileInfo, void* buf, s32 length, s32 offset, CARDCallback callback) {
+    s32 result = CARDRead(fileInfo, buf, length, offset);
+    if (callback) callback(fileInfo->chan, result);
     return result;
 }
 
-s32 CARDWrite(CARDFileInfo_PC* fileInfo, const void* buf, s32 length, s32 offset) {
+s32 CARDWrite(CARDFileInfo* fileInfo, const void* buf, s32 length, s32 offset) {
     CARDOpenSlot* slot = card_slot_find(fileInfo);
     if (!slot || !slot->fp) return CARD_RESULT_NOFILE;
-    fseek(slot->fp, offset, SEEK_SET);
+    if (offset < 0 || length < 0 || offset + length > fileInfo->length) return CARD_RESULT_LIMIT;
+    if (fseek(slot->fp, offset, SEEK_SET) != 0) return CARD_RESULT_IOERROR;
     if ((s32)fwrite(buf, 1, length, slot->fp) != length) return CARD_RESULT_IOERROR;
-    fflush(slot->fp);
+    if (fflush(slot->fp) != 0) return CARD_RESULT_IOERROR;
+    card_entries[fileInfo->chan][fileInfo->fileNo].dir.time = card_now();
     return CARD_RESULT_READY;
 }
 
-s32 CARDWriteAsync(void* fileInfo, const void* buf, s32 length, s32 offset, void* callback) {
-    s32 result = CARDWrite((CARDFileInfo_PC*)fileInfo, buf, length, offset);
-    if (callback) ((void (*)(s32, s32))callback)(0, result);
+s32 CARDWriteAsync(CARDFileInfo* fileInfo, const void* buf, s32 length, s32 offset, CARDCallback callback) {
+    s32 result = CARDWrite(fileInfo, buf, length, offset);
+    if (callback) callback(fileInfo->chan, result);
     return result;
+}
+
+/* Windows cannot delete or rename a file that is still open */
+static void card_close_no(s32 chan, int no) {
+    int i;
+    for (i = 0; i < CARD_MAX_OPEN; i++) {
+        CARDFileInfo* fi = card_slots[i].owner;
+        if (fi != NULL && fi->chan == chan && fi->fileNo == no) card_slot_free(fi);
+    }
 }
 
 s32 CARDDelete(s32 chan, const char* fileName) {
     char path[512];
-    if (!card_filename_safe(fileName)) return CARD_RESULT_NAMETOOLONG;
-    snprintf(path, sizeof(path), "%s/%s", get_card_dir(chan), fileName);
-    remove(path);
+    int no;
+
+    if (!card_chan_valid(chan)) return CARD_RESULT_NOCARD;
+    if (!card_filename_safe(fileName)) return CARD_RESULT_NOFILE;
+    card_sync(chan);
+    no = card_find(chan, fileName);
+    if (no < 0) return CARD_RESULT_NOFILE;
+    card_close_no(chan, no);
+    card_path(path, sizeof(path), chan, fileName);
+    if (remove(path) != 0) return CARD_RESULT_IOERROR;
+    card_entries[chan][no].used = 0;
     return CARD_RESULT_READY;
 }
 
-s32 CARDDeleteAsync(s32 chan, const char* fileName, void* callback) {
+s32 CARDDeleteAsync(s32 chan, const char* fileName, CARDCallback callback) {
     s32 result = CARDDelete(chan, fileName);
-    if (callback) ((void (*)(s32, s32))callback)(chan, result);
+    if (callback) callback(chan, result);
     return result;
 }
 
-s32 CARDGetResultCode(s32 chan) { return CARD_RESULT_READY; }
-s32 CARDFreeBlocks(s32 chan, s32* byteNotUsed, s32* filesNotUsed) {
-    if (byteNotUsed) *byteNotUsed = 1024 * 1024; /* 1 MB free */
-    if (filesNotUsed) *filesNotUsed = 100;
-    return CARD_RESULT_READY;
-}
+s32 CARDFastDelete(s32 chan, s32 fileNo) {
+    char name[CARD_FILENAME_MAX + 1];
 
-s32 CARDGetSectorSize(s32 chan, u32* size) {
-    if (size) *size = CARD_SECTOR_SIZE;
-    return CARD_RESULT_READY;
-}
-
-s32 CARDProbeEx(s32 chan, s32* memSize, s32* sectorSize) {
-    if (memSize) *memSize = 16 * 1024 * 1024; /* 16 MB */
-    if (sectorSize) *sectorSize = CARD_SECTOR_SIZE;
-    return CARD_RESULT_READY;
-}
-
-s32 CARDProbe(s32 chan) { return CARD_RESULT_READY; }
-
-s32 CARDCheck(s32 chan) { return CARD_RESULT_READY; }
-s32 CARDCheckAsync(s32 chan, void* callback) {
-    if (callback) ((void (*)(s32, s32))callback)(chan, CARD_RESULT_READY);
-    return CARD_RESULT_READY;
-}
-
-typedef struct {
-    char fileName[32];
-    u32  length;
-    u32  time;
-    u8   gameName[4];
-    u8   company[2];
-    u8   bannerFormat;
-    u32  iconAddr;
-    u16  iconFormat;
-    u16  iconSpeed;
-    u32  commentAddr;
-    u32  offsetBanner;
-    u32  offsetBannerTlut;
-    u32  offsetIcon[8];
-    u32  offsetIconTlut;
-    u32  offsetData;
-} CARDStat;
-
-s32 CARDGetStatus(s32 chan, s32 fileNo, CARDStat* stat) {
-    memset(stat, 0, sizeof(CARDStat));
-    return CARD_RESULT_READY;
-}
-
-s32 CARDSetStatus(s32 chan, s32 fileNo, CARDStat* stat) {
-    return CARD_RESULT_READY;
-}
-
-s32 CARDSetStatusAsync(s32 chan, s32 fileNo, void* stat, void* callback) {
-    if (callback) ((void (*)(s32, s32))callback)(chan, CARD_RESULT_READY);
-    return CARD_RESULT_READY;
+    if (!card_chan_valid(chan)) return CARD_RESULT_NOCARD;
+    if (fileNo < 0 || fileNo >= CARD_MAX_FILE) return CARD_RESULT_FATAL_ERROR;
+    if (!card_entries[chan][fileNo].used) return CARD_RESULT_NOFILE;
+    card_entry_name(&card_entries[chan][fileNo], name);
+    return CARDDelete(chan, name);
 }
 
 s32 CARDRename(s32 chan, const char* oldName, const char* newName) {
     char oldPath[512], newPath[512];
-    if (!card_filename_safe(oldName) || !card_filename_safe(newName)) return CARD_RESULT_NAMETOOLONG;
-    snprintf(oldPath, sizeof(oldPath), "%s/%s", get_card_dir(chan), oldName);
-    snprintf(newPath, sizeof(newPath), "%s/%s", get_card_dir(chan), newName);
-    rename(oldPath, newPath);
+    CARDDir* dir;
+    int no;
+
+    if (!card_chan_valid(chan)) return CARD_RESULT_NOCARD;
+    if (!card_filename_safe(oldName)) return CARD_RESULT_NOFILE;
+    if (!card_filename_safe(newName)) return CARD_RESULT_NAMETOOLONG;
+    card_sync(chan);
+    no = card_find(chan, oldName);
+    if (no < 0) return CARD_RESULT_NOFILE;
+    if (card_find(chan, newName) >= 0) return CARD_RESULT_EXIST;
+    card_close_no(chan, no);
+    card_path(oldPath, sizeof(oldPath), chan, oldName);
+    card_path(newPath, sizeof(newPath), chan, newName);
+    if (rename(oldPath, newPath) != 0) return CARD_RESULT_IOERROR;
+    dir = &card_entries[chan][no].dir;
+    memset(dir->fileName, 0, sizeof(dir->fileName));
+    strncpy((char*)dir->fileName, newName, CARD_FILENAME_MAX);
+    dir->time = card_now();
     return CARD_RESULT_READY;
 }
 
-s32 CARDRenameAsync(s32 chan, const char* oldName, const char* newName, void* callback) {
+s32 CARDRenameAsync(s32 chan, const char* oldName, const char* newName, CARDCallback callback) {
     s32 result = CARDRename(chan, oldName, newName);
-    if (callback) ((void (*)(s32, s32))callback)(chan, result);
+    if (callback) callback(chan, result);
     return result;
 }
 
-s32 CARDFormat(s32 chan) { return CARD_RESULT_READY; }
-s32 CARDFormatAsync(s32 chan, void* callback) {
-    if (callback) ((void (*)(s32, s32))callback)(chan, CARD_RESULT_READY);
+s32 CARDGetResultCode(s32 chan) {
+    return card_chan_valid(chan) ? CARD_RESULT_READY : CARD_RESULT_NOCARD;
+}
+
+s32 CARDFreeBlocks(s32 chan, s32* byteNotUsed, s32* filesNotUsed) {
+    int files;
+    u32 used;
+
+    if (!card_chan_valid(chan)) return CARD_RESULT_NOCARD;
+    card_sync(chan);
+    used = card_used_blocks(chan, &files);
+    if (byteNotUsed) *byteNotUsed = used < CARD_USER_BLOCKS ? (s32)((CARD_USER_BLOCKS - used) * CARD_SECTOR_SIZE) : 0;
+    if (filesNotUsed) *filesNotUsed = CARD_MAX_FILE - files;
     return CARD_RESULT_READY;
 }
 
-/* Scan a card directory for the first valid AC GCI file.
- * Returns 1 and writes full path to out_path if found, 0 otherwise. */
-int pc_card_scan_for_gci(s32 chan, char* out_path, int out_size) {
-    const char* dir = get_card_dir(chan);
+s32 CARDGetSectorSize(s32 chan, u32* size) {
+    if (!card_chan_valid(chan)) return CARD_RESULT_NOCARD;
+    if (size) *size = CARD_SECTOR_SIZE;
+    return CARD_RESULT_READY;
+}
 
-#ifdef _WIN32
-    WIN32_FIND_DATAA fd;
-    HANDLE h;
-    char search[300];
-    snprintf(search, sizeof(search), "%s\\*.gci", dir);
-    h = FindFirstFileA(search, &fd);
-    if (h == INVALID_HANDLE_VALUE) return 0;
-    do {
-        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
-        /* Quick-validate: read first 4 bytes of GCI header (gameName) */
-        {
-            char full[512];
-            FILE* fp;
-            u8 hdr[4];
-            snprintf(full, sizeof(full), "%s/%s", dir, fd.cFileName);
-            fp = fopen(full, "rb");
-            if (fp) {
-                if (fread(hdr, 1, 4, fp) == 4 && hdr[0] == 'G' && hdr[1] == 'A' && hdr[2] == 'F') {
-                    fclose(fp);
-                    snprintf(out_path, out_size, "%s", full);
-                    FindClose(h);
-                    return 1;
-                }
-                fclose(fp);
-            }
-        }
-    } while (FindNextFileA(h, &fd));
-    FindClose(h);
-#else
-    DIR* d = opendir(dir);
-    struct dirent* ent;
-    if (!d) return 0;
-    while ((ent = readdir(d)) != NULL) {
-        const char* name = ent->d_name;
-        int len = strlen(name);
-        if (len < 5) continue;
-        if (strcasecmp(name + len - 4, ".gci") != 0) continue;
-        {
-            char full[512];
-            FILE* fp;
-            u8 hdr[4];
-            snprintf(full, sizeof(full), "%s/%s", dir, name);
-            fp = fopen(full, "rb");
-            if (fp) {
-                if (fread(hdr, 1, 4, fp) == 4 && hdr[0] == 'G' && hdr[1] == 'A' && hdr[2] == 'F') {
-                    fclose(fp);
-                    snprintf(out_path, out_size, "%s", full);
-                    closedir(d);
-                    return 1;
-                }
-                fclose(fp);
-            }
-        }
+/* memSize is in megabits, as on the console */
+s32 CARDProbeEx(s32 chan, s32* memSize, s32* sectorSize) {
+    if (!card_chan_valid(chan)) return CARD_RESULT_NOCARD;
+    if (memSize) *memSize = CARD_MEM_SIZE_MBIT;
+    if (sectorSize) *sectorSize = CARD_SECTOR_SIZE;
+    return CARD_RESULT_READY;
+}
+
+BOOL CARDProbe(s32 chan) { return card_chan_valid(chan); }
+
+s32 CARDCheck(s32 chan) { return card_chan_valid(chan) ? CARD_RESULT_READY : CARD_RESULT_NOCARD; }
+s32 CARDCheckAsync(s32 chan, CARDCallback callback) {
+    s32 result = CARDCheck(chan);
+    if (callback) callback(chan, result);
+    return result;
+}
+s32 CARDCheckEx(s32 chan, s32* xferBytes) {
+    if (xferBytes) *xferBytes = 0;
+    return CARDCheck(chan);
+}
+s32 CARDCheckExAsync(s32 chan, s32* xferBytes, CARDCallback callback) {
+    s32 result = CARDCheckEx(chan, xferBytes);
+    if (callback) callback(chan, result);
+    return result;
+}
+
+static CARDDir* card_dir_entry(s32 chan, s32 fileNo, s32* result) {
+    if (!card_chan_valid(chan)) {
+        *result = CARD_RESULT_NOCARD;
+    } else if (fileNo < 0 || fileNo >= CARD_MAX_FILE) {
+        *result = CARD_RESULT_FATAL_ERROR;
+    } else if (!card_entries[chan][fileNo].used) {
+        *result = CARD_RESULT_NOFILE;
+    } else {
+        *result = CARD_RESULT_READY;
+        return &card_entries[chan][fileNo].dir;
     }
-    closedir(d);
-#endif
+    return NULL;
+}
 
-    return 0;
+/* Fills in the size fields from the file on disk */
+static void card_dir_refresh(s32 chan, CARDDir* dir) {
+    char name[CARD_FILENAME_MAX + 1];
+    u32 size = 0;
+
+    memcpy(name, dir->fileName, CARD_FILENAME_MAX);
+    name[CARD_FILENAME_MAX] = '\0';
+    card_file_stat(chan, name, &size, NULL);
+    dir->length = (u16)((size + CARD_SECTOR_SIZE - 1) / CARD_SECTOR_SIZE);
+}
+
+s32 __CARDGetStatusEx(s32 chan, s32 fileNo, CARDDir* dirent) {
+    s32 result;
+    CARDDir* dir = card_dir_entry(chan, fileNo, &result);
+
+    if (dir == NULL) return result;
+    card_dir_refresh(chan, dir);
+    *dirent = *dir;
+    return CARD_RESULT_READY;
+}
+
+/* The name, size and owner stay; the rest (permission, icon ...) is taken */
+s32 __CARDSetStatusEx(s32 chan, s32 fileNo, CARDDir* dirent) {
+    s32 result;
+    CARDDir* dir = card_dir_entry(chan, fileNo, &result);
+    CARDDir keep;
+
+    if (dir == NULL) return result;
+    keep = *dir;
+    *dir = *dirent;
+    memcpy(dir->gameName, keep.gameName, sizeof(dir->gameName));
+    memcpy(dir->company, keep.company, sizeof(dir->company));
+    memcpy(dir->fileName, keep.fileName, sizeof(dir->fileName));
+    dir->length = keep.length;
+    dir->startBlock = keep.startBlock;
+    return CARD_RESULT_READY;
+}
+
+s32 CARDGetStatus(s32 chan, s32 fileNo, CARDStat* stat) {
+    s32 result;
+    CARDDir* dir = card_dir_entry(chan, fileNo, &result);
+    char name[CARD_FILENAME_MAX + 1];
+    u32 size = 0;
+
+    if (dir == NULL) return result;
+    memcpy(name, dir->fileName, CARD_FILENAME_MAX);
+    name[CARD_FILENAME_MAX] = '\0';
+    card_file_stat(chan, name, &size, NULL);
+
+    memset(stat, 0, sizeof(*stat));
+    memcpy(stat->fileName, dir->fileName, CARD_FILENAME_MAX);
+    stat->length = size;
+    stat->time = dir->time;
+    memcpy(stat->gameName, dir->gameName, sizeof(stat->gameName));
+    memcpy(stat->company, dir->company, sizeof(stat->company));
+    stat->bannerFormat = dir->bannerFormat;
+    stat->iconAddr = dir->iconAddr;
+    stat->iconFormat = dir->iconFormat;
+    stat->iconSpeed = dir->iconSpeed;
+    stat->commentAddr = dir->commentAddr;
+    return CARD_RESULT_READY;
+}
+
+s32 CARDSetStatus(s32 chan, s32 fileNo, CARDStat* stat) {
+    s32 result;
+    CARDDir* dir = card_dir_entry(chan, fileNo, &result);
+
+    if (dir == NULL) return result;
+    dir->bannerFormat = stat->bannerFormat;
+    dir->iconAddr = stat->iconAddr;
+    dir->iconFormat = stat->iconFormat;
+    dir->iconSpeed = stat->iconSpeed;
+    dir->commentAddr = stat->commentAddr;
+    dir->time = card_now();
+    return CARD_RESULT_READY;
+}
+
+s32 CARDSetStatusAsync(s32 chan, s32 fileNo, CARDStat* stat, CARDCallback callback) {
+    s32 result = CARDSetStatus(chan, fileNo, stat);
+    if (callback) callback(chan, result);
+    return result;
+}
+
+s32 CARDGetAttributes(s32 chan, s32 fileNo, u8* attr) {
+    s32 result;
+    CARDDir* dir = card_dir_entry(chan, fileNo, &result);
+
+    if (dir == NULL) return result;
+    *attr = dir->permission;
+    return CARD_RESULT_READY;
+}
+
+s32 CARDSetAttributes(s32 chan, s32 fileNo, u8 attr) {
+    s32 result;
+    CARDDir* dir = card_dir_entry(chan, fileNo, &result);
+
+    if (dir == NULL) return result;
+    dir->permission = attr;
+    return CARD_RESULT_READY;
+}
+
+s32 CARDSetAttributesAsync(s32 chan, s32 fileNo, u8 attr, CARDCallback callback) {
+    s32 result = CARDSetAttributes(chan, fileNo, attr);
+    if (callback) callback(chan, result);
+    return result;
+}
+
+/* The port never reports a damaged or foreign card, so the game has no
+ * reason to format one; keep the files */
+s32 CARDFormat(s32 chan) {
+    return card_chan_valid(chan) ? CARD_RESULT_READY : CARD_RESULT_NOCARD;
+}
+
+s32 CARDFormatAsync(s32 chan, CARDCallback callback) {
+    s32 result = CARDFormat(chan);
+    if (callback) callback(chan, result);
+    return result;
 }
