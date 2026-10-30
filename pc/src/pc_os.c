@@ -295,10 +295,63 @@ void osSetThreadPri(void* thread, int pri) { (void)thread; (void)pri; }
 void* OSGetCurrentThread(void) { return current_thread; }
 void* OSGetStackPointer(void) { return &arena_memory; /* dummy */ }
 
-/* --- Interrupts --- */
-BOOL OSDisableInterrupts(void) { return 0; }
-BOOL OSEnableInterrupts(void) { return 0; }
-BOOL OSRestoreInterrupts(BOOL level) { return level; }
+/* --- Interrupts ---
+ * On the GameCube the sound runs from the audio DMA interrupt and the
+ * threads it wakes, so code that turns interrupts off can count on no sound
+ * work happening until it turns them back on. Here the sound runs on its own
+ * thread (pc_audio.c), so "interrupts off" is one lock that the sound thread
+ * also holds for each frame of sound it makes. Each thread has its own
+ * on/off state, as each GameCube thread had its own MSR, so nested
+ * disable/restore pairs only take the lock at the outermost one. */
+#if defined(_MSC_VER)
+#define PC_THREAD_LOCAL __declspec(thread)
+#else
+#define PC_THREAD_LOCAL __thread
+#endif
+
+static SDL_mutex* intr_lock = NULL;
+static PC_THREAD_LOCAL int intr_disabled = 0;
+
+static void intr_set(int disabled) {
+    if (disabled == intr_disabled) return;
+    if (intr_lock == NULL) {
+        intr_lock = SDL_CreateMutex(); /* first use is on the game thread, before the sound thread starts */
+        if (intr_lock == NULL) return;
+    }
+    if (disabled) {
+        SDL_LockMutex(intr_lock);
+    } else {
+        SDL_UnlockMutex(intr_lock);
+    }
+    intr_disabled = disabled;
+}
+
+BOOL OSDisableInterrupts(void) {
+    BOOL was_enabled = !intr_disabled;
+
+    intr_set(1);
+    return was_enabled;
+}
+
+BOOL OSEnableInterrupts(void) {
+    BOOL was_enabled = !intr_disabled;
+
+    intr_set(0);
+    return was_enabled;
+}
+
+BOOL OSRestoreInterrupts(BOOL level) {
+    BOOL was_enabled = !intr_disabled;
+
+    intr_set(level ? 0 : 1);
+    return was_enabled;
+}
+
+/* the calling thread lets go of "interrupts off" before it waits for the
+ * sound thread to end (quitting from inside a critical section) */
+void pc_os_interrupts_release(void) {
+    intr_set(0);
+}
 
 /* --- Cache (no-ops on PC) --- */
 void DCFlushRange(void* addr, u32 len) { (void)addr; (void)len; }

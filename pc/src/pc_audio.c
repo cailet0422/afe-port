@@ -40,7 +40,12 @@ static int pc_audio_producer_func(void* data) {
     while (SDL_AtomicGet(&audio_thread_running)) {
         int fill = pc_audio_get_buffer_fill();
         if (fill < AUDIO_PRODUCE_THRESHOLD) {
+            /* a frame of sound is an interrupt on the GameCube: it never
+             * runs while the game has interrupts off (pc_os.c) */
+            BOOL level = OSDisableInterrupts();
+
             pc_audio_process_frame();
+            OSRestoreInterrupts(level);
         } else {
             SDL_Delay(1);
         }
@@ -232,6 +237,7 @@ int pc_audio_is_active(void) {
 void pc_audio_shutdown(void) {
     /* Stop producer thread first */
     SDL_AtomicSet(&audio_thread_running, 0);
+    pc_os_interrupts_release();
     if (audio_producer_thread) {
         SDL_WaitThread(audio_producer_thread, NULL);
         audio_producer_thread = NULL;

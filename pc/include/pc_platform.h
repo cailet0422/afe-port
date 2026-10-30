@@ -136,6 +136,11 @@ void pc_audio_start_producer_thread(void);
 void pc_audio_mq_init(void);
 void pc_audio_mq_shutdown(void);
 
+/* --- OS (pc_os.c): "interrupts off" is a lock the sound thread also takes --- */
+BOOL OSDisableInterrupts(void);
+BOOL OSRestoreInterrupts(BOOL level);
+void pc_os_interrupts_release(void);
+
 #ifdef __cplusplus
 }
 #endif
