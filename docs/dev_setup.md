@@ -7,7 +7,7 @@
 ```sh
 dpkg --add-architecture i386 && apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y gcc-multilib g++-multilib libsdl2-dev:i386 \
-    libgl-dev:i386 libgl1-mesa-dri:i386 xvfb mesa-utils x11-apps imagemagick xdotool gdb unifdef \
+    libgl-dev:i386 libgl1-mesa-dri:i386 xvfb mesa-utils x11-apps x11-utils imagemagick xdotool gdb unifdef \
     binutils-powerpc-linux-gnu ninja-build cmake
 ```
 
@@ -22,7 +22,8 @@ cmake -S pc -B pc/build-tests -G Ninja -DPC_TESTS_ONLY=ON && ninja -C pc/build-t
 
 디스크 이미지(일본판 Rev 1, CISO 약 33MB)는 사용자가 세션에 직접 올려준다. 저장소·문서에 다운로드 링크를
 두지 않는다. Claude Code 세션에 올린 파일은 `/root/.claude/uploads/<세션>/` 아래에 이름 앞에 접두어가 붙어
-생긴다(`.iso`라면 `game.iso`로 복사한다):
+생긴다(`.iso`라면 `game.iso`로 복사한다; 7z로 압축해 올렸으면 `apt-get install -y 7zip` 후 빈 폴더에서
+`7z x`로 풀어 안의 `.ciso`를 쓴다):
 
 ```sh
 mkdir -p /tmp/disc && cp /root/.claude/uploads/*/*.ciso /tmp/disc/game.ciso
@@ -76,6 +77,20 @@ cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
   저장한다(첫날 하니와는 주민을 한 명도 만나지 않았으면 저장을 거절한다). `save/card_a/DobutsunomoriE_MURA`가
   생기면 `make_opening_script.py 5200`으로 다시 실행해 이어하기 — 밀크가 맞이하고 집 앞에서 시작한다.
   저장하지 않고 끝낸 세이브를 불러오면 도루묵씨(리셋씨)가 나온다(원래 동작).
+- 한국어 편집기 확인(한글패치 디스크, `--save`로 만든 세이브에서 시작):
+  `python3 pc/tools/make_ko_edit_script.py 시나리오 > /tmp/k.txt` 후
+  `./DobutsuNoMoriEPlus --no-framelimit --script-fast --deterministic --verbose --input-script /tmp/k.txt`
+  (각 1–3분, 스크린샷은 `shots/k_시나리오_번호_단계.ppm`).
+  - `letter`: 편지지를 받아(`GIVE 2000`) 밀크에게 편지 — 본문은 `TYPE`, 화면 키보드는 스틱·A와 `TOUCH`, 긴 줄
+    넘김·지우기·끼워 넣기, 십자키로 머리말(이름 앞뒤)과 맺음말. 확인 후 소지품에서 "다시쓰기"로 다시 열고 하니와에서
+    저장한다. 이어서 `letter-check`가 불러온 뒤 그 편지를 다시 연다.
+  - `ephrase`: 밀크의 말버릇을 "하나둘이"로(`LEDIT 2 E038`, 7바이트로 압축됨: `CATCH`가
+    `FE 8A 01 23 20 66 0B`) 바꾸고 말을 걸어 대사 끝에 나오는지 본 뒤 저장. `ephrase-check`는 불러와서 다시 확인.
+  - `request`: 신청곡 편집기(`LEDIT 4`)에 "K.K.보사노바"(디스크에선 사전 코드), "아일랜드의 노래"(띄어쓰기 있이·없이),
+    없는 곡을 넣고 `ITEM`이 2A0A, 2A13, 2A13, 2A8C(없음)를 찍는지 본다. 저장하지 않는다.
+  - `reset`: `RESETS 6`으로 도루묵씨의 세 번째 방문을 불러 틀린 대답(몰라) → 다시 묻기 → 그가 시키는 문구를 띄어
+    써서 입력 → "참말이제?!"(맞음). 문구는 세이브마다 다르다(`--save`의 세이브에서는 "정말죄송합니다").
+  - 시나리오마다 `--save`로 만든 세이브를 새로 복사해 쓴다(`letter`·`ephrase`는 저장하므로 `*-check`는 그 뒤에).
 - 메모리 문제는 `-fsanitize=address -fsanitize-recover=address`로 별도 빌드 디렉터리를 만들어 본다
   (`ASAN_OPTIONS=detect_leaks=0:halt_on_error=0`). 원래 게임의 읽기 범위 초과
   (`mFM_LoadBGCommonTex` 등)는 무해한 것도 있다.
