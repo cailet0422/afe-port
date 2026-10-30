@@ -4,7 +4,8 @@
 
 typedef enum {
     PC_FIX_U16,          /* array of 16-bit values */
-    PC_FIX_U32,          /* array of 32-bit values (also raw display lists) */
+    PC_FIX_U32,          /* array of 32-bit values */
+    PC_FIX_GFX,          /* raw display list: 32-bit words; a 64-bit build also keeps a copy as Gfx[] */
     PC_FIX_MOVE_ACTOR,   /* mFM_move_actor_data_c[] */
     PC_FIX_COMBO_INFO,   /* mFM_combo_info_c[] */
     PC_FIX_NPC_HOUSE,    /* mNpc_NpcHouseData_c[] */
@@ -21,5 +22,9 @@ typedef struct {
 
 extern const PCDataFixup pc_data_fixups[];
 extern const int pc_data_fixup_count;
+
+/* A raw display list blob as the host's Gfx[]: the copy made at boot when
+ * Gfx is wider than the disc's 8 bytes, else p itself */
+void* pc_raw_dl_host(void* p);
 
 #endif

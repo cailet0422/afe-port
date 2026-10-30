@@ -48,6 +48,65 @@ static void swap_records(u8* data, u32 size, u32 record_size, const u8* offsets1
 }
 
 
+/* Raw display lists hold the disc's 8-byte commands. Where Gfx is wider
+ * (64-bit, the second word holds a pointer) emu64 runs a copy in the host's
+ * layout instead (pc_raw_dl_host); the commands carry no addresses. */
+#if UINTPTR_MAX > 0xFFFFFFFFu
+#define MAX_RAW_DLS 64
+
+static struct {
+    const u8* data;
+    u32 size;
+    Gfx* host;
+} raw_dls[MAX_RAW_DLS];
+static int raw_dl_count;
+
+static void raw_dl_add(const u8* data, u32 size) {
+    u32 n = size / 8;
+    Gfx* host;
+    u32 i;
+
+    if (raw_dl_count >= MAX_RAW_DLS) {
+        OSReport("[PC] too many raw display lists\n");
+        return;
+    }
+    host = (Gfx*)calloc(n, sizeof(Gfx));
+    for (i = 0; i < n; i++) {
+        u32 w[2];
+
+        memcpy(w, data + i * 8, sizeof(w)); /* already swapped to native order */
+        host[i].words.w0 = w[0];
+        host[i].words.w1 = w[1];
+    }
+    raw_dls[raw_dl_count].data = data;
+    raw_dls[raw_dl_count].size = size;
+    raw_dls[raw_dl_count].host = host;
+    raw_dl_count++;
+}
+
+void* pc_raw_dl_host(void* p) {
+    int i;
+
+    for (i = 0; i < raw_dl_count; i++) {
+        uintptr_t ofs = (uintptr_t)p - (uintptr_t)raw_dls[i].data;
+
+        if (ofs < raw_dls[i].size) {
+            return raw_dls[i].host + ofs / 8;
+        }
+    }
+    return p;
+}
+#else
+static void raw_dl_add(const u8* data, u32 size) {
+    (void)data;
+    (void)size;
+}
+
+void* pc_raw_dl_host(void* p) {
+    return p;
+}
+#endif
+
 static void apply_fixup(const PCDataFixup* fix) {
     u32 i;
 
@@ -62,6 +121,13 @@ static void apply_fixup(const PCDataFixup* fix) {
             for (i = 0; i + 4 <= fix->size; i += 4) {
                 swap32_at(fix->data + i);
             }
+            break;
+
+        case PC_FIX_GFX:
+            for (i = 0; i + 4 <= fix->size; i += 4) {
+                swap32_at(fix->data + i);
+            }
+            raw_dl_add(fix->data, fix->size);
             break;
 
         case PC_FIX_MOVE_ACTOR: {
