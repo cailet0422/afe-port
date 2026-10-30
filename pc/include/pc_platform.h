@@ -136,6 +136,15 @@ void pc_audio_start_producer_thread(void);
 void pc_audio_mq_init(void);
 void pc_audio_mq_shutdown(void);
 
+/* --- OS (pc_os.c): "interrupts off" is a lock the sound thread also takes --- */
+BOOL OSDisableInterrupts(void);
+BOOL OSRestoreInterrupts(BOOL level);
+void pc_os_interrupts_release(void);
+
+/* --- Graphics (pc_gx.c): a point of the window (0-1) in the 640x480 screen
+ * the game's 2D drawing uses, after widescreen correction --- */
+void pc_gx_window_to_ui(float wx, float wy, float* x, float* y);
+
 #ifdef __cplusplus
 }
 #endif

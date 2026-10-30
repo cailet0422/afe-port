@@ -6,6 +6,8 @@
 #include "game.h"
 #include "m_common_data.h"
 #include "m_play.h"
+#include "m_field_info.h"
+#include "m_random_field_h.h"
 
 #include <ctype.h>
 #include <dolphin/pad.h>
@@ -442,12 +444,40 @@ static void log_positions(u32 frame) {
                    home->bx, home->bz, home_x(home), home_z(home));
         }
     }
+    printf("[POS] frame %u camera %d center %.0f,%.0f,%.0f eye %.0f,%.0f,%.0f dir %d,%d dist %.0f\n", (unsigned)frame,
+           play->camera.now_main_index, play->camera.lookat.center.x, play->camera.lookat.center.y,
+           play->camera.lookat.center.z, play->camera.lookat.eye.x, play->camera.lookat.eye.y, play->camera.lookat.eye.z,
+           play->camera.direction.x, play->camera.direction.y, play->camera.focus_distance);
     for (i = 0; i < (int)(sizeof(parts) / sizeof(parts[0])); i++) {
         ACTOR* actor;
 
         for (actor = play->actor_info.list[parts[i]].actor; actor != NULL; actor = actor->next_actor) {
             printf("[POS] frame %u %s %04X x %.0f z %.0f\n", (unsigned)frame, parts[i] == ACTOR_PART_PLAYER ? "player" : "npc",
                    actor->npc_id, actor->world.position.x, actor->world.position.z);
+        }
+    }
+    /* buildings: the blocks they are in, and the ones loaded nearby by actor profile */
+    {
+        static const struct {
+            u32 kind;
+            const char* name;
+        } buildings[] = {
+            { mRF_BLOCKKIND_SHOP, "shop" },       { mRF_BLOCKKIND_MUSEUM, "museum" },
+            { mRF_BLOCKKIND_POSTOFFICE, "post" }, { mRF_BLOCKKIND_TAILORS, "tailors" },
+            { mRF_BLOCKKIND_POLICE, "police" },   { mRF_BLOCKKIND_SHRINE, "shrine" },
+        };
+        ACTOR* actor;
+        int bx, bz;
+
+        for (i = 0; i < (int)(sizeof(buildings) / sizeof(buildings[0])); i++) {
+            if (mFI_BlockKind2BkNum(&bx, &bz, buildings[i].kind)) {
+                printf("[POS] frame %u %s block %d,%d\n", (unsigned)frame, buildings[i].name, bx, bz);
+            }
+        }
+
+        for (actor = play->actor_info.list[ACTOR_PART_ITEM].actor; actor != NULL; actor = actor->next_actor) {
+            printf("[POS] frame %u structure %04X x %.0f z %.0f\n", (unsigned)frame, (u16)actor->id,
+                   actor->world.position.x, actor->world.position.z);
         }
     }
 }

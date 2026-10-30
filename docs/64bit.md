@@ -51,11 +51,35 @@ CC=clang CXX=clang++ cmake -G Ninja -S pc -B pc/build64 -DPC_ALLOW_64BIT=ON \
 - **액터 라벨**: 플레이어의 그물·문·눈덩이·모기 요청 등 액터를 가리키는 `u32` 라벨, 구조물의
   `arg1`/`arg3`를 `uintptr_t`/`intptr_t`로 넓혔다. 비교만 하는 ID(효과음 위치, 셔터 라벨)는 그대로 둔다.
 - **고정 크기 풀**: NPC 액터 풀의 칸(0xBA0)은 64비트에서 NPC 구조체가 커지므로 0xE00으로 한다.
+- **원시 바이트 디스플레이 리스트**: `u8 x[] = { #include "....inc" }`로 추출되어 `gsSPDisplayList`로 불리는
+  리스트 11개(이름 입력 창의 `nam_win_modeT`, 편집기 결합기 `lat_sousa_*_combine`, 달력·일기·편지 등)는 디스크의
+  8바이트 명령 그대로라 64비트 `Gfx`(16바이트)로 읽으면 두 명령씩 섞인다(이름 입력 창과 연필, 편집기의 A/B
+  버튼 글자가 흰 덩어리로 나왔다). `gen_data_fixups.py`가 이들을 `PC_FIX_GFX`로 표시하고, 부팅 때 바이트 순서를
+  바꾼 뒤 64비트에서는 호스트 배치의 사본을 만들어 emu64의 `G_DL`이 그 사본을 실행한다(`pc_raw_dl_host`).
+
+## 점검 방법
+
+32비트 기본 빌드(gcc)와 64비트 빌드(clang)는 같은 `--deterministic` 스크립트로도 화면이 다르다. 두 컴파일러가
+함수 인자를 계산하는 순서가 달라서(gcc는 오른쪽부터, clang은 왼쪽부터), 인자 둘이 난수를 부르는 곳
+(`aNPC_set_tex_anime(..., 32 + RANDOM(16), 1 + RANDOM_F(3))` 등)에서 난수가 다른 곳에 쓰이고, 마을 배치·옷·주민
+움직임이 갈라진다. 그래서 64비트는 **clang 32비트 빌드와** 비교한다.
+
+```
+sed 's/gcc)/clang)/; s/g++)/clang++)/' pc/cmake/Toolchain-multilib32.cmake > /tmp/Toolchain-clang32.cmake
+cmake -S pc -B pc/build32clang -G Ninja -DCMAKE_TOOLCHAIN_FILE=/tmp/Toolchain-clang32.cmake -DPC_BUILD_TESTS=OFF \
+      -DCMAKE_CXX_FLAGS="-m32 -mlong-double-64 -fno-aligned-new"
+```
+
+(`-malign-double`과 libstdc++의 `long double` 표, 32비트 clang의 정렬 `new`를 피하는 플래그. 비교용 빌드에만 쓴다.)
+각 빌드 폴더의 relmap을 그 실행 파일 옆에 두고 돌린 뒤 스크린샷을 `compare -metric AE`로 비교한다.
 
 ## 현재 상태
 
-- 리눅스 x86_64에서 타이틀·오프닝과 새 게임 진행(이름 입력, 역 도착, 너굴과 집 고르기, 자유 이동)이
-  32비트와 같은 화면으로 동작한다.
+- 리눅스 x86_64에서 clang 32비트와 같은 `--deterministic` 스크립트로 비교: 원래 디스크 오프닝(52장) 모두 같음,
+  한국어 새 게임 → 자유 이동 → 동쪽 구역의 주민에게 걸어가는 경로(202장) 중 201장이 같고 1장은 플레이어 팔 자세가
+  한 프레임 다름(다음 장면부터 다시 같음; 32·64비트 libm의 실수 오차로 보임). 크래시 없음.
+- 고친 것: 이름 입력 창·편집기 버튼(원시 바이트 디스플레이 리스트, 위).
 - Android APK에 arm64-v8a 라이브러리를 함께 넣는다([android.md](android.md)). arm64 실행은 기기가 없어
   확인하지 못했다(같은 LP64 모델인 x86_64로 확인).
-- 남은 것: 여러 장면(가게, 박물관, 패미컴, 편지·저장 등)의 64비트 점검.
+- 남은 것: 가게·박물관 등 건물 안, 패미컴, 편지 쓰기·저장의 64비트 점검(clang 빌드의 마을에서는 `--save` 경로가
+  gcc 빌드의 마을에 맞춘 것이라 저장까지 가지 않는다).

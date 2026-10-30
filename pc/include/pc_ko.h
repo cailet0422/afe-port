@@ -97,6 +97,14 @@ struct game_s;
  * y are the editor's slide offsets. */
 void pc_ko_editor_draw(struct game_s* game, f32 x, f32 y);
 
+/* On-screen keyboard of that panel: back to its first key (editor opens);
+ * takes the controller buttons it uses while the editor is taking input
+ * (A B X Y Z L R, D-pad, stick; START is left to end editing); a finger
+ * down at window coordinates 0-1 presses the key there (returns 1) */
+void pc_ko_osk_reset(void);
+void pc_ko_osk_pad(u16* buttons, s8* stick_x, s8* stick_y);
+int pc_ko_osk_touch(int down, f32 x, f32 y);
+
 #ifdef __cplusplus
 }
 #endif

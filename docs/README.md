@@ -41,6 +41,12 @@ afe-decomp를 기반으로 한 PC(Windows/Linux)·Android 포트와 한국어 �
   `.inc`(18,070개)와 시스템 글꼴을 같은 모양의 0으로 바꿔 넣고, 시작할 때 디스크의 main.dol·REL에서 전부 읽어
   채운다(`pc_rel_overlay.c`, 아래 "에셋 없는 빌드"). foresti/foresto를 dtk 어셈블리에서 만든 C 소스의 구조
   (디스플레이 리스트, 표)는 어느 쪽이든 그대로 들어간다.
+- 소리는 보통 별도 스레드(`pc_audio.c`의 생산 스레드)가 만든다. 게임큐브에서 소리는 오디오 인터럽트로 돌아서
+  게임 코드가 `OSDisableInterrupts`로 막은 구간에는 끼어들지 못했으므로, PC에서는 "인터럽트 끄기"를 생산
+  스레드와 함께 쓰는 잠금으로 구현했다(`pc_os.c`). 스레드마다 켜짐/꺼짐 상태를 따로 두어 중첩된 호출은
+  바깥쪽에서만 잠그고, 생산 스레드는 소리 한 프레임을 만드는 동안 같은 잠금을 잡는다. 인터럽트를 끈 채 소리
+  진행을 기다리는 곳은 없다(게임 코드의 해당 구간은 모두 짧은 목록·변수 갱신). `--deterministic`에서는 소리를
+  게임 스레드에서 프레임마다 만든다.
 - 원래 빅엔디언 원시 바이트(`u8[]`)로 들어 있는 데이터를 다른 곳에서 `u16`/구조체로 읽는
   경우가 있어, `pc/tools/gen_data_fixups.py`가 그런 블롭을 찾아 부팅 시 한 번 바이트 순서를
   바꾸는 표(`pc_data_fixups.c`)를 만든다.
@@ -66,7 +72,10 @@ afe-decomp를 기반으로 한 PC(Windows/Linux)·Android 포트와 한국어 �
          -DCMAKE_TOOLCHAIN_FILE=$PWD/pc/cmake/Toolchain-multilib32.cmake
    ninja -C pc/build32
    ```
-   첫 configure는 foresti/foresto 생성 때문에 몇 분 걸린다.
+   첫 configure는 foresti/foresto 생성 때문에 몇 분 걸린다. 32비트 x86은 `-msse2 -mfpmath=sse`로 빌드한다:
+   x87로는 범위를 넘는 실수를 `s16`에 넣을 때 -32768이 되는데, 게임큐브는 32비트로 바꾼 뒤 아래 16비트를 남기고
+   게임 코드가 그것에 기댄다(각도 보간 `cKF_SkeletonInfo_subRotInterpolation` — 구역 경계를 넘는 동안 카메라가
+   땅높이에서 수평으로 보던 문제).
 3. 실행: 디스크 이미지(`.ciso`/`.iso`/`.gcm`)를 `pc/build32/bin/rom/`에 두거나 `settings.ini`의
    `rom_dir`에 이미지가 있는 폴더(또는 이미지 파일)를 적고
    ```sh
@@ -176,8 +185,8 @@ ninja -C pc/build32strip
 | M1 | Linux/Windows에서 타이틀 화면까지 부팅 | 완료: Linux, Windows(리눅스에서 MinGW 교차 빌드, Wine으로 실행 확인) |
 | M2 | 마을 플레이, 세이브(메모리 카드 파일), e+ 전용 기능(SD/e-Reader/GBA)은 우회 | 진행 중: 한글 디스크로 역 → 너굴 → 집 구경·선택 → 자유 이동 → 소지품 화면까지 크래시 없음(`pc/tools/make_newgame_script.py`). 저장·불러오기: 토용군(하니와)에게서 첫 저장(첫날은 주민 한 명에게 인사해야 받아 줌), 이어하기, 덮어쓰기 저장, 저장 없이 끈 뒤 도루묵씨까지 확인(`make_newgame_script.py --save`, 메모리 카드 계층 테스트 `pc/tests/test_pc_card.c`). 남은 것: 아르바이트 전체, 여러 날에 걸친 플레이 |
 | M3 | 오디오 정상화, 패미컴(FixNES) | 예정 |
-| M4 | 64비트 정리(포인터↔u32), Android(arm64, SDL2 + GLES3, 터치 입력) | 진행 중: 렌더러 OpenGL ES 3.0 지원(`-DPC_GLES=ON`, 리눅스 Mesa GLES로 오프닝·마을 확인), Android(armeabi-v7a) APK 빌드, 화면 게임패드(터치)·Android 키보드 한글 입력([android.md](android.md)). 64비트: x86_64에서 타이틀·오프닝·새 게임 진행이 32비트와 같은 화면, APK에 arm64-v8a 포함([64bit.md](64bit.md)). 남은 것: 64비트로 여러 장면 점검, 실기기 확인 |
-| M5 | 한국어 패치 | 사용자 한글패치 디스크 지원: 대사·로고·이름표·글자 폭 표시, 키보드 한글 입력(이름·마을 이름·영어 이름 확인, 편지는 코드만 연결), 사전 코드·말버릇·조사 자동 선택, 패치가 옮긴 문자열·표, 게시판/일기/알림판 줄 폭, 설정 메뉴에서 패치 zip을 골라 바로 적용(`korean/`에 한글판 이미지를 만들고 다시 시작). 남은 것: 시간·비밀번호 입력 등 UI 상수, 말소리, SD 경고 문구, 게임패드 화면 키보드 ([korean_patch.md](korean_patch.md)) |
+| M4 | 64비트 정리(포인터↔u32), Android(arm64, SDL2 + GLES3, 터치 입력) | 진행 중: 렌더러 OpenGL ES 3.0 지원(`-DPC_GLES=ON`, 리눅스 Mesa GLES로 오프닝·마을 확인), Android(armeabi-v7a) APK 빌드, 화면 게임패드(터치)·Android 키보드 한글 입력([android.md](android.md)). 64비트: clang 32비트 빌드와 `--deterministic` 비교로 오프닝(52장)·한국어 새 게임 경로(202장 중 201장)가 같은 화면, 이름 입력 창·편집기 버튼 수정, APK에 arm64-v8a 포함([64bit.md](64bit.md)). 남은 것: 건물 안·패미컴·저장의 64비트 점검, 실기기 확인 |
+| M5 | 한국어 패치 | 사용자 한글패치 디스크 지원: 대사·로고·이름표·글자 폭 표시, 키보드 한글 입력(이름·마을 이름·영어 이름 확인, 편지는 코드만 연결), 사전 코드·말버릇·조사 자동 선택, 패치가 옮긴 문자열·표, 게시판/일기/알림판 줄 폭, 설정 메뉴에서 패치 zip을 골라 바로 적용(`korean/`에 한글판 이미지를 만들고 다시 시작). 게임패드·터치용 화면 키보드(QWERTY 두벌식 + 한/영). 남은 것: 시간·비밀번호 입력 등 UI 상수, 말소리, SD 경고 문구 ([korean_patch.md](korean_patch.md)) |
 | M6 | 런타임 에셋 로더, 배포 패키징 | 진행 중: 에셋 없는 빌드(`-DPC_STRIP_ASSETS=ON`) — 실행 파일에 디스크에서 꺼낸 에셋 없이, 시작할 때 디스크에서 읽는다. 일반 빌드와 스크린샷·세이브가 같다. `dist` 타깃으로 Linux·Windows zip(Windows는 Wine에서 확인). 남은 것: 실제 Windows·Android 기기 확인, Android APK(`-PstripAssets`) 빌드 확인 |
 
 ## 한국어 패치 설계
@@ -211,8 +220,8 @@ ninja -C pc/build32strip
 - 백스페이스는 자모 단위로 지운다(`값` → `갑` → `가` → `ㄱ` → 없음).
 - **한/영 전환**: 조합 중인 글자를 확정한 뒤 모드를 바꾼다. 영문 모드에서는 입력이 그대로 통과.
   - 실제 키보드: `한/영` 키, 오른쪽 Alt, `Shift+Space` 중 아무거나 (키 설정에서 변경 가능하게).
-  - 화면 키보드: 게임의 문자 입력 화면을 QWERTY 배치로 바꾸고 `한/영` 버튼을 추가한다.
-    게임패드로는 버튼 하나를 한/영 전환에 할당한다.
+  - 화면 키보드: 문자 입력 화면의 휠 자리에 QWERTY 배치와 `한/영` 키를 그린다(아래 "편집기 연결").
+    게임패드로는 X가 한/영 전환.
 - 출력은 유니코드(완성형 U+AC00–U+D7A3, 호환 자모 U+3131–U+3163)이고, 한글패치 인코딩으로의 변환은
   `pc/src/ko/ko_charset.c`(KS X 1001 순번 → 2바이트, 테스트 `pc/tests/test_ko_charset.c`)가 한다.
   조합 중인 낱자모는 패치의 자모 글리프(초성 19 + 중성 21)로 보인다. KS X 1001에 없는 음절(예: 똠)은
@@ -231,9 +240,18 @@ ninja -C pc/build32strip
   `Shift+Space`. `Enter`는 여러 줄이면 줄바꿈, 한 줄이면 결정(편지 머리말·맺음말에서는 다음 칸),
   `Ctrl+Enter`/`Shift+Enter`는 끝내기.
 - 패치는 가나 휠 대신 자체 한글 입력 UI를 넣고 휠의 텍스처를 그 UI용으로 바꿨는데, 이 UI는 재현하지
-  않았다. 한국어 모드에서는 휠 입력을 끄고(R=공백, B=지우기, 십자키=커서, START=끝내기는 그대로)
-  휠 자리에 키보드 안내 패널(`pc/src/pc_ko_editor.c`)을 그린다. **게임패드만으로는 한글을 입력할 수
-  없다** — 화면 키보드(QWERTY 배치 + 한/영 버튼)가 남은 일이다(Android 터치 입력과 함께).
+  않았다. 한국어 모드에서는 휠 입력을 끄고 휠 자리에 **화면 키보드**(`pc/src/pc_ko_editor.c`, 배치와 커서는
+  `pc/src/ko/ko_osk.c`, 테스트 `pc/tests/test_ko_osk.c`)를 그린다.
+  - 배치: 숫자 줄 + QWERTY 세 줄(한글 모드에서는 두벌식 자모, 영문 모드에서는 글자를 표시) + `한/영`·공백·`<-`
+    (지우기)·`확정`. 자판은 실제 키보드와 같은 내장 입력기(`ko_ime.c`)로 조합하므로 받침 넘김·겹받침·자모
+    단위 지우기가 똑같다. `^`(Shift)는 다음 한 글자에만 걸린다(ㄲ ㄸ ㅃ ㅆ ㅉ ㅒ ㅖ, 대문자, `!@#…`).
+  - 게임패드(편집기가 입력을 받는 동안): 십자키·스틱 = 키 이동(누르고 있으면 반복), A = 누르기, B = 지우기,
+    X = 한/영, Y = Shift, Z = 확정(여러 줄이면 줄바꿈), L/R = 커서 왼쪽/오른쪽, START = 끝내기. 키보드가
+    쓰는 버튼은 게임에 넘기지 않는다(`pc_ko_osk_pad`, `pc_pad.c`). 특수 키 모서리에 해당 버튼 글자를 적어 둔다.
+  - 터치: 키를 손가락으로 누르면 그 키가 눌린다(`pc_ko_osk_touch`, `pc_touch.c`가 화면 패드보다 먼저 묻는다).
+    창 좌표는 와이드 화면 보정을 거쳐 게임의 2D 좌표로 바꾼다(`pc_gx_window_to_ui`).
+  - 시스템 입력기 설정(`text_input = 1`)에서도 화면 키보드는 내장 입력기로 조합한다. 실제 키보드 입력은
+    이전과 같다.
 - 원본 디스크에서는 ACGC처럼 `Tab`으로 켜며, 일본어 글꼴에 확실히 있는 영문·숫자·공백·`!?,.`만 받는다.
 - **시스템 입력기** (`settings.ini` `[Input]`의 `text_input = 1`, Android 기본값): 내장 두벌식 대신
   OS 입력기(Android 화면 키보드, Windows IME 등)를 쓴다. 편집기가 열리면 `SDL_StartTextInput`으로
@@ -243,7 +261,10 @@ ninja -C pc/build32strip
   조합을 "백스페이스 + 새 글자"로 보내므로 그 경로로도 같은 결과가 된다. 게임패드 명령으로 조합이
   확정되면 `SDL_ClearComposition`으로 입력기 쪽 조합도 비워 같은 글자가 두 번 들어가지 않게 한다.
 - 자동 테스트: `--input-script`의 `TYPE`(내장 입력기 키), `EDIT`/`TEXT`(시스템 입력기의 조합 중·확정
-  텍스트) 명령(`pc/src/pc_input_script.c`), `make_opening_script.py --korean`.
+  텍스트) 명령(`pc/src/pc_input_script.c`), `make_opening_script.py --korean`. 화면 키보드는 스크립트의
+  버튼(`DOWN`, `RIGHT`, `A`, `X`, `Y`, `B`, `Z`)과 `TOUCH`로 시험한다: 이름 입력에서 패드로 "한국"을 치고
+  Shift·한/영·지우기, 터치로 `?`를 넣어 "한국?"이 되는 것을 확인했다. `make_opening_script.py --korean`은
+  편집기가 열려 있는 동안 A를 누르지 않는다(화면 키보드의 키가 눌리므로).
 
 ## 알려진 문제
 
@@ -251,7 +272,4 @@ ninja -C pc/build32strip
   부팅 시 바이트 순서 보정을 못 하고 있음(빌드할 때 `gen_data_fixups.py`가 경고).
 - 세이브는 PC의 바이트 순서 그대로 `save/card_a/`에 파일로 저장된다. 게임큐브 메모리 카드에서 꺼낸 세이브(GCI)와는
   호환되지 않는다(`pc_m_card.c`·`pc_save_bswap.c`는 ACGC에서 온 변환 코드로, 아직 빌드에 들어가지 않음).
-- 보통 실행에서는 오디오가 별도 스레드(`pc_audio.c`의 생산 스레드)에서 게임 스레드와 잠금 없이 같은 데이터를
-  다룬다(PC의 `OSDisableInterrupts`는 아무것도 하지 않음). 간헐적인 크래시의 원인일 수 있다.
-  `--deterministic`에서는 오디오를 게임 스레드에서 돌려 이 문제가 없다.
 - SD 카드, e-Reader, GBA 연동은 "장치 없음"으로 응답.

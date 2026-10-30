@@ -11,7 +11,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y gcc-multilib g++-multilib libs
     binutils-powerpc-linux-gnu ninja-build cmake
 ```
 
-단위 테스트(한글 입력기·문자표·패치 적용기·메모리 카드)는 게임 데이터 없이 돌아간다(CI와 같음, 메모리 카드 테스트만
+단위 테스트(한글 입력기·화면 키보드·문자표·패치 적용기·메모리 카드)는 게임 데이터 없이 돌아간다(CI와 같음, 메모리 카드 테스트만
 `decomp/` 서브모듈의 헤더가 필요):
 
 ```sh
@@ -66,8 +66,12 @@ cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
 - 새 게임 → 마을: `python3 pc/tools/make_newgame_script.py --korean [단계...] > /tmp/ng.txt` 후
   `./DobutsuNoMoriEPlus --no-framelimit --script-fast --deterministic --input-script /tmp/ng.txt`
   (약 1분 반). 단계 형식은 스크립트 설명 참고. 자유 이동은 약 29,000프레임부터. 길을 만들 때는 `--pos`로
-  스크린샷마다 플레이어·주민 위치를 찍고(`POS`), 주민이나 지점까지는 `SEEK:E038:600`처럼 걷게 한다
-  (막히면 옆으로 비켜 감).
+  스크린샷마다 플레이어·주민 위치, 카메라(모드, 중심, 눈, 각도), 가게·박물관·우체국 등이 있는 구역과 근처 건물
+  액터의 위치를 찍고(`POS`, `--verbose`일 때 나옴; 한 구역은 640),
+  주민이나 지점까지는 `SEEK:E038:600`처럼 걷게 한다(막히면 옆으로 비켜 감).
+- 보통 속도 확인: `--no-framelimit` 없이(필요하면 `--script-fast`만) 돌리면 소리가 별도 스레드에서 돈다.
+  `--deterministic`이 아니면 마을이 매번 달라 `--save` 경로가 저장까지 가지 못할 수 있지만 끝까지 크래시·멈춤
+  없이 도는지 보는 데 쓴다(llvmpipe에서 모든 프레임을 그리면 30fps 안팎이라 시간이 두 배쯤 걸린다).
 - 저장·불러오기 확인: `make_newgame_script.py --korean --save`가 옆집 주민(밀크)에게 인사하고 하니와에서
   저장한다(첫날 하니와는 주민을 한 명도 만나지 않았으면 저장을 거절한다). `save/card_a/DobutsunomoriE_MURA`가
   생기면 `make_opening_script.py 5200`으로 다시 실행해 이어하기 — 밀크가 맞이하고 집 앞에서 시작한다.

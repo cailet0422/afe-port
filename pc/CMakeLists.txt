@@ -61,6 +61,15 @@ if(PC_BUILD_TESTS)
     target_compile_options(test_ko_charset PRIVATE -Wall -Wextra)
     add_test(NAME ko_charset COMMAND test_ko_charset)
 
+    add_executable(test_ko_osk
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_osk.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_ime.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_ko_osk.c
+    )
+    target_include_directories(test_ko_osk PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_compile_options(test_ko_osk PRIVATE -Wall -Wextra)
+    add_test(NAME ko_osk COMMAND test_ko_osk)
+
     add_executable(test_ko_patch
         ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_patch.c
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_ko_patch.c
@@ -149,6 +158,15 @@ add_compile_options(
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(i.86|x86|X86|AMD64|x86_64)$")
     # PowerPC aligns double/long long to 8 bytes inside structs; ARM does already
     add_compile_options(-malign-double)
+    if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+        # Float math in SSE registers, as on x86_64 and ARM. With the x87 FPU
+        # (the i686 default) a float stored to an s16 is converted at 16 bits
+        # and comes out as -32768 when out of range; the GameCube converts to
+        # 32 bits and keeps the low half, which the game relies on for angles
+        # (cKF_SkeletonInfo_subRotInterpolation gives 40960.0 for -24576: the
+        # camera looked along the ground while crossing into the next block).
+        add_compile_options(-msse2 -mfpmath=sse)
+    endif()
 endif()
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm|aarch64)")
     add_compile_options(-fsigned-char) # PowerPC and x86 char is signed, ARM's is not
@@ -342,6 +360,7 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_disc.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_rom_dir.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_ime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_osk.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_charset.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_patch.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_ko_patch.c

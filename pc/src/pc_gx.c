@@ -36,6 +36,18 @@ static void pc_gx_update_aspect(void) {
     }
 }
 
+void pc_gx_window_to_ui(float wx, float wy, float* x, float* y) {
+    float nx = wx * 2.0f - 1.0f;
+
+    pc_gx_update_aspect();
+    /* GXSetProjection narrows orthographic drawing about the centre */
+    if ((g_pc_widescreen_stretch == 0 || g_pc_widescreen_stretch == 2) && g_aspect_active) {
+        nx /= g_aspect_factor;
+    }
+    *x = (nx + 1.0f) * 0.5f * (float)PC_GC_WIDTH;
+    *y = wy * (float)PC_GC_HEIGHT;
+}
+
 /* EFB capture: keep full-res GL textures from GXCopyTex instead of downsampling to 640x480 */
 #define MAX_EFB_CAPTURES 4
 static struct {
@@ -79,6 +91,11 @@ void pc_gx_efb_capture_cleanup(void) {
             glDeleteTextures(1, &s_efb_captures[i].gl_tex);
     }
     s_efb_capture_count = 0;
+}
+#else
+void pc_gx_window_to_ui(float wx, float wy, float* x, float* y) {
+    *x = wx * (float)PC_GC_WIDTH;
+    *y = wy * (float)PC_GC_HEIGHT;
 }
 #endif
 

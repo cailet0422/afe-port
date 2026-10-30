@@ -28,9 +28,16 @@ KOREAN_STEPS = (
     (("Ami{SP}e", "eng_typed"), ("{ENTER}", "eng_done")),
 )
 
+# On a Korean patch disc the editors open earlier than EDITORS and stay open
+# until the typed {ENTER}; A there would press a key of the on-screen keyboard
+# (measured with --deterministic, after the A that opens each one)
+KOREAN_OPEN = ((5100, 6000), (6900, 7200), (7700, 8100))
+
 ev = ["900 START", "1100 START"]
 for f in range(1300, END, 90):
     if any(e <= f < e + EDITOR_SPAN for e in EDITORS):
+        continue
+    if KOREAN and any(a <= f < b for a, b in KOREAN_OPEN):
         continue
     ev.append(f"{f} A")
 for n, start in enumerate(EDITORS):

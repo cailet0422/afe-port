@@ -29,7 +29,15 @@ static void push(int op) {
     }
 }
 
+extern u32 pc_frame_counter;
+static u32 s_polled_frame = (u32)-8;
+
+int pc_typing_editor_listening(void) {
+    return pc_frame_counter - s_polled_frame <= 2;
+}
+
 int pc_typing_pop(int* op) {
+    s_polled_frame = pc_frame_counter; /* the editor asks every frame it takes input */
     if (s_count == 0) {
         return 0;
     }
@@ -162,10 +170,17 @@ static void flush(void) {
 }
 
 int pc_typing_toggle_korean(void) {
+    if (!g_pc_typing_mode || pc_typing_system_ime()) {
+        return 0;
+    }
+    return pc_typing_osk_toggle_korean();
+}
+
+int pc_typing_osk_toggle_korean(void) {
     uint16_t out[KO_IME_MAX_COMMIT];
     int n;
 
-    if (!g_pc_ko_mode || !g_pc_typing_mode || !g_pc_editor_active || pc_typing_system_ime()) {
+    if (!g_pc_ko_mode || !g_pc_editor_active) {
         return 0;
     }
     n = ko_ime_toggle_mode(&s_ime, out);
@@ -174,24 +189,20 @@ int pc_typing_toggle_korean(void) {
     return 1;
 }
 
-int pc_typing_key(int key) {
+int pc_typing_ime_korean(void) {
+    return g_pc_ko_mode && s_ime.mode == KO_IME_MODE_KO;
+}
+
+/* A key through the built-in input method */
+static void builtin_key(int key) {
     uint16_t out[KO_IME_MAX_COMMIT];
     int n;
 
-    if (!g_pc_typing_mode || !g_pc_editor_active) {
-        return 0;
-    }
     if (key == PC_TYPING_CMD_BACKSPACE && ko_ime_backspace(&s_ime)) {
         update_preedit();
-        return 1;
-    }
-    if (key >= PC_TYPING_CMD_BACKSPACE) {
+    } else if (key >= PC_TYPING_CMD_BACKSPACE) {
         flush();
         push(key);
-        return 1;
-    }
-    if (pc_typing_system_ime()) {
-        push_unit((uint16_t)key, FALSE);
     } else if (g_pc_ko_mode) {
         n = ko_ime_key(&s_ime, (char)key, out);
         emit_text(out, n);
@@ -199,6 +210,25 @@ int pc_typing_key(int key) {
     } else if (ascii_code((uint16_t)key) >= 0) {
         push(ascii_code((uint16_t)key));
     }
+}
+
+int pc_typing_key(int key) {
+    if (!g_pc_typing_mode || !g_pc_editor_active) {
+        return 0;
+    }
+    if (pc_typing_system_ime() && key < PC_TYPING_CMD_BACKSPACE) {
+        push_unit((uint16_t)key, FALSE);
+    } else {
+        builtin_key(key);
+    }
+    return 1;
+}
+
+int pc_typing_osk_key(int key) {
+    if (!g_pc_editor_active) {
+        return 0;
+    }
+    builtin_key(key);
     return 1;
 }
 
@@ -207,6 +237,7 @@ void pc_typing_editor_open(int latin) {
     ko_ime_init(&s_ime);
     s_preedit = -1;
     s_has_preedit = 0;
+    pc_ko_osk_reset();
     if (g_pc_ko_mode) {
         uint16_t unused[KO_IME_MAX_COMMIT];
 

@@ -70,7 +70,8 @@ Settings → Controls → Buttons에서 블루투스 게임패드의 버튼(과 
   실행은 확인하지 못했다. 같은 렌더러는 리눅스에서 OpenGL ES 3.0 컨텍스트로 확인했다(dev_setup.md 7).
 - 입력: 게임패드(블루투스 등)와 물리 키보드는 SDL이 처리한다. 글자 입력 화면(이름·편지 등)이 열리면
   Android 화면 키보드가 뜨고, 그 키보드로 한글을 입력한다(`settings.ini`의 `text_input = 1`,
-  README의 "시스템 입력기").
+  README의 "시스템 입력기"). 한글패치 디스크에서는 게임 화면 아래의 화면 키보드(QWERTY 두벌식)를 손가락이나
+  게임패드로 눌러도 된다(README의 "편집기 연결").
 - 터치 조작(`pc/src/pc_touch.c`, `settings.ini`의 `touch_controls = 1`, Android 기본값): 게임 화면 위에
   게임큐브 패드 모양의 화면 패드를 그린다. 왼쪽 아래 절반에 엄지를 대면 그 자리가 스틱 중심이 되고
   (떠 있는 스틱), 오른쪽에 A(크게)/B/X/Y, 위쪽에 L·START·R·Z, 왼쪽 위에 작은 십자키가 있다. 버튼 사이를

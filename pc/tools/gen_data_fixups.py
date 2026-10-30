@@ -126,7 +126,9 @@ def main():
         if name in tlut_names:
             kinds.add("PC_FIX_U16")
         if name in dlist_names:
-            kinds.add("PC_FIX_U32")
+            # Gfx is 16 bytes in 64-bit builds: these get a converted copy
+            kinds.discard("PC_FIX_U32")
+            kinds.add("PC_FIX_GFX")
         if name in vertex_names:
             kinds.add("PC_FIX_VTX")
         unhandled = {t for t in types.get(name, ()) if t not in KINDS and t not in BYTE_TYPES}
