@@ -301,7 +301,7 @@ void pc_rom_dir_describe(char* buf, size_t n) {
     }
     jni_end(&j);
     if (raw[0] == '\0') {
-        snprintf(buf, n, "app folder/rom");
+        snprintf(buf, n, "rom (app folder)");
         return;
     }
 #else
@@ -312,21 +312,30 @@ void pc_rom_dir_describe(char* buf, size_t n) {
     snprintf(raw, sizeof(raw), "%s", g_pc_settings.rom_dir);
 #endif
 
-    /* The menu font is ASCII: one '?' per other character */
-    for (i = 0; raw[i] != '\0' && len + 1 < sizeof(ascii); i++) {
+    /* Only the folder's own name: the menu font has no '/' (that slot is a
+     * note), and is ASCII: one '?' per other character */
+    len = strlen(raw);
+    while (len > 1 && (raw[len - 1] == '/' || raw[len - 1] == '\\')) {
+        raw[--len] = '\0';
+    }
+    i = len;
+    while (i > 0 && raw[i - 1] != '/' && raw[i - 1] != '\\' && raw[i - 1] != ':') {
+        i--;
+    }
+    len = 0;
+    for (; raw[i] != '\0' && len + 1 < sizeof(ascii); i++) {
         unsigned char c = (unsigned char)raw[i];
 
         if (c < 0x80) {
-            ascii[len++] = (c == '\\') ? '/' : (char)c;
+            ascii[len++] = (char)c;
         } else if ((c & 0xC0) != 0x80) {
             ascii[len++] = '?';
         }
     }
     ascii[len] = '\0';
 
-    /* Keep the end of long paths */
     if (len > 14) {
-        snprintf(buf, n, "...%s", ascii + len - 11);
+        snprintf(buf, n, "%.12s..", ascii);
     } else {
         snprintf(buf, n, "%s", ascii);
     }
