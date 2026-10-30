@@ -485,6 +485,38 @@ u8* pc_ko_word_ending(u8* ending) {
     return buf;
 }
 
+u8* pc_ko_ledit_buf(int ledit_type) {
+    /* mLE_TYPE_EPHRASE, mLE_TYPE_RESET, mLE_TYPE_REQUEST */
+    static u8 bufs[3][PC_KO_LEDIT_LEN];
+
+    if (!g_pc_ko_mode || ledit_type < 2 || ledit_type > 4) {
+        return NULL;
+    }
+    return bufs[ledit_type - 2];
+}
+
+int pc_ko_ledit_match(const u8* name, int name_len, const u8* text, int text_len) {
+    const u8* full;
+    int full_len = pc_ko_expand(name, name_len, 0, &full);
+    int i = 0;
+    int j = 0;
+
+    for (;;) {
+        while (i < full_len && full[i] == CHAR_SPACE) {
+            i++;
+        }
+        while (j < text_len && text[j] == CHAR_SPACE) {
+            j++;
+        }
+        if (i == full_len || j == text_len) {
+            return i == full_len && j == text_len;
+        }
+        if (full[i++] != text[j++]) {
+            return FALSE;
+        }
+    }
+}
+
 /* Final consonant (jongseong index, 0 = none) of the last character of
  * str as read aloud, or -1 if unknown. Digits are read as Sino-Korean
  * numbers: 3 is 삼, 10 is 십, 100 is 백. */
