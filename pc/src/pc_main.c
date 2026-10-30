@@ -31,6 +31,7 @@ __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 SDL_Window*   g_pc_window = NULL;
 SDL_GLContext  g_pc_gl_context = NULL;
 int           g_pc_running = 1;
+int           g_pc_restart = 0;
 int           g_pc_no_framelimit = 0;
 int           g_pc_skip_draw = 0;
 int           g_pc_deterministic = 0;
@@ -281,12 +282,67 @@ int pc_platform_poll_events(void) {
             case SDL_FINGERDOWN:
             case SDL_FINGERMOTION:
             case SDL_FINGERUP:
-            case SDL_CONTROLLERBUTTONDOWN:
                 pc_touch_handle_event(&event);
+                break;
+            case SDL_CONTROLLERBUTTONDOWN:
+            case SDL_CONTROLLERAXISMOTION:
+            case SDL_MOUSEBUTTONDOWN:
+                if (event.type == SDL_CONTROLLERBUTTONDOWN) {
+                    pc_touch_handle_event(&event); /* a pad in use hides the touch pad */
+                }
+                if (g_pc_paused) {
+                    /* menu navigation, and the bindings page's capture */
+                    pc_pause_menu_handle_event(&event);
+                }
                 break;
         }
     }
     return 1;
+}
+
+/* Starts this program again with the same arguments, in the same folder.
+ * The game ends with exit() (src/main.c), so this runs from atexit. */
+static char** s_restart_argv = NULL;
+
+static void pc_restart_process(void) {
+    char** argv = s_restart_argv;
+
+    if (!g_pc_restart) {
+        return;
+    }
+    fflush(stdout);
+    fflush(stderr);
+#ifdef _WIN32
+    wchar_t exe[MAX_PATH];
+    wchar_t* cmdline = _wcsdup(GetCommandLineW()); /* CreateProcessW may write to it */
+    STARTUPINFOW si;
+    PROCESS_INFORMATION pi;
+
+    memset(&si, 0, sizeof(si));
+    si.cb = sizeof(si);
+    if (cmdline != NULL && GetModuleFileNameW(NULL, exe, MAX_PATH) > 0 &&
+        CreateProcessW(exe, cmdline, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+    }
+    free(cmdline);
+    (void)argv;
+#elif defined(__ANDROID__)
+    (void)argv; /* started by pc_request_restart */
+#else
+    execv("/proc/self/exe", argv);
+    execvp(argv[0], argv);
+    fprintf(stderr, "[PC] restart failed\n");
+#endif
+}
+
+void pc_request_restart(void) {
+    g_pc_restart = 1;
+    g_pc_running = 0;
+#ifdef __ANDROID__
+    /* a helper process ends this one and opens the game again */
+    pc_android_restart();
+#endif
 }
 
 /* game's main() renamed to ac_entry via -Dmain=ac_entry, boot.c's to boot_main */
@@ -383,6 +439,9 @@ int main(int argc, char* argv[]) {
         }
     }
 #endif
+
+    s_restart_argv = argv;
+    atexit(pc_restart_process);
 
     SDL_SetMainReady();
 #ifdef __ANDROID__

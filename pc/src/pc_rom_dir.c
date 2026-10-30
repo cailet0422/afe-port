@@ -31,8 +31,8 @@ FILE* pc_fopen_utf8(const char* path, const char* mode) {
 }
 
 #ifdef _WIN32
-/* The Explorer folder dialog */
-static int pick_windows(char* out, size_t n) {
+/* The Explorer dialog for a folder, or for the Korean patch file */
+static int pick_windows(char* out, size_t n, int folder) {
     HWND owner = NULL;
     Uint32 fullscreen = 0;
     IFileOpenDialog* dlg = NULL;
@@ -60,8 +60,19 @@ static int pick_windows(char* out, size_t n) {
         IShellItem* item = NULL;
 
         IFileOpenDialog_GetOptions(dlg, &opts);
-        IFileOpenDialog_SetOptions(dlg, opts | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
-        IFileOpenDialog_SetTitle(dlg, L"디스크 이미지(.iso/.ciso/.gcm)가 있는 폴더 선택");
+        if (folder) {
+            IFileOpenDialog_SetOptions(dlg, opts | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
+            IFileOpenDialog_SetTitle(dlg, L"디스크 이미지(.iso/.ciso/.gcm)가 있는 폴더 선택");
+        } else {
+            static const COMDLG_FILTERSPEC types[] = {
+                { L"한글패치 (*.zip, *.xdelta)", L"*.zip;*.xdelta" },
+                { L"모든 파일", L"*.*" },
+            };
+
+            IFileOpenDialog_SetOptions(dlg, opts | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST);
+            IFileOpenDialog_SetFileTypes(dlg, 2, types);
+            IFileOpenDialog_SetTitle(dlg, L"한글패치 파일 선택 (받은 zip 그대로, 또는 .xdelta)");
+        }
         if (SUCCEEDED(IFileOpenDialog_Show(dlg, owner)) && SUCCEEDED(IFileOpenDialog_GetResult(dlg, &item))) {
             PWSTR path = NULL;
 
@@ -174,6 +185,46 @@ static int pick_android(void) {
     return state == 2;
 }
 
+/* MainActivity.pickPatchFile(): the system's file picker, polled like the
+ * folder picker; the chosen file is then opened with openPatchFd() */
+static FILE* pick_patch_android(char* name, size_t n) {
+    Jni j;
+    FILE* fp = NULL;
+    int state = 0;
+
+    if (jni_begin(&j) && jni_int(&j, "pickPatchFile") == 1) {
+        do {
+            SDL_Delay(50);
+            state = jni_int(&j, "pickState");
+        } while (state == 1);
+        if (state == 2) {
+            int fd = jni_int(&j, "openPatchFd");
+
+            if (fd >= 0) {
+                fp = fdopen(fd, "rb");
+                if (fp == NULL) {
+                    close(fd);
+                } else {
+                    jni_string(&j, "patchFileName", name, n);
+                }
+            }
+        }
+    }
+    jni_end(&j);
+    return fp;
+}
+
+int pc_android_restart(void) {
+    Jni j;
+    int ok = 0;
+
+    if (jni_begin(&j)) {
+        ok = jni_int(&j, "restartApp") == 1;
+    }
+    jni_end(&j);
+    return ok;
+}
+
 FILE* pc_rom_dir_android_open(char* name, size_t n) {
     Jni j;
     FILE* fp = NULL;
@@ -207,7 +258,7 @@ int pc_rom_dir_pick(void) {
 #ifdef _WIN32
     char path[1024];
 
-    if (!pick_windows(path, sizeof(path))) {
+    if (!pick_windows(path, sizeof(path), 1)) {
         return 0;
     }
     snprintf(g_pc_settings.rom_dir, sizeof(g_pc_settings.rom_dir), "%s", path);
@@ -222,6 +273,32 @@ int pc_rom_dir_pick(void) {
     return 1;
 #else
     return 0;
+#endif
+}
+
+FILE* pc_pick_patch_file(char* name, size_t n) {
+    name[0] = '\0';
+#ifdef _WIN32
+    {
+        char path[1024];
+        FILE* fp;
+        const char* base;
+
+        if (!pick_windows(path, sizeof(path), 0)) {
+            return NULL;
+        }
+        fp = pc_fopen_utf8(path, "rb");
+        base = path + strlen(path);
+        while (base > path && base[-1] != '/' && base[-1] != '\\') {
+            base--;
+        }
+        snprintf(name, n, "%s", base);
+        return fp;
+    }
+#elif defined(__ANDROID__)
+    return pick_patch_android(name, n);
+#else
+    return NULL;
 #endif
 }
 

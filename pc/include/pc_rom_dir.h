@@ -21,6 +21,11 @@ int pc_rom_dir_can_pick(void);
  * preferences). Blocks until the player picks or cancels; 1 = picked. */
 int pc_rom_dir_pick(void);
 
+/* Shows the file picker for the Korean patch (the downloaded .zip or the
+ * .xdelta in it) and opens the chosen file; name gets its file name. NULL if
+ * cancelled or there is no picker (pc_rom_dir_can_pick). Blocks meanwhile. */
+FILE* pc_pick_patch_file(char* name, size_t n);
+
 /* 1 once a folder was picked in this run (the game reads the disc at startup) */
 int pc_rom_dir_changed(void);
 
@@ -38,6 +43,10 @@ FILE* pc_fopen_utf8(const char* path, const char* mode);
 /* Opens the first disc image in the folder chosen with the picker; NULL if
  * none was chosen or it holds no image */
 FILE* pc_rom_dir_android_open(char* name, size_t n);
+
+/* Starts the app again in a new process (MainActivity.restartApp); 1 if the
+ * restart is on its way and this process will be ended */
+int pc_android_restart(void);
 #endif
 
 #ifdef __cplusplus

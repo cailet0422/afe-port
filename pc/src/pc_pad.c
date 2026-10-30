@@ -26,12 +26,56 @@ BOOL PADInit(void) {
     return TRUE;
 }
 
+/* The GameCube button of each PC_BIND_* that is one */
+static const u16 s_bind_buttons[PC_BIND_COUNT] = {
+    [PC_BIND_A] = PAD_BUTTON_A,
+    [PC_BIND_B] = PAD_BUTTON_B,
+    [PC_BIND_X] = PAD_BUTTON_X,
+    [PC_BIND_Y] = PAD_BUTTON_Y,
+    [PC_BIND_START] = PAD_BUTTON_START,
+    [PC_BIND_Z] = PAD_TRIGGER_Z,
+    [PC_BIND_L] = PAD_TRIGGER_L,
+    [PC_BIND_R] = PAD_TRIGGER_R,
+    [PC_BIND_DPAD_UP] = PAD_BUTTON_UP,
+    [PC_BIND_DPAD_DOWN] = PAD_BUTTON_DOWN,
+    [PC_BIND_DPAD_LEFT] = PAD_BUTTON_LEFT,
+    [PC_BIND_DPAD_RIGHT] = PAD_BUTTON_RIGHT,
+};
+
+static int pad_input_pressed(PCPadInput in) {
+    if (in == PC_PAD_TRIGGER_LEFT || in == PC_PAD_TRIGGER_RIGHT) {
+        s16 v = SDL_GameControllerGetAxis(g_controller, in == PC_PAD_TRIGGER_LEFT ? SDL_CONTROLLER_AXIS_TRIGGERLEFT
+                                                                                 : SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
+        return (v >> 7) > TRIGGER_THRESHOLD;
+    }
+    return in >= 0 && in < SDL_CONTROLLER_BUTTON_MAX &&
+           SDL_GameControllerGetButton(g_controller, (SDL_GameControllerButton)in);
+}
+
+/* Held controls to buttons and full stick tilts */
+static void apply_held(u32 held, u16* buttons, s8* stickX, s8* stickY, s8* cstickX, s8* cstickY) {
+    for (int i = 0; i < PC_BIND_COUNT; i++) {
+        if (held & (1u << i)) {
+            *buttons |= s_bind_buttons[i];
+        }
+    }
+    if (held & (1u << PC_BIND_STICK_UP))     *stickY += STICK_MAGNITUDE;
+    if (held & (1u << PC_BIND_STICK_DOWN))   *stickY -= STICK_MAGNITUDE;
+    if (held & (1u << PC_BIND_STICK_LEFT))   *stickX -= STICK_MAGNITUDE;
+    if (held & (1u << PC_BIND_STICK_RIGHT))  *stickX += STICK_MAGNITUDE;
+    if (held & (1u << PC_BIND_CSTICK_UP))    *cstickY += STICK_MAGNITUDE;
+    if (held & (1u << PC_BIND_CSTICK_DOWN))  *cstickY -= STICK_MAGNITUDE;
+    if (held & (1u << PC_BIND_CSTICK_LEFT))  *cstickX -= STICK_MAGNITUDE;
+    if (held & (1u << PC_BIND_CSTICK_RIGHT)) *cstickX += STICK_MAGNITUDE;
+}
+
 u32 PADRead(PADStatus* status) {
     memset(status, 0, sizeof(PADStatus) * 4);
 
     const u8* keys = SDL_GetKeyboardState(NULL);
     u32 mouse = SDL_GetMouseState(NULL, NULL);
     u16 buttons = 0;
+    u32 held = 0; /* 1 << PC_BIND_* */
     s8 stickX = 0, stickY = 0;
     s8 cstickX = 0, cstickY = 0;
 
@@ -39,38 +83,17 @@ u32 PADRead(PADStatus* status) {
     if (!(g_pc_typing_mode && g_pc_editor_active)) {
         /* helper: check if a PCInputCode is currently pressed */
         #define INPUT_PRESSED(code) \
-            (((code) & PC_INPUT_MOUSE_BIT) \
+            ((code) < 0 ? 0 \
+             : ((code) & PC_INPUT_MOUSE_BIT) \
                 ? (mouse & SDL_BUTTON((code) & 0xFF)) \
                 : keys[(SDL_Scancode)(code)])
 
-        /* buttons (from keybindings.ini) */
-        PCKeybindings* kb = &g_pc_keybindings;
-        if (INPUT_PRESSED(kb->a))     buttons |= PAD_BUTTON_A;
-        if (INPUT_PRESSED(kb->b))     buttons |= PAD_BUTTON_B;
-        if (INPUT_PRESSED(kb->x))     buttons |= PAD_BUTTON_X;
-        if (INPUT_PRESSED(kb->y))     buttons |= PAD_BUTTON_Y;
-        if (INPUT_PRESSED(kb->start)) buttons |= PAD_BUTTON_START;
-        if (INPUT_PRESSED(kb->z))     buttons |= PAD_TRIGGER_Z;
-        if (INPUT_PRESSED(kb->l))     buttons |= PAD_TRIGGER_L;
-        if (INPUT_PRESSED(kb->r))     buttons |= PAD_TRIGGER_R;
-
-        /* main stick */
-        if (INPUT_PRESSED(kb->stick_up))    stickY += STICK_MAGNITUDE;
-        if (INPUT_PRESSED(kb->stick_down))  stickY -= STICK_MAGNITUDE;
-        if (INPUT_PRESSED(kb->stick_left))  stickX -= STICK_MAGNITUDE;
-        if (INPUT_PRESSED(kb->stick_right)) stickX += STICK_MAGNITUDE;
-
-        /* C-stick */
-        if (INPUT_PRESSED(kb->cstick_up))    cstickY += STICK_MAGNITUDE;
-        if (INPUT_PRESSED(kb->cstick_down))  cstickY -= STICK_MAGNITUDE;
-        if (INPUT_PRESSED(kb->cstick_left))  cstickX -= STICK_MAGNITUDE;
-        if (INPUT_PRESSED(kb->cstick_right)) cstickX += STICK_MAGNITUDE;
-
-        /* D-pad */
-        if (INPUT_PRESSED(kb->dpad_up))    buttons |= PAD_BUTTON_UP;
-        if (INPUT_PRESSED(kb->dpad_down))  buttons |= PAD_BUTTON_DOWN;
-        if (INPUT_PRESSED(kb->dpad_left))  buttons |= PAD_BUTTON_LEFT;
-        if (INPUT_PRESSED(kb->dpad_right)) buttons |= PAD_BUTTON_RIGHT;
+        /* from keybindings.ini / Settings > Controls */
+        for (int i = 0; i < PC_BIND_COUNT; i++) {
+            if (INPUT_PRESSED(g_pc_keybindings.key[i])) {
+                held |= 1u << i;
+            }
+        }
 
         #undef INPUT_PRESSED
     }
@@ -92,18 +115,16 @@ u32 PADRead(PADStatus* status) {
         }
     }
     if (g_controller) {
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_A)) buttons |= PAD_BUTTON_A;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_B)) buttons |= PAD_BUTTON_B;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_X)) buttons |= PAD_BUTTON_X;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_Y)) buttons |= PAD_BUTTON_Y;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_START)) buttons |= PAD_BUTTON_START;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_BACK))  buttons |= PAD_BUTTON_START;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_LEFTSHOULDER))  buttons |= PAD_TRIGGER_L;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)) buttons |= PAD_TRIGGER_Z;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_DPAD_UP))    buttons |= PAD_BUTTON_UP;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_DPAD_DOWN))  buttons |= PAD_BUTTON_DOWN;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_DPAD_LEFT))  buttons |= PAD_BUTTON_LEFT;
-        if (SDL_GameControllerGetButton(g_controller, SDL_CONTROLLER_BUTTON_DPAD_RIGHT)) buttons |= PAD_BUTTON_RIGHT;
+        for (int i = 0; i < PC_BIND_COUNT; i++) {
+            for (int j = 0; j < PC_PAD_BINDS; j++) {
+                if (pad_input_pressed(g_pc_keybindings.pad[i][j])) {
+                    held |= 1u << i;
+                }
+            }
+        }
+
+        apply_held(held, &buttons, &stickX, &stickY, &cstickX, &cstickY);
+        held = 0;
 
         s16 lx = SDL_GameControllerGetAxis(g_controller, SDL_CONTROLLER_AXIS_LEFTX);
         s16 ly = SDL_GameControllerGetAxis(g_controller, SDL_CONTROLLER_AXIS_LEFTY);
@@ -133,11 +154,11 @@ u32 PADRead(PADStatus* status) {
 
         u8 lt = (u8)(SDL_GameControllerGetAxis(g_controller, SDL_CONTROLLER_AXIS_TRIGGERLEFT) >> 7);
         u8 rt = (u8)(SDL_GameControllerGetAxis(g_controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) >> 7);
-        if (lt > TRIGGER_THRESHOLD) buttons |= PAD_TRIGGER_L;
-        if (rt > TRIGGER_THRESHOLD) buttons |= PAD_TRIGGER_R;
         status[0].triggerLeft = lt;
         status[0].triggerRight = rt;
     }
+
+    apply_held(held, &buttons, &stickX, &stickY, &cstickX, &cstickY);
 
     pc_touch_read(&buttons, &stickX, &stickY);
     pc_input_script_apply(&buttons, &stickX, &stickY);

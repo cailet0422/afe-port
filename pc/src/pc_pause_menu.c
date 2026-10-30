@@ -37,8 +37,12 @@ static PauseMenuPage cur_page = PAGE_MAIN;
 static int main_sel = 0;    /* 0=Resume, 1=Settings, 2=Quit Game */
 static int confirm_sel = 0; /* 0=No (default), 1=Yes */
 
+extern int pc_matrix_ready(void); /* sys_matrix.c */
+
 void pc_pause_menu_toggle(void) {
     if (!g_pc_paused && g_pc_title_main_menu_visible && g_pc_nes_active) return;
+    /* too early in boot to draw the menu (no matrix stack yet) */
+    if (!g_pc_paused && !pc_matrix_ready()) return;
 
     g_pc_paused = !g_pc_paused;
     if (g_pc_paused) {
@@ -79,10 +83,29 @@ static void confirm_activate(void) {
 
 int pc_pause_menu_handle_event(const SDL_Event* e) {
     if (!g_pc_paused) return 0;
-    if (e->type != SDL_KEYDOWN) return 0;
-    if (e->key.repeat) return 1;
 
-    SDL_Keycode k = e->key.keysym.sym;
+    /* The bindings page takes the next key or button as it is */
+    if (cur_page == PAGE_SETTINGS && pc_settings_menu_handle_event(e)) return 1;
+
+    SDL_Keycode k;
+    if (e->type == SDL_CONTROLLERBUTTONDOWN) {
+        /* a gamepad moves through the menus like the arrow keys */
+        switch (e->cbutton.button) {
+            case SDL_CONTROLLER_BUTTON_DPAD_UP:    k = SDLK_UP; break;
+            case SDL_CONTROLLER_BUTTON_DPAD_DOWN:  k = SDLK_DOWN; break;
+            case SDL_CONTROLLER_BUTTON_DPAD_LEFT:  k = SDLK_LEFT; break;
+            case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: k = SDLK_RIGHT; break;
+            case SDL_CONTROLLER_BUTTON_A:          k = SDLK_RETURN; break;
+            case SDL_CONTROLLER_BUTTON_B:
+            case SDL_CONTROLLER_BUTTON_START:      k = SDLK_ESCAPE; break;
+            default: return 1;
+        }
+    } else if (e->type == SDL_KEYDOWN) {
+        if (e->key.repeat) return 1;
+        k = e->key.keysym.sym;
+    } else {
+        return 0;
+    }
 
     /* Settings page is driven by pc_settings_menu. */
     if (cur_page == PAGE_SETTINGS) {

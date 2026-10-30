@@ -62,6 +62,7 @@ extern "C" {
 extern SDL_Window*   g_pc_window;
 extern SDL_GLContext  g_pc_gl_context;
 extern int           g_pc_running;
+extern int           g_pc_restart; /* start the game again once it has shut down */
 extern int           g_pc_verbose;
 extern int           g_pc_no_framelimit;
 extern int           g_pc_skip_draw; /* drop GL draws (fast input-script replay) */
@@ -73,6 +74,10 @@ extern int           g_pc_sec_override;
 extern int g_pc_window_w;
 extern int g_pc_window_h;
 void pc_platform_update_window_size(void);
+
+/* Ends the game loop and starts the game again (e.g. after installing the
+ * Korean patch, which is read at startup) */
+void pc_request_restart(void);
 
 /* --- Widescreen mode (3-state) ---
  * 0 = hor+ (default): full-window viewport, FOV-corrected projection. Resets each frame.

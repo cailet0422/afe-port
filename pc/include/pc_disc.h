@@ -4,14 +4,27 @@
 
 #include "types.h"
 
-/* Initialize disc image reader. Opens the .ciso/.iso/.gcm in the folder the
- * player chose (settings.ini rom_dir; on Android also the folder picked in
- * the app, pc_rom_dir.h), else in the current dir, orig/ or rom/. Parses GCM
- * filesystem into lookup table. Returns 1 on success, 0 if no disc image found. */
+/* Initialize disc image reader. Opens the Korean disc made in the settings
+ * menu if the player chose it (settings.ini korean, ko_image; pc_ko_patch.h),
+ * else the .ciso/.iso/.gcm in the folder the player chose (settings.ini
+ * rom_dir; on Android also the folder picked in the app, pc_rom_dir.h), else
+ * in the current dir, orig/ or rom/. Parses GCM filesystem into lookup table.
+ * Returns 1 on success, 0 if no disc image found. */
 int pc_disc_init(void);
 
 /* Check if a disc image is open. */
 int pc_disc_is_open(void);
+
+/* 1 if the game runs from the Korean disc made in the settings menu */
+int pc_disc_is_korean_image(void);
+
+/* A second handle on the player's own disc image (never the Korean one made
+ * in the settings menu), independent of the game's, for the Korean patch
+ * installer's thread. desc gets the image's path. NULL if there is none. */
+typedef struct PCDiscImage PCDiscImage;
+PCDiscImage* pc_disc_open_original(char* desc, int desc_size);
+int pc_disc_image_read(PCDiscImage* img, u32 offset, void* dest, u32 size);
+void pc_disc_image_close(PCDiscImage* img);
 
 /* Find a file in the disc FST by path (e.g., "COPYDATE", "audiores/banks/bank0.aw").
  * Leading '/' is stripped automatically. Returns 1 if found. */

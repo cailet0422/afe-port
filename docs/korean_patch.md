@@ -89,6 +89,23 @@ PC 포트는 자체 번역을 만드는 대신, 사용자가 직접 적용한 �
 - 그 밖: 화면 비율(시야·직교 행렬·카메라), RTC 연도 상한 2032→2100, 구역 경계 달리기, 부팅 주민의
   한자 메뉴 → 화면 비율 메뉴
 
+## 배포 형식과 게임 안 적용
+
+- 배포 zip(`Doubutsu-no-Mori-e-plus-Korean-v0.9.2/`): `*.xdelta`(약 8MB), `manifest.json`, 적용 도구
+  (`vcdiff.py`·`apply_gc_xdelta.py`·브라우저용 `패치적용.html`), 설명 문서. 패치 도구는 MIT.
+- `.xdelta`는 xdelta3가 만든 VCDIFF(RFC 3284): 헤더 `D6 C3 C4 00`, 보조 압축·사용자 코드 표 없음,
+  창(window) 58개, 창마다 xdelta3 확장인 Adler-32(창 표시 `0x04`)가 있다. 원본 창은 4MB 이하이고 원본 위치는
+  디스크 전체(1,459,978,240바이트) 범위, 결과는 36,995,072바이트의 잘린 ISO.
+- `manifest.json`: `patch_sha256`, `target_bytes`, `target_sha256`, `target_filename`, `source_*`(원본
+  CRC-32/MD5/SHA-1/SHA-256, 원본은 일본판 Rev 1 GAEJ01).
+- PC 포트의 설치기(`pc/src/pc_ko_patch.c`, 순수 코드는 `pc/src/ko/ko_patch.c` + `pc/tests/test_ko_patch.c`):
+  zip이면 안의 `.xdelta`와 `manifest.json`을 풀고(inflate 자체 구현), 설정 메뉴가 쓰는 디스크와 따로 연
+  원래 이미지(CISO도 그대로)에서 창 단위로 원본을 읽어 `korean/<target_filename>.part`에 쓰며 SHA-256을
+  계산한다. 크기·해시가 manifest와 맞으면 이름을 바꾸고 `settings.ini`의 `korean = 1`, `ko_image`를 쓴다.
+  디스크 헤더가 `GAEJ01`·버전 1이 아니면 시작하지 않고, 창의 Adler-32가 다르면(다른 판·이미 패치된 이미지)
+  멈춘다. 리눅스에서 v0.9.2 적용에 0.2초 남짓.
+- 다음 실행 때 `pc_disc_init`이 `korean = 1`이면 `ko_image`를 먼저 연다(없거나 디스크가 아니면 원래 이미지).
+
 ## PC 포트 구현 계획
 
 1. 패치 디스크 감지 → 한국어 모드.

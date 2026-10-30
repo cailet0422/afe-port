@@ -375,23 +375,55 @@ static FILE* open_default_image(char* out_path, int out_sz) {
 
 /* ---- public API ---- */
 
-int pc_disc_init(void) {
-    char path[1100];
-    FILE* fp;
+/* The player's own image: the chosen folder first, then the game's folders */
+static FILE* open_original_image(char* out_path, int out_sz) {
+    FILE* fp = open_chosen_image(out_path, out_sz);
 
-    if (g_disc_open) return 1;
-    /* the folder the player chose comes first */
-    fp = open_chosen_image(path, sizeof(path));
 #ifdef __ANDROID__
     if (!fp) {
         char name[256];
 
         fp = pc_rom_dir_android_open(name, sizeof(name));
-        if (fp) snprintf(path, sizeof(path), "%s (chosen folder)", name);
+        if (fp) snprintf(out_path, out_sz, "%s (chosen folder)", name);
     }
 #endif
-    if (!fp) fp = open_default_image(path, sizeof(path));
-    if (!disc_open(&g_disc, fp)) return 0;
+    if (!fp) fp = open_default_image(out_path, out_sz);
+    return fp;
+}
+
+/* The disc the Korean patch installer made (settings.ini ko_image), if it
+ * was chosen in the settings menu */
+static int g_disc_korean = 0;
+
+static FILE* open_korean_image(char* out_path, int out_sz) {
+    FILE* fp;
+
+    if (!g_pc_settings.korean || g_pc_settings.ko_image[0] == '\0') return NULL;
+    snprintf(out_path, out_sz, "%s", g_pc_settings.ko_image);
+    fp = pc_fopen_utf8(out_path, "rb");
+    if (!fp) printf("[PC] Korean disc %s is missing, using the original\n", out_path);
+    return fp;
+}
+
+int pc_disc_init(void) {
+    char path[1100];
+    FILE* fp;
+
+    if (g_disc_open) return 1;
+    fp = open_korean_image(path, sizeof(path));
+    g_disc_korean = fp != NULL;
+    if (fp) {
+        disc_open(&g_disc, fp);
+        if (!gcm_verify(&g_disc)) {
+            printf("[PC] Korean disc %s is not a disc image, using the original\n", path);
+            disc_close(&g_disc);
+            g_disc_korean = 0;
+        }
+    }
+    if (!g_disc_korean) {
+        fp = open_original_image(path, sizeof(path));
+        if (!disc_open(&g_disc, fp)) return 0;
+    }
 
     if (!gcm_verify(&g_disc)) {
         if (g_pc_verbose) printf("[PC] %s: not a valid GC disc image\n", path);
@@ -420,6 +452,44 @@ int pc_disc_init(void) {
 
 int pc_disc_is_open(void) {
     return g_disc_open;
+}
+
+int pc_disc_is_korean_image(void) {
+    return g_disc_open && g_disc_korean;
+}
+
+struct PCDiscImage {
+    DiscFile file;
+};
+
+PCDiscImage* pc_disc_open_original(char* desc, int desc_size) {
+    char path[1100];
+    FILE* fp = open_original_image(path, sizeof(path));
+    PCDiscImage* img;
+
+    if (!fp) return NULL;
+    img = (PCDiscImage*)malloc(sizeof(*img));
+    if (!img) {
+        fclose(fp);
+        return NULL;
+    }
+    disc_open(&img->file, fp);
+    if (!gcm_verify(&img->file)) {
+        pc_disc_image_close(img);
+        return NULL;
+    }
+    if (desc) snprintf(desc, desc_size, "%s", path);
+    return img;
+}
+
+int pc_disc_image_read(PCDiscImage* img, u32 offset, void* dest, u32 size) {
+    return disc_read(&img->file, offset, dest, size);
+}
+
+void pc_disc_image_close(PCDiscImage* img) {
+    if (!img) return;
+    disc_close(&img->file);
+    free(img);
 }
 
 int pc_disc_find_file(const char* path, u32* disc_offset, u32* file_size) {

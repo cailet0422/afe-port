@@ -46,6 +46,23 @@ Android Studio에서는 `pc/android`를 열면 된다. 첫 네이티브 빌드�
 앱은 고른 폴더를 시스템 폴더 선택(SAF)으로 받은 권한으로 읽는다(`MainActivity.java`, `pc_rom_dir.c`). 다른
 저장소 권한은 요청하지 않는다.
 
+### 한글패치 적용 (게임 안에서)
+
+1. 원래 디스크 이미지(일본판 Rev 1)로 실행한 뒤 뒤로 버튼 → Settings → Disc → **Korean patch: Install**.
+2. 시스템 파일 선택 화면에서 받은 한글패치 **zip**(또는 그 안의 `.xdelta`)을 고른다. 다운로드 폴더 그대로 둬도 된다.
+3. 진행이 끝나면 **Restart now**. 앱이 스스로 다시 시작해 한국어로 나온다.
+
+한글판 이미지(약 37MB)는 앱 데이터 폴더의 `korean/`에 만들어지고 원래 이미지는 그대로다. Disc 탭의
+**Korean < On / Off >**로 원래 디스크와 오갈 수 있다(Apply 후 다시 시작). 파일은 시스템 파일 선택(SAF)으로
+받은 권한으로 한 번 읽는다(`MainActivity.pickPatchFile`). 다시 시작은 따로 된 프로세스의
+`RestartActivity`(`android:process=":restart"`)가 게임 프로세스를 끝내고 새로 연다 — 네이티브 라이브러리의
+정적 변수가 같은 프로세스에서는 초기화되지 않기 때문이다.
+
+### 조작키
+
+Settings → Controls → Buttons에서 블루투스 게임패드의 버튼(과 물리 키보드 키)을 바꿀 수 있다
+(README의 "조작키 바꾸기"). 일시정지 중에는 게임패드 십자키·A·B로 메뉴를 움직인다.
+
 ## 현재 상태
 
 - 빌드(컴파일·링크·APK 패키징)까지 확인했다. 이 작업 환경에는 Android 기기·에뮬레이터가 없어 실제
