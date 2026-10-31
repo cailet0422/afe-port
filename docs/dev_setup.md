@@ -128,6 +128,13 @@ cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
   - `station`: `NOJOB`을 마을을 불러오기 전에(역무원은 생길 때 아르바이트 여부를 본다) 하고 역무원에게 "외출할 거야" →
     SD 확인 → 슬롯 B 메모리 카드에 플레이어, 슬롯 A에 마을 기록 → 기차 → 타이틀. 세이브가 바뀐다(`save/card_b/`).
   - `all`: `film`, `terminal`, `tailors`.
+- 아르바이트(한글패치 디스크, `--save`로 만든 첫날 세이브에서, `--days` 없이):
+  `python3 pc/tools/make_job_script.py 단계 > /tmp/j.txt` 후 실행하고 `save/`를 복사해 다음 단계에 쓴다(단계마다 1–2분, 하니와에서
+  저장하고 타이틀로 돌아감). `plant`(작업복: 소지품에서 집기 → 플레이어 위에 놓기 / 꽃씨·묘목 10개 심기 — 가게 남동쪽
+  z 1260 줄, 처음 두 자리는 안 받아서 아래 줄에 다시), `hello`(주민 여섯과 신사 옆 촌장 D07F에게 인사; 그 시각 집 안에 있는
+  주민은 집에 들어가서), `furniture`(가구를 E08C에게), `letter`(너굴의 편지지로 루시에게 편지 → 펠리), `carpet`(E09D),
+  `axe`(E09E), `notice`(집들 북쪽 알림판 2220,1580에 글) → 너굴이 가게 주인으로 맞이함(아르바이트 끝). 받는 주민은
+  `POS`의 `first job N progress P to XXXX`로 본다. 대화는 `TALK`/`CHOOSE`/`TALKEND`로 기다린다.
 - 여러 날(한글패치 디스크, `--save`로 만든 세이브):
   `python3 pc/tools/make_days_script.py 시나리오 > /tmp/n.txt` 후 위와 같이 실행(스크린샷 `shots/n_시나리오_번호_단계.ppm`).
   - `letter`(`--days 1`): `JOBDONE` → 편지지(`GIVE 2000`)로 밀크에게 "안녕" → 우체국에서 펠리에게 "편지를 보내고 싶어" →
