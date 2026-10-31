@@ -25,6 +25,14 @@ player go, so a scenario can start on what the game makes of day two.
               the room upstairs, down, the basement (on the island-buy save)
   island [CHOICES]  the next day: to the dock from the north, Kapp'n, the boat
               trip with his song, a walk on the island, and the trip back
+  week        one run through the week, the clock moved on with CLOCK (an
+              input script debug command) instead of a new run per day
+              (--days 1, on the save make_newgame_script.py --save leaves):
+              Monday the letter to Milk; on past midnight into Tuesday, save
+              and quit at the haniwa and continue from the title (her answer
+              is made when the town loads); 16:59, her letter in the
+              mailbox; on through four more midnights to Saturday 20:00,
+              K.K.'s song; save. POS prints the game's date (time ...)
 
 Every step leaves a screenshot n_<scenario>_<n>_<step>; with --verbose the
 POS at each shows where the player is.
@@ -168,7 +176,7 @@ def write_letter(body):
     shot("letter_done", 30)
 
 
-def letter():
+def letter(save=True):
     do("JOBDONE", 20)
     # A villager answers a letter the game rates good (enough words from its
     # Japanese keyword table, m_mail_check_ovl.c) or bad (under 5 characters,
@@ -192,6 +200,39 @@ def letter():
     do("A", 60)
     presses(3, every=60, name="bye")
     go_out("post")
+    if save:
+        save_at_haniwa()
+
+
+def midnight(day):
+    """The clock to 23:59:40, then 40 seconds of the game on into the next
+    day (the game reads the clock every frame: the date changes, the stalk
+    market and the day's renewals run as when playing on at night)"""
+    do("CLOCK 23:59:40", 30)
+    shot(f"{day}_2359", 0)
+    shot(f"{day}_past", 2400)
+
+
+def continue_game():
+    """After save and quit (writing the town takes a while): A through Milk's
+    questions (who the player is, the town) until the town is loaded"""
+    presses(40, every=90, name="load", each=8)
+    shot("continued", 300)
+
+
+def week():
+    letter(save=False)                          # Monday, 2026-11-02
+    midnight("mon")                             # into Tuesday
+    save_at_haniwa()
+    continue_game()                             # the town loads on Tuesday: Milk answers
+    do("CLOCK 16:59", 30)
+    shot("tue_1659", 0)
+    reply()
+    for day in ("tue", "wed", "thu", "fri"):    # on to Saturday
+        midnight(day)
+    do("CLOCK 20:00", 30)
+    shot("sat_2000", 0)
+    kk()
     save_at_haniwa()
 
 
@@ -339,7 +380,7 @@ def house_next():
 
 SCENARIOS = {"letter": letter, "reply": reply, "kk": kk, "house": house, "house-next": house_next,
              "island-buy": island_buy, "island": island,
-             "rooms": rooms}
+             "rooms": rooms, "week": week}
 ISLAND_CHOICES = [int(c) for c in sys.argv[2].split(",")] if len(sys.argv) > 2 and sys.argv[1] == "island" else [0]
 PAYS = int(sys.argv[2]) if len(sys.argv) > 2 else 1
 OFFER = [int(c) for c in sys.argv[3].split(",")] if len(sys.argv) > 3 else [0, 9]

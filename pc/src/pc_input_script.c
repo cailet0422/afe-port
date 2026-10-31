@@ -23,6 +23,7 @@
 #include "m_collision_bg.h"
 #include "m_weather_type.h"
 #include "pc_ko.h"
+#include "pc_platform.h"
 #include "charmap.h"
 #include "audio.h"
 
@@ -67,6 +68,7 @@ typedef enum {
     SCRIPT_WARP,
     SCRIPT_WEATHER,
     SCRIPT_FG,
+    SCRIPT_CLOCK,
     SCRIPT_BGM,
 } ScriptKind;
 
@@ -264,6 +266,12 @@ int pc_input_script_load(const char* path) {
                    sscanf(arg, "%f,%f", &ev.seek_pos[0], &ev.seek_pos[1]) == 2) {
             ev.kind = SCRIPT_WARP;
             ev.value[0] = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : mSc_DIRECT_NORTH;
+        } else if (strcmp(word, "CLOCK") == 0 && fields >= 3) {
+            unsigned h = 0, m = 0, sec = 0;
+
+            sscanf(arg, "%u:%u:%u", &h, &m, &sec);
+            ev.kind = SCRIPT_CLOCK;
+            ev.value[0] = (h % 24) * 3600 + (m % 60) * 60 + sec % 60;
         } else if (strcmp(word, "FG") == 0 && fields >= 4 &&
                    sscanf(arg, "%f,%f", &ev.seek_pos[0], &ev.seek_pos[1]) == 2) {
             ev.kind = SCRIPT_FG;
@@ -690,6 +698,17 @@ static void log_positions(u32 frame) {
         }
     }
     printf("[POS] frame %u scene %d\n", (unsigned)frame, (int)Save_Get(scene_no));
+    {
+        lbRTC_time_c* t = Common_GetPointer(time.rtc_time);
+
+        printf("[POS] frame %u time %04d-%02d-%02d %02d:%02d:%02d weekday %d\n", (unsigned)frame, t->year, t->month,
+               t->day, t->hour, t->min, t->sec, t->weekday);
+        /* the visitor of the week (mEv_EVENT_*: the broker's sale, the
+         * artist ...), its day (month << 8 | day) and state (3 today) */
+        printf("[POS] frame %u special event %d day %04X state %d weekly %d\n", (unsigned)frame,
+               (int)(s16)mEv_get_special_event_type(), (unsigned)mEv_get_special_event_day(),
+               mEv_get_special_event_state(), (int)Save_Get(event_save_common).weekly_event.type);
+    }
     if (Common_Get(player_no) < PLAYER_NUM) {
         /* the player's house and debt: a house is enlarged a day after its loan is paid */
         const mHm_hs_c* house = &Save_Get(homes[mHS_get_arrange_idx(Common_Get(player_no))]);
@@ -859,9 +878,14 @@ static void debug_command(const ScriptEvent* ev) {
     } else if (ev->kind == SCRIPT_WARP) {
         /* the scene again with the player at x,z, as when leaving a building
          * (a fade out and in): a route starts by the door it needs instead
-         * of finding a way around rivers and cliffs */
+         * of finding a way around rivers and cliffs; outdoors only (in
+         * another scene, the player select say, it would crash) */
         Door_data_c door;
 
+        if (mFI_GET_TYPE(mFI_GetFieldId()) != mFI_FIELDTYPE_FG) {
+            printf("[INPUT] frame %u: warp: not outdoors (scene %d)\n", (unsigned)s_frame, (int)Save_Get(scene_no));
+            return;
+        }
         memset(&door, 0, sizeof(door));
         door.next_scene_id = Save_Get(scene_no);
         door.exit_orientation = (u8)ev->value[0];
@@ -873,6 +897,20 @@ static void debug_command(const ScriptEvent* ev) {
         door.wipe_type = WIPE_TYPE_FADE_BLACK;
         printf("[INPUT] frame %u: warp to %d,%d: %d\n", (unsigned)s_frame, door.exit_position.x, door.exit_position.z,
                goto_other_scene(play, &door, FALSE));
+    } else if (ev->kind == SCRIPT_CLOCK) {
+        /* forward to the next H:M:S (later today, else tomorrow): the game
+         * reads the clock every frame (mTM_time), so it crosses midnight
+         * as when playing on into the night */
+        lbRTC_time_c* t = Common_GetPointer(time.rtc_time);
+        long long now = t->hour * 3600 + t->min * 60 + t->sec;
+        long long step = (long long)ev->value[0] - now;
+
+        if (step <= 0) {
+            step += 24 * 3600;
+        }
+        pc_os_advance_clock(step);
+        printf("[INPUT] frame %u: clock %04d-%02d-%02d %02d:%02d:%02d + %lld s\n", (unsigned)s_frame, t->year,
+               t->month, t->day, t->hour, t->min, t->sec, step);
     } else if (ev->kind == SCRIPT_FG) {
         /* an item on the ground (the unit at x,z), as the game puts one:
          * Resetti's hole, a fence, a buried thing ... */
