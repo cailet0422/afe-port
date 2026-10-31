@@ -68,6 +68,7 @@ extern int           g_pc_no_framelimit;
 extern int           g_pc_skip_draw; /* drop GL draws (fast input-script replay) */
 extern int           g_pc_time_override;
 extern int           g_pc_deterministic; /* clock driven by frames from a fixed date (testing) */
+extern int           g_pc_deterministic_days; /* --days: days after that date */
 extern int           g_pc_min_override;
 extern int           g_pc_sec_override;
 

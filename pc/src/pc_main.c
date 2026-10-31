@@ -35,6 +35,7 @@ int           g_pc_restart = 0;
 int           g_pc_no_framelimit = 0;
 int           g_pc_skip_draw = 0;
 int           g_pc_deterministic = 0;
+int           g_pc_deterministic_days = 0; /* --days: start that many days after the fixed date */
 int           g_pc_verbose = 0;
 int           g_pc_time_override = -1; /* -1=system clock, 0-23=override hour */
 int           g_pc_min_override = -1; /* -1=system clock, 0-59=override minute */
@@ -374,6 +375,7 @@ int main(int argc, char* argv[]) {
             printf("  --script-fast       With --input-script: draw only the frames it screenshots\n");
             printf("  --deterministic     Start the clock at a fixed date and advance it by frames,\n");
             printf("                      so a new game's town is the same every run\n");
+            printf("  --days N            With --deterministic: start N days later (6 is a Saturday)\n");
             printf("  --model-viewer [N]  Launch model viewer (optional start index)\n");
             printf("  --time H[:M[:S]]    Override in-game time (e.g. 5, 17:30, 5:55:00)\n");
             printf("  --help, -h          Show this help message\n");
@@ -386,6 +388,8 @@ int main(int argc, char* argv[]) {
             }
         } else if (strcmp(argv[i], "--deterministic") == 0) {
             g_pc_deterministic = 1;
+        } else if (strcmp(argv[i], "--days") == 0 && i + 1 < argc) {
+            g_pc_deterministic_days = atoi(argv[++i]);
         } else if (strcmp(argv[i], "--script-fast") == 0) {
             pc_input_script_set_fast(1);
         } else if (strcmp(argv[i], "--verbose") == 0 || strcmp(argv[i], "-v") == 0) {

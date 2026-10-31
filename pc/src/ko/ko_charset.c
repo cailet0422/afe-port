@@ -110,3 +110,48 @@ int ko_charset_ascii(char c) {
         default: return -1;
     }
 }
+
+void ko_charset_pack_ending(const uint8_t text[KO_ENDING_TEXT_LEN], uint8_t out[KO_ENDING_PACKED_LEN]) {
+    int v[4] = { 0xFFF, 0xFFF, 0xFFF, 0xFFF };
+    int len = KO_ENDING_TEXT_LEN;
+    int i = 0;
+    int k;
+
+    while (len > 4 && text[len - 1] == ' ') {
+        len--;
+    }
+    if (len <= 4) {
+        for (k = 0; k < 4; k++) {
+            out[k] = text[k];
+        }
+        out[4] = out[5] = out[6] = 0;
+        return;
+    }
+    /* Like the patch, any lead byte followed by a second byte makes a pair
+     * (its glyph is not range checked) */
+    for (k = 0; k < 4 && i < len; k++) {
+        int lead = -1;
+        int j;
+
+        for (j = 0; j < (int)sizeof(leads); j++) {
+            if (leads[j] == text[i]) {
+                lead = j;
+                break;
+            }
+        }
+        if (lead >= 0 && i + 1 < len && text[i + 1] >= TRAIL_FIRST) {
+            v[k] = lead * TRAILS + (text[i + 1] - TRAIL_FIRST);
+            i += 2;
+        } else {
+            v[k] = 2400 + text[i];
+            i++;
+        }
+    }
+    out[0] = 0xFE;
+    out[1] = (uint8_t)(v[0] >> 4);
+    out[2] = (uint8_t)(((v[0] & 0xF) << 4) | (v[1] >> 8));
+    out[3] = (uint8_t)v[1];
+    out[4] = (uint8_t)(v[2] >> 4);
+    out[5] = (uint8_t)(((v[2] & 0xF) << 4) | (v[3] >> 8));
+    out[6] = (uint8_t)v[3];
+}

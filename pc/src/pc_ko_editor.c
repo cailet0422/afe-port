@@ -30,7 +30,8 @@
 #define HINT_SCALE 0.42f
 #define HEADER_SCALE 0.6f
 
-/* controller: the D-pad or the stick moves, repeating while held */
+/* controller: the stick moves between keys and the D-pad moves the text
+ * cursor (as on the game's own panel), both repeating while held */
 #define STICK_THRESHOLD 40
 #define REPEAT_DELAY 15
 #define REPEAT_RATE 5
@@ -46,11 +47,14 @@ static f32 s_left, s_top;         /* where the keys were drawn */
 static const KoOskKey* s_touched; /* key under a finger, drawn pressed */
 static u16 s_prev_buttons;
 static int s_dir_x, s_dir_y, s_repeat;
+static u16 s_cursor_button;
+static int s_cursor_repeat;
 
 void pc_ko_osk_reset(void) {
     ko_osk_init(&s_osk);
     s_touched = NULL;
     s_dir_x = s_dir_y = 0;
+    s_cursor_button = 0;
 }
 
 /* The editor drew the keyboard last frame and is taking input */
@@ -73,17 +77,17 @@ static void press(const KoOskKey* key) {
     }
 }
 
-static void navigate(u16 buttons, s8 stick_x, s8 stick_y) {
+static void navigate(s8 stick_x, s8 stick_y) {
     int dx = 0, dy = 0;
 
-    if ((buttons & PAD_BUTTON_LEFT) || stick_x <= -STICK_THRESHOLD) {
+    if (stick_x <= -STICK_THRESHOLD) {
         dx = -1;
-    } else if ((buttons & PAD_BUTTON_RIGHT) || stick_x >= STICK_THRESHOLD) {
+    } else if (stick_x >= STICK_THRESHOLD) {
         dx = 1;
     }
-    if ((buttons & PAD_BUTTON_UP) || stick_y >= STICK_THRESHOLD) {
+    if (stick_y >= STICK_THRESHOLD) {
         dy = -1;
-    } else if ((buttons & PAD_BUTTON_DOWN) || stick_y <= -STICK_THRESHOLD) {
+    } else if (stick_y <= -STICK_THRESHOLD) {
         dy = 1;
     }
     if (dx != s_dir_x || dy != s_dir_y) {
@@ -100,6 +104,42 @@ static void navigate(u16 buttons, s8 stick_x, s8 stick_y) {
     ko_osk_move(&s_osk, dx, dy);
 }
 
+/* The D-pad moves the cursor in the text: between lines, and in a letter
+ * to its header and closing */
+static void move_cursor(u16 buttons) {
+    static const struct {
+        u16 button;
+        int cmd;
+    } dirs[] = {
+        { PAD_BUTTON_LEFT, PC_TYPING_CMD_LEFT },
+        { PAD_BUTTON_RIGHT, PC_TYPING_CMD_RIGHT },
+        { PAD_BUTTON_UP, PC_TYPING_CMD_UP },
+        { PAD_BUTTON_DOWN, PC_TYPING_CMD_DOWN },
+    };
+    u16 held = 0;
+    int cmd = 0;
+    int i;
+
+    for (i = 0; i < (int)(sizeof(dirs) / sizeof(dirs[0])); i++) {
+        if (buttons & dirs[i].button) {
+            held = dirs[i].button;
+            cmd = dirs[i].cmd;
+            break;
+        }
+    }
+    if (held != s_cursor_button) {
+        s_cursor_button = held;
+        s_cursor_repeat = REPEAT_DELAY;
+    } else if (held == 0 || --s_cursor_repeat > 0) {
+        return;
+    } else {
+        s_cursor_repeat = REPEAT_RATE;
+    }
+    if (held != 0) {
+        pc_typing_osk_key(cmd);
+    }
+}
+
 void pc_ko_osk_pad(u16* buttons, s8* stick_x, s8* stick_y) {
     static u32 done_frame = (u32)-1;
     u16 pressed;
@@ -113,7 +153,8 @@ void pc_ko_osk_pad(u16* buttons, s8* stick_x, s8* stick_y) {
         pressed = *buttons & ~s_prev_buttons;
         s_prev_buttons = *buttons;
 
-        navigate(*buttons, *stick_x, *stick_y);
+        navigate(*stick_x, *stick_y);
+        move_cursor(*buttons);
         if (pressed & PAD_BUTTON_A) {
             s_touched = NULL;
             press(NULL);

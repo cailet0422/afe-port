@@ -37,6 +37,15 @@ int ko_charset_decode(const uint8_t* s);
  * if the font has no such character. */
 int ko_charset_ascii(char c);
 
+/* A catchphrase typed into the patch's 8-byte buffer (space padded), as
+ * the patch stores it in a villager's 4-byte field and the 3 bytes of
+ * padding after it: text that fits in 4 bytes as is (then 3 zero bytes),
+ * otherwise 0xFE and four 12-bit values packed big-endian, each a glyph
+ * (below 2400) or 2400 + a one-byte code, unused ones 0xFFF. */
+#define KO_ENDING_TEXT_LEN 8
+#define KO_ENDING_PACKED_LEN 7
+void ko_charset_pack_ending(const uint8_t text[KO_ENDING_TEXT_LEN], uint8_t out[KO_ENDING_PACKED_LEN]);
+
 #ifdef __cplusplus
 }
 #endif

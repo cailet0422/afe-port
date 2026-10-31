@@ -83,6 +83,7 @@ const u8* pc_ko_patched_str(u32 s7_offset, const u8* original);
 #define PC_KO_DATA_MAP_LABELS 0x59AF8       /* mMP_label_data */
 #define PC_KO_DATA_ESTRING_CLASS1 0x604BC   /* eString_string1_class */
 #define PC_KO_DATA_ESTRING_CLASS2 0x604D4   /* eString_string2_class */
+#define PC_KO_DATA_LEDIT_WIN 0x595B4        /* mLE_win_data, 52 bytes each, edit_max at +0x20 */
 const void* pc_ko_data_ptr(u32 offset, const void* original);
 u32 pc_ko_data_u32(u32 offset, u32 original);
 
@@ -90,6 +91,18 @@ u32 pc_ko_data_u32(u32 offset, u32 original);
  * line checks, as the patch measures it (one-byte half-width punctuation,
  * a syllable's second byte 0, a new line 0). */
 int pc_ko_line_char_width(const u16* p);
+
+/* Name editors (m_ledit_ovl.c): the patch has a catchphrase, the reply to
+ * Resetti and a song request for K.K. typed into longer buffers of its own
+ * (8, 18 and 18 bytes). pc_ko_ledit_buf returns the buffer for those
+ * editors (mLE_TYPE_EPHRASE, _RESET, _REQUEST) in Korean mode, else NULL. */
+#define PC_KO_LEDIT_LEN 18
+u8* pc_ko_ledit_buf(int ledit_type);
+
+/* How the patch matches a typed song request or reply to Resetti with a
+ * song name or Resetti's phrase: equal once dictionary codes are expanded
+ * and all spaces dropped. */
+int pc_ko_ledit_match(const u8* name, int name_len, const u8* text, int text_len);
 
 struct game_s;
 

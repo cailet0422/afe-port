@@ -2,6 +2,7 @@
 #include "ko_charset.h"
 
 #include <stdio.h>
+#include <string.h>
 
 static int failures = 0;
 
@@ -69,6 +70,63 @@ int main(void) {
     CHECK(ko_charset_ascii('~') == 0x2A);
     CHECK(ko_charset_ascii('=') == 0x7D);
     CHECK(ko_charset_ascii('{') == -1);
+
+    /* Catchphrases as the patch stores them */
+    {
+        uint8_t text[KO_ENDING_TEXT_LEN];
+        uint8_t out[KO_ENDING_PACKED_LEN];
+        int a = ko_charset_glyph(0xBA4D); /* 멍 */
+        int b = ko_charset_glyph(0xC57C); /* 야 */
+
+        /* fits in four bytes: stored as is */
+        memcpy(text, "abc     ", 8);
+        ko_charset_pack_ending(text, out);
+        CHECK(memcmp(out, "abc \0\0\0", 7) == 0);
+        ko_charset_encode(a, text);
+        ko_charset_encode(b, text + 2);
+        memset(text + 4, ' ', 4);
+        ko_charset_pack_ending(text, out);
+        CHECK(out[0] == text[0] && out[1] == text[1] && out[2] == text[2] && out[3] == text[3]);
+        CHECK(out[4] == 0 && out[5] == 0 && out[6] == 0);
+
+        /* 멍멍야 + '!': three glyphs and a one-byte code */
+        ko_charset_encode(a, text);
+        ko_charset_encode(a, text + 2);
+        ko_charset_encode(b, text + 4);
+        text[6] = '!';
+        text[7] = ' ';
+        ko_charset_pack_ending(text, out);
+        CHECK(out[0] == 0xFE);
+        CHECK(((out[1] << 4) | (out[2] >> 4)) == a);
+        CHECK((((out[2] & 0xF) << 8) | out[3]) == a);
+        CHECK(((out[4] << 4) | (out[5] >> 4)) == b);
+        CHECK((((out[5] & 0xF) << 8) | out[6]) == 2400 + '!');
+
+        /* five one-byte codes: only four fit, unused values are 0xFFF */
+        memcpy(text, "abcde   ", 8);
+        ko_charset_pack_ending(text, out);
+        CHECK(out[0] == 0xFE && ((out[1] << 4) | (out[2] >> 4)) == 2400 + 'a');
+        CHECK((((out[5] & 0xF) << 8) | out[6]) == 2400 + 'd');
+        ko_charset_encode(a, text);
+        memcpy(text + 2, "  x  ", 5);
+        text[7] = ' ';
+        ko_charset_pack_ending(text, out);
+        CHECK(((out[1] << 4) | (out[2] >> 4)) == a);
+        CHECK((((out[2] & 0xF) << 8) | out[3]) == 2400 + ' ');
+        CHECK((((out[5] & 0xF) << 8) | out[6]) == 2400 + 'x');
+        memcpy(text, "ab    c ", 8);
+        ko_charset_pack_ending(text, out);
+        CHECK((((out[5] & 0xF) << 8) | out[6]) == 2400 + ' ');
+        memcpy(text, "abcd e  ", 8);
+        ko_charset_pack_ending(text, out);
+        CHECK(out[0] == 0xFE);
+        memcpy(text, "a       ", 8);
+        text[1] = 0x00; /* a lead byte without a second byte is a one-byte code */
+        text[4] = 'z';
+        text[5] = 0x86;
+        ko_charset_pack_ending(text, out);
+        CHECK((((out[2] & 0xF) << 8) | out[3]) == 2400 + 0x00);
+    }
 
     if (failures == 0) {
         printf("all ko_charset tests passed\n");
