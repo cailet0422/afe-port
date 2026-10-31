@@ -17,8 +17,11 @@ the game's way, looks around inside, and comes out again. Buildings:
   houseE015   a villager's house, by the villager's id (any of HOMES)
   all         shop to myhouse and the houses of E015 and E038 in one run
   town        no building: the town at a few points (for --days and --time:
-              rain, snow, night)
+              snow, night)
+  town-rain   the same in heavy rain (WEATHER; the game keeps the part-time
+              job's days dry)
   furnish     myhouse, putting down a chest from the pockets
+  famicom     myhouse, putting down a famicom and playing it (no way back out)
   buy         shop, buying from the goods by the west wall (BELLS first)
   donate      museum, giving Blathers a fish (GIVE), then the fish room
   state       furnish, buy and donate, then save at the haniwa
@@ -64,9 +67,10 @@ for npc, (x, z) in HOMES.items():
     DOORS["house" + npc] = ((x, z - 8), "", True)
 
 CHEST = 0x1000   # FTR_SUM_HAL_CHEST02 facing south
+FAMICOM = 0x1DE8  # FTR_FAMICOM_COMMON00 facing south
 FISH = 0x2300    # ITM_FISH00, a crucian carp, for the museum
 BUY = (95, 218)   # in the shop, facing west the goods there (2209 in that town)
-furnish = donate = buy = False
+furnish = donate = buy = famicom = False
 
 ev = []
 f = FREE
@@ -191,7 +195,7 @@ def visit(name):
             do("B", 30)
     elif name == "myhouse" and furnish:
         do("SU 60", 70)
-        do(f"GIVE {CHEST:04X}", 30)                  # a chest, put down in front of the player
+        do(f"GIVE {FAMICOM if famicom else CHEST:04X}", 30)  # put down in front of the player
         do("START", 100)
         shot("pocket", 0)
         do("A", 50)
@@ -199,6 +203,14 @@ def visit(name):
         shot("item_menu", 0)
         do("A", 150)
         shot("placed")                               # the pockets close by themselves
+        if famicom:                                  # it lands on the left: play (crash check only)
+            do("SL 10", 30)
+            presses(6)                               # play it?
+            shot("nes_how_to_quit", 120)             # L+R+Z quits
+            presses(3)
+            for i in range(6):
+                shot(f"nes{i}", 300)
+            return
         do("SL 30", 40)
         shot("placed_left")
         do("SD 40", 50)                              # away from it: B facing it takes it back
@@ -225,10 +237,12 @@ def visit(name):
 TOUR = ((2240, 1000), (1000, 1200), (3500, 3700), (960, 3600), (1740, 3780), (2128, 1488))
 
 
-def town_tour():
+def town_tour(weather=None):
     """No buildings: the town at each point, standing and walking a little"""
     global building, shots
     building, shots = "town", 0
+    if weather is not None:
+        do(f"WEATHER {weather} 3", 10)               # heavy
     for i, (x, z) in enumerate(TOUR):
         do(f"WARP {x},{z}", 220)
         shot(f"p{i}", 0)
@@ -249,19 +263,20 @@ def save_at_haniwa():
 
 scenario = sys.argv[1] if len(sys.argv) > 1 else ""
 ALL = ("shop", "museum", "post", "tailors", "police", "myhouse", "houseE015", "houseE038")
-SCENARIOS = {"all": ALL, "furnish": ("myhouse",), "donate": ("museum",), "buy": ("shop",),
+SCENARIOS = {"all": ALL, "furnish": ("myhouse",), "donate": ("museum",), "buy": ("shop",), "famicom": ("myhouse",),
              "state": ("myhouse", "museum", "shop"), "state-check": ("myhouse", "museum", "shop")}
-if scenario not in DOORS and scenario not in SCENARIOS and scenario != "town":
+if scenario not in DOORS and scenario not in SCENARIOS and scenario not in ("town", "town-rain"):
     sys.exit(__doc__)
-furnish = scenario in ("furnish", "state")
+furnish = scenario in ("furnish", "state", "famicom")
+famicom = scenario == "famicom"
 donate = scenario in ("donate", "state")
 buy = scenario in ("buy", "state")
 opening = subprocess.run([sys.executable, str(Path(__file__).with_name("make_opening_script.py")), "--korean",
                           str(LOADED)], capture_output=True, text=True, check=True).stdout.splitlines()
 ev += [l for l in opening if int(l.split()[0]) < LOADED and l.split()[1] not in ("QUIT", "SHOT")]
-if scenario == "town":
-    town_tour()
-for name in SCENARIOS.get(scenario, (scenario,) if scenario != "town" else ()):
+if scenario.startswith("town"):
+    town_tour(1 if scenario == "town-rain" else None)
+for name in SCENARIOS.get(scenario, (scenario,) if not scenario.startswith("town") else ()):
     visit(name)
 if scenario in ("state", "state-check"):
     save_at_haniwa()

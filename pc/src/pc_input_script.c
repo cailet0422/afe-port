@@ -13,6 +13,7 @@
 #include "m_player.h"
 #include "m_scene.h"
 #include "m_collision_bg.h"
+#include "m_weather_type.h"
 
 #include <ctype.h>
 #include <dolphin/pad.h>
@@ -46,6 +47,7 @@ typedef enum {
     SCRIPT_NOJOB,
     SCRIPT_BELLS,
     SCRIPT_WARP,
+    SCRIPT_WEATHER,
 } ScriptKind;
 
 typedef struct {
@@ -180,6 +182,10 @@ int pc_input_script_load(const char* path) {
                    sscanf(arg, "%f,%f", &ev.seek_pos[0], &ev.seek_pos[1]) == 2) {
             ev.kind = SCRIPT_WARP;
             ev.value[0] = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : mSc_DIRECT_NORTH;
+        } else if (strcmp(word, "WEATHER") == 0 && fields >= 3) {
+            ev.kind = SCRIPT_WEATHER;
+            ev.value[0] = (u32)strtoul(arg, NULL, 10);
+            ev.value[1] = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : mEnv_WEATHER_INTENSITY_NORMAL;
         } else if (strcmp(word, "BELLS") == 0 && fields >= 3) {
             ev.kind = SCRIPT_BELLS;
             ev.value[0] = (u32)strtoul(arg, NULL, 10);
@@ -511,6 +517,7 @@ static void log_positions(u32 frame) {
             { mRF_BLOCKKIND_SHOP, "shop" },       { mRF_BLOCKKIND_MUSEUM, "museum" },
             { mRF_BLOCKKIND_POSTOFFICE, "post" }, { mRF_BLOCKKIND_TAILORS, "tailors" },
             { mRF_BLOCKKIND_POLICE, "police" },   { mRF_BLOCKKIND_SHRINE, "shrine" },
+            { mRF_BLOCKKIND_DOCK, "dock" },       { mRF_BLOCKKIND_ISLAND, "island" },
         };
         ACTOR* actor;
         int bx, bz;
@@ -602,6 +609,15 @@ static void debug_command(const ScriptEvent* ev) {
         door.wipe_type = WIPE_TYPE_FADE_BLACK;
         printf("[INPUT] frame %u: warp to %d,%d: %d\n", (unsigned)s_frame, door.exit_position.x, door.exit_position.z,
                goto_other_scene(play, &door, FALSE));
+    } else if (ev->kind == SCRIPT_WEATHER) {
+        /* today's weather, as the game decides it at the start of a day (the
+         * town shows it from the next scene on, e.g. after a WARP); while
+         * the part-time job lasts the game never lets it rain */
+        Common_Set(weather, (s16)ev->value[0]);
+        Common_Set(weather_intensity, (s16)ev->value[1]);
+        Save_Set(weather, (u8)(ev->value[1] | (ev->value[0] << 4)));
+        printf("[INPUT] frame %u: weather %u, intensity %u\n", (unsigned)s_frame, (unsigned)ev->value[0],
+               (unsigned)ev->value[1]);
     } else if (ev->kind == SCRIPT_BELLS) {
         Now_Private->inventory.wallet = ev->value[0];
         printf("[INPUT] frame %u: %u bells\n", (unsigned)s_frame, (unsigned)ev->value[0]);
@@ -655,7 +671,7 @@ int pc_input_script_frame(u32 frame) {
             push_key_or_pad(ev);
         } else if (ev->kind == SCRIPT_POS) {
             log_positions(frame);
-        } else if (ev->kind >= SCRIPT_GIVE && ev->kind <= SCRIPT_WARP) {
+        } else if (ev->kind >= SCRIPT_GIVE && ev->kind <= SCRIPT_WEATHER) {
             debug_command(ev);
         } else if (ev->kind == SCRIPT_QUIT) {
             printf("[INPUT] frame %u: quit\n", frame);

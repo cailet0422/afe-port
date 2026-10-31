@@ -10,7 +10,10 @@ screenshots after each step. Frame numbers were measured on the unpatched
 disc; the editors appear around frames 5600, 6900 and 7800 and the train
 reaches the station around 14700.
 
-usage: make_opening_script.py [--korean] [END_FRAME] > opening.txt
+--idle presses nothing: the title screen waits and then plays the title
+demo (the game in a town of its own), screenshots every 300 frames.
+
+usage: make_opening_script.py [--korean] [--idle] [END_FRAME] > opening.txt
 """
 import sys
 
@@ -33,14 +36,15 @@ KOREAN_STEPS = (
 # (measured with --deterministic, after the A that opens each one)
 KOREAN_OPEN = ((5100, 6000), (6900, 7200), (7700, 8100))
 
-ev = ["900 START", "1100 START"]
-for f in range(1300, END, 90):
+IDLE = "--idle" in sys.argv
+ev = [] if IDLE else ["900 START", "1100 START"]
+for f in range(1300, END if not IDLE else 0, 90):
     if any(e <= f < e + EDITOR_SPAN for e in EDITORS):
         continue
     if KOREAN and any(a <= f < b for a, b in KOREAN_OPEN):
         continue
     ev.append(f"{f} A")
-for n, start in enumerate(EDITORS):
+for n, start in enumerate(EDITORS if not IDLE else ()):
     f = start
     if KOREAN:
         ev.append(f"{f} SHOT {['name', 'town', 'eng'][n]}_open")

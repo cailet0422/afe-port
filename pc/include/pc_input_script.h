@@ -20,6 +20,8 @@
  *     <frame> BELLS <n>               debug: n bells in the wallet
  *     <frame> WARP <x>,<z> [<dir>]    debug: the town again with the player at x,z (as on
  *                                     leaving a building), facing mSc_DIRECT_* (4 north)
+ *     <frame> WEATHER <type> [<n>]    debug: today's weather (1 rain, 2 snow ...) and its
+ *                                     intensity (0-3), shown from the next scene (WARP)
  *     <frame> TYPE <keys>             type into the text editor (pc_input_script.c)
  *     <frame> EDIT [<utf8>]           system input method: text being composed
  *     <frame> TEXT <utf8>             system input method: committed text
