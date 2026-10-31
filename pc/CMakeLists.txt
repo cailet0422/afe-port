@@ -366,7 +366,7 @@ endif()
 set(WINDOW_ICON_C "${CMAKE_BINARY_DIR}/gen/pc_window_icon.c")
 add_custom_command(
     OUTPUT "${WINDOW_ICON_C}"
-    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin2c.py"
+    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin2c.py" --own
             "${CMAKE_CURRENT_SOURCE_DIR}/res/icon64.rgba" "${WINDOW_ICON_C}" pc_window_icon_rgba 4
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/res/icon64.rgba" "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin2c.py"
     COMMENT "Embedding window icon"
