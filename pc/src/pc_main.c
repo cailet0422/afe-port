@@ -376,6 +376,7 @@ int main(int argc, char* argv[]) {
             printf("  --deterministic     Start the clock at a fixed date and advance it by frames,\n");
             printf("                      so a new game's town is the same every run\n");
             printf("  --days N            With --deterministic: start N days later (6 is a Saturday)\n");
+            printf("  --audio-dump F      Also write the sound to the WAV file F (32 kHz stereo)\n");
             printf("  --model-viewer [N]  Launch model viewer (optional start index)\n");
             printf("  --time H[:M[:S]]    Override in-game time (e.g. 5, 17:30, 5:55:00)\n");
             printf("  --help, -h          Show this help message\n");
@@ -390,6 +391,10 @@ int main(int argc, char* argv[]) {
             g_pc_deterministic = 1;
         } else if (strcmp(argv[i], "--days") == 0 && i + 1 < argc) {
             g_pc_deterministic_days = atoi(argv[++i]);
+        } else if (strcmp(argv[i], "--audio-dump") == 0 && i + 1 < argc) {
+            if (!pc_audio_dump_open(argv[++i])) {
+                return 1;
+            }
         } else if (strcmp(argv[i], "--script-fast") == 0) {
             pc_input_script_set_fast(1);
         } else if (strcmp(argv[i], "--verbose") == 0 || strcmp(argv[i], "-v") == 0) {

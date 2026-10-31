@@ -180,6 +180,8 @@ ninja -C pc/build32strip
 `KEY Escape`, `PAD dpdown`처럼 키·패드 이벤트도 보낼 수 있어 일시정지·설정 메뉴(키 설정, 한글패치
 설치)를 시험할 수 있다. `POS`는 플레이어·주민 위치를 찍고, `SEEK`은 주민이나 지점까지 걷는다.
 `--deterministic`과 함께 쓰면 같은 스크립트가 매번 같은 화면을 낸다(`--days N`이면 N일 뒤에서 시작).
+`--audio-dump 파일.wav`는 소리 출력을 WAV로 남긴다(`--deterministic`이면 같은 스크립트가 같은 WAV, 분석은
+`pc/tools/audio_stats.py`, [dev_setup.md](dev_setup.md)).
 가끔만 나오는 장면을 위한 디버그 명령: `GIVE`(소지품에 아이템), `LEDIT`(이름 입력 편집기 열기: 주민의 말버릇
 등), `RESETS`(저장 없이 끈 횟수 — 도루묵씨가 온다), `CATCH`(주민의 말버릇 바이트 출력), `ITEM`(메뉴가 고른
 아이템 출력).

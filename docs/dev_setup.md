@@ -73,6 +73,12 @@ cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
 - 보통 속도 확인: `--no-framelimit` 없이(필요하면 `--script-fast`만) 돌리면 소리가 별도 스레드에서 돈다.
   `--deterministic`이 아니면 마을이 매번 달라 `--save` 경로가 저장까지 가지 못할 수 있지만 끝까지 크래시·멈춤
   없이 도는지 보는 데 쓴다(llvmpipe에서 모든 프레임을 그리면 30fps 안팎이라 시간이 두 배쯤 걸린다).
+- 소리 확인: `--audio-dump 파일.wav`를 더하면 소리 출력(32kHz 스테레오 16비트, 볼륨 설정을 적용하기 전)을 WAV로
+  남긴다. `SDL_AUDIODRIVER=dummy`에서도 된다. `--deterministic`이면 소리를 프레임마다 1/60초씩 만들므로 같은 스크립트가
+  샘플 하나까지 같은 WAV를 낸다(프레임 F는 대략 샘플 F×32000/60). `python3 pc/tools/audio_stats.py 파일.wav
+  --seg 이름:F1-F2 ... --gaps 200`이 구간(프레임)마다 길이·음량(RMS/피크 dBFS)·무음 비율·가장 긴 무음·튐·클리핑·
+  DC·좌우 상관·가장 센 주파수를 보여 주고, `--gaps`는 소리 사이의 끊김, `--every 초`는 시간별 음량,
+  `--compare 다른.wav`는 두 덤프가 같은지 본다.
 - 저장·불러오기 확인: `make_newgame_script.py --korean --save`가 옆집 주민(밀크)에게 인사하고 하니와에서
   저장한다(첫날 하니와는 주민을 한 명도 만나지 않았으면 저장을 거절한다). `save/card_a/DobutsunomoriE_MURA`가
   생기면 `make_opening_script.py 5200`으로 다시 실행해 이어하기 — 밀크가 맞이하고 집 앞에서 시작한다.

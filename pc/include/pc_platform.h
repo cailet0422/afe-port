@@ -134,6 +134,7 @@ int  pc_audio_is_active(void);
 void pc_audio_set_paused(int paused); // Can be used to pause the audio. Not used at the moment.
 void pc_audio_shutdown(void);
 void pc_audio_start_producer_thread(void);
+int  pc_audio_dump_open(const char* path); /* --audio-dump: write the sound to a WAV file */
 void pc_audio_mq_init(void);
 void pc_audio_mq_shutdown(void);
 
