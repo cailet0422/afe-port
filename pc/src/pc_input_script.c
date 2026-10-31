@@ -148,7 +148,7 @@ static u32 menu_type(const char* name) {
         { "CALENDAR", mSM_OVL_CALENDAR }, { "PASSWORDMAKE", mSM_OVL_PASSWORDMAKE },
         { "PASSWORDCHK", mSM_OVL_PASSWORDCHK }, { "ALARMIN", mSM_OVL_ALARMIN },
         { "FILM", mSM_OVL_FILM },         { "DIARY", mSM_OVL_DIARY },
-        { "BOARD", mSM_OVL_BOARD },
+        { "BOARD", mSM_OVL_BOARD },       { "MAP", mSM_OVL_MAP },
     };
     int i;
 
