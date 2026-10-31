@@ -460,7 +460,7 @@ static ScriptEvent* first_waiting(void) {
             }
             if (!ev->done) {
                 ev->done = 1;
-                printf("[INPUT] frame %u: gave up waiting (line %d)\n", (unsigned)s_frame, i);
+                printf("[INPUT] frame %u: gave up waiting (line %d, started %u, now %u)\n", (unsigned)s_frame, i, ev->started, s_real);
             }
         }
     }
@@ -748,6 +748,23 @@ static void log_positions(u32 frame) {
             }
         }
 
+        /* boards in the player's block (the message board for Nook's notice job) */
+        {
+            static const struct {
+                mActor_name_t item;
+                const char* name;
+            } boards[] = { { MESSAGE_BOARD0, "message board" }, { MESSAGE_BOARD1, "message board" },
+                           { MAP_BOARD0, "map board" },         { MAP_BOARD1, "map board" } };
+            int ux, uz, k;
+
+            for (k = 0; k < (int)(sizeof(boards) / sizeof(boards[0])); k++) {
+                if (mFI_SearchFGInBlock(&ux, &uz, boards[k].item, play->block_table.block_x,
+                                        play->block_table.block_z)) {
+                    printf("[POS] frame %u %s at %d,%d\n", (unsigned)frame, boards[k].name,
+                           play->block_table.block_x * 640 + ux * 40 + 20, play->block_table.block_z * 640 + uz * 40 + 20);
+                }
+            }
+        }
         for (actor = play->actor_info.list[ACTOR_PART_ITEM].actor; actor != NULL; actor = actor->next_actor) {
             printf("[POS] frame %u structure %04X x %.0f z %.0f\n", (unsigned)frame, (u16)actor->id,
                    actor->world.position.x, actor->world.position.z);
