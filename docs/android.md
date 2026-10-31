@@ -33,6 +33,13 @@ Android Studio에서는 `pc/android`를 열면 된다. 첫 네이티브 빌드�
 라이브러리의 배치에 따라 다르므로 ABI마다 따로 만든다(`DobutsuNoMoriEPlus-arm64-v8a.relmap` 등).
 한쪽만 필요하면 `app/build.gradle`의 `abiFilters`를 줄인다.
 
+`-PstripAssets` 확인(리눅스, SDK는 `sdkmanager "platforms;android-34" "build-tools;34.0.0" "ndk;27.2.12479018"
+"cmake;3.22.1"`, SDL2 2.30.9, Gradle 8.14, JDK 21): `gradle assembleDebug -PsdlDir=… -PstripAssets`가 약 7분에 끝나고
+APK는 12MB(라이브러리 armeabi-v7a 9.6MB, arm64-v8a 15.5MB). 매칭 빌드가 추출한 에셋에서 고른 32바이트 조각 400개 중
+데스크톱 일반 실행 파일에서는 399개가 찾히고, 두 ABI의 `libmain.so`에서는 1개(연속된 아이템 번호 목록이라 코드의 다른
+표와 우연히 같은 것; 데스크톱 에셋 없는 빌드도 같은 1개)만 찾힌다. 그전에는 창 아이콘(`pc_window_icon_rgba`)을
+디스크 에셋으로 잘못 보아 `--require-assets`가 링크를 실패시켰다(`bin2c.py --own`으로 고침). 기기에서 실행은 하지 못했다.
+
 ## 실행
 
 1. 디스크 이미지(`.iso`/`.ciso`/`.gcm`, 한글패치 적용본 가능)를 폰의 아무 폴더에나 둔다(예: `Download/동물의숲`).
