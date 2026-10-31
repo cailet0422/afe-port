@@ -21,6 +21,8 @@ player go, so a scenario can start on what the game makes of day two.
               nothing, so no more building); save
   island-buy [PAYS]  the day the upper floor is built: pay it, and Nook sells
               an island (its name typed in Korean); save
+  rooms       the house up to the upper floor and the basement: the stairs up,
+              the room upstairs, down, the basement (on the island-buy save)
   island [CHOICES]  the next day: to the dock from the north, Kapp'n, the boat
               trip with his song, a walk on the island, and the trip back
 
@@ -298,6 +300,33 @@ def island():
     shot("town", 0)
 
 
+def rooms():
+    """In the house built up to the upper floor and the basement (scenes 40
+    the main floor, 41 upstairs, 45 the basement): the stairs up are at the
+    front left (100,370, walking south), down at the front right (300,370)"""
+    do("WARP 2112,1485 5", 200)
+    do("A", 10)
+    shot("main", 360)
+    do("SEEK 100,370 200", 210)
+    do("SD 10", 400)                            # up
+    shot("upstairs", 0)
+    for i, d in enumerate(("SR 60", "SU 60", "SL 60")):
+        do(d, 70)
+        shot(f"up{i}", 0)
+    do("SEEK 60,300 200", 210)
+    do("SL 10", 400)                            # down
+    shot("main_again", 0)
+    do("SEEK 300,370 200", 210)
+    do("SD 10", 400)                            # the basement
+    shot("basement", 0)
+    for i, d in enumerate(("SL 60", "SU 60", "SR 60")):
+        do(d, 70)
+        shot(f"bm{i}", 0)
+    do("SEEK 300,380 200", 210)
+    do("SD 10", 400)                            # up again (the basement is unlit)
+    shot("back", 0)
+
+
 def house_next():
     """The next day: Nook tells of the bigger house and its loan; then pay it
     (PAYS times, as much as the wallet holds each time), back to him for the
@@ -309,7 +338,8 @@ def house_next():
 
 
 SCENARIOS = {"letter": letter, "reply": reply, "kk": kk, "house": house, "house-next": house_next,
-             "island-buy": island_buy, "island": island}
+             "island-buy": island_buy, "island": island,
+             "rooms": rooms}
 ISLAND_CHOICES = [int(c) for c in sys.argv[2].split(",")] if len(sys.argv) > 2 and sys.argv[1] == "island" else [0]
 PAYS = int(sys.argv[2]) if len(sys.argv) > 2 else 1
 OFFER = [int(c) for c in sys.argv[3].split(",")] if len(sys.argv) > 3 else [0, 9]
