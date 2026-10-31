@@ -70,6 +70,8 @@ cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
   스크린샷마다 플레이어·주민 위치, 카메라(모드, 중심, 눈, 각도), 가게·박물관·우체국 등이 있는 구역과 근처 건물
   액터의 위치를 찍고(`POS`, `--verbose`일 때 나옴; 한 구역은 640),
   주민이나 지점까지는 `SEEK:E038:600`처럼 걷게 한다(막히면 옆으로 비켜 감).
+  게임이 가끔만 여는 화면은 `MENU <이름> [인자0] [인자1]`(`ALARMIN`, `TIMEIN`, `HBOARD`, `PASSWORDMAKE`, `PASSWORDCHK`,
+  `NOTICE`, `WARNING`, `CALENDAR`, `FILM` …, `pc/include/pc_input_script.h`)로 연다.
 - 보통 속도 확인: `--no-framelimit` 없이(필요하면 `--script-fast`만) 돌리면 소리가 별도 스레드에서 돈다.
   `--deterministic`이 아니면 마을이 매번 달라 `--save` 경로가 저장까지 가지 못할 수 있지만 끝까지 크래시·멈춤
   없이 도는지 보는 데 쓴다(llvmpipe에서 모든 프레임을 그리면 30fps 안팎이라 시간이 두 배쯤 걸린다).
@@ -90,6 +92,13 @@ cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
     없는 곡을 넣고 `ITEM`이 2A0A, 2A13, 2A13, 2A8C(없음)를 찍는지 본다. 저장하지 않는다.
   - `reset`: `RESETS 6`으로 도루묵씨의 세 번째 방문을 불러 틀린 대답(몰라) → 다시 묻기 → 그가 시키는 문구를 띄어
     써서 입력 → "참말이제?!"(맞음). 문구는 세이브마다 다르다(`--save`의 세이브에서는 "정말죄송합니다").
+  - `ui`: 디버그 명령 `MENU`로 시간 입력("시간을 맞춰보자"), 하니와 알람 두 가지("분 뒤에"/"분에"), 비밀번호 화면("마을"/"이름"),
+    하니와 알람 메시지(한글을 넣어 폭으로 줄이 나뉘는지), 알림판(날짜 "2026/11/01")을 차례로 연다.
+  - `warning`: 소지품 메뉴 경고 24종(`MENU WARNING n`)을 차례로 띄운다(패치가 옮긴 긴 문구).
+  - `boards`: 알림판과 일기(달력 → 오늘 → 일기 쓰기)에 한글을 써서 올리고, 비밀번호 확인 화면("암호 입력")과 사진 메뉴
+    ("사진을, SD카드에 저장?")를 연다. 사진 메뉴에서 A를 누르면 SD 저장을 시도하다 멈추므로(PC에 SD 없음) B로 닫는다.
+  - `voice`: `VOICELOG 1`을 켜고 밀크에게 말을 건다. 로그의 `[VOICE] msg 055C 1BDC U+C557 voice 1`은 메시지 번호, 바이트,
+    글자, 고른 말소리 번호(가나 말소리 표의 번호, 둘째 바이트는 나오지 않음).
   - 시나리오마다 `--save`로 만든 세이브를 새로 복사해 쓴다(`letter`·`ephrase`는 저장하므로 `*-check`는 그 뒤에).
 - 메모리 문제는 `-fsanitize=address -fsanitize-recover=address`로 별도 빌드 디렉터리를 만들어 본다
   (`ASAN_OPTIONS=detect_leaks=0:halt_on_error=0`). 원래 게임의 읽기 범위 초과

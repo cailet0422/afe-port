@@ -211,17 +211,20 @@ elif scenario == "reset":
 elif scenario == "ui":
     # screens the game opens only now and then, through the MENU debug command
     for name, menu, keys, close in (
-            ("timein", "TIMEIN 0 0", "", "START"),                  # 시간을 맞춰보자
-            ("alarm_play", "ALARMIN 0 0", "", "START"),             # 시간 / 분 뒤에
-            ("alarm_time", "ALARMIN 1 0", "", "START"),             # 분에
-            ("password", "PASSWORDMAKE 0 0", "", "START"),          # 마을 / 이름
-            ("hboard", "HBOARD 0 0", "dkssudgktpdy{SP}qksrkdnj,{SP}wkf{SP}wkfkqhk."
-             "{SP}rmfjgrp{SP}qkqns{SP}eotm{SP}dkcla", "START"),     # the haniwa's alarm message
-            ("notice", "NOTICE 0 0", "", "B")):                     # the date on the board
+            ("timein", "TIMEIN 0 0", [], "START"),                  # 시간을 맞춰보자
+            ("alarm_play", "ALARMIN 0 0", [], "START"),             # 시간 / 분 뒤에
+            ("alarm_time", "ALARMIN 1 0", [], "START"),             # 분에
+            ("password", "PASSWORDMAKE 0 0", [], "START"),          # 마을 / 이름
+            ("hboard", "HBOARD 0 0", ["{DOWN}" * 3, "{RIGHT}" * 16] + ["{BS}" * 20] * 3 +  # clear the message
+             ["dkssudgktpdy{SP}qksrkdnj,{SP}dhsmfdms{SP}woalTsms{SP}skfdlrh.",
+              "{SP}sodlfdms{SP}rmadydlfdlqslek."], "START"),
+            ("notice", "NOTICE 0 0", [], "B")):                     # the date on the board
         do(f"MENU {menu}", 90)
         shot(f"{name}_open", 0)
+        for part in keys:                           # TYPE takes up to 127 characters
+            do(f"TYPE {part}", 30)
         if keys:
-            typed(keys, f"{name}_typed")
+            shot(f"{name}_typed", 0)
         do(close, 60)
         do("B", 40)
         shot(f"{name}_closed", 30)
