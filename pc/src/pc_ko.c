@@ -540,7 +540,7 @@ u8* pc_ko_ledit_buf(int ledit_type) {
 
 int pc_ko_ledit_match(const u8* name, int name_len, const u8* text, int text_len) {
     const u8* full;
-    int full_len = pc_ko_expand(name, name_len, 0, &full);
+    int full_len = pc_ko_expand(name, name_len, 5, &full);
     int i = 0;
     int j = 0;
 

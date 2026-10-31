@@ -691,6 +691,18 @@ static void log_positions(u32 frame) {
                (unsigned)frame, house->size_info.size, house->size_info.next_size, house->size_info.renew,
                house->size_info.basement_ordered, house->island.flags.unlocked, (unsigned)Now_Private->inventory.loan,
                (unsigned)Now_Private->inventory.wallet);
+        printf("[POS] frame %u pockets", (unsigned)frame);
+        for (i = 0; i < mPr_POCKETS_SLOT_COUNT; i++) {
+            printf(" %04X", (unsigned)Now_Private->inventory.pockets[i]);
+        }
+        printf("\n");
+        if (mEv_CheckFirstJob()) {
+            /* the part-time job: kind - mQst_ERRAND_FIRSTJOB_CHANGE_CLOTH is Nook's job number */
+            mQst_errand_c* job = mQst_GetFirstJobData();
+
+            printf("[POS] frame %u first job %d progress %d\n", (unsigned)frame,
+                   (int)job->base.quest_kind - mQst_ERRAND_FIRSTJOB_CHANGE_CLOTH, (int)job->base.progress);
+        }
     }
     printf("[POS] frame %u camera %d center %.0f,%.0f,%.0f eye %.0f,%.0f,%.0f dir %d,%d dist %.0f\n", (unsigned)frame,
            play->camera.now_main_index, play->camera.lookat.center.x, play->camera.lookat.center.y,
