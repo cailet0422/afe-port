@@ -15,6 +15,13 @@
  *                                     the town just loaded is one (Resetti comes)
  *     <frame> CATCH <id>              print a villager's catchphrase bytes
  *     <frame> ITEM                    print the item a menu chose (a song requested of K.K.)
+ *     <frame> NOJOB                   debug: end the part-time job for Nook (day one), so
+ *                                     the shops, post office and houses act as later on
+ *     <frame> BELLS <n>               debug: n bells in the wallet
+ *     <frame> WARP <x>,<z> [<dir>]    debug: the town again with the player at x,z (as on
+ *                                     leaving a building), facing mSc_DIRECT_* (4 north)
+ *     <frame> WEATHER <type> [<n>]    debug: today's weather (1 rain, 2 snow ...) and its
+ *                                     intensity (0-3), shown from the next scene (WARP)
  *     <frame> MENU <name> [<a0> [<a1>]] debug: open a submenu by its mSM_OVL_ name without the
  *                                     prefix (ALARMIN, TIMEIN, HBOARD, PASSWORDMAKE, NOTICE,
  *                                     WARNING, FILM ...) or number, with its two arguments
