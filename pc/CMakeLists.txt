@@ -180,9 +180,10 @@ set(ENV{AFE_DECOMP_ROOT} "${DECOMP_ROOT}")
 # =============================================================================
 if(CMAKE_SIZEOF_VOID_P EQUAL 8 AND NOT PC_ALLOW_64BIT)
     message(FATAL_ERROR
-        "The PC port MUST be built as 32-bit (pointer-to-u32 casts in the decomp).\n"
+        "This is a 64-bit compiler. The desktop default is 32-bit:\n"
         "  Windows/MSYS2: Use the MINGW32 shell (not MINGW64)\n"
-        "  Linux: cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/Toolchain-linux32.cmake ..")
+        "  Linux: cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/Toolchain-linux32.cmake ..\n"
+        "Or build 64-bit with -DPC_ALLOW_64BIT=ON (Linux x86_64, Windows MinGW x86_64, Android arm64; docs/64bit.md)")
 endif()
 
 # =============================================================================

@@ -11,6 +11,15 @@ def sdlDir = file(project.findProperty('sdlDir') ?: "${rootDir}/SDL")
 // from the disc at start (PC_STRIP_ASSETS, docs/README.md)
 def stripAssets = project.hasProperty('stripAssets') ? 'ON' : 'OFF'
 def assetDir = file("${buildDir}/generated/afe_assets")
+// Release signing: a keystore.properties (storeFile, storePassword, keyAlias,
+// keyPassword; storeFile relative to that file) at pc/android/release-key/,
+// or the one -PreleaseKeyProps=/path/keystore.properties names. Without one
+// the release APK is signed with the debug key, as before. Never commit it.
+def releaseKeyProps = file(project.findProperty('releaseKeyProps') ?: "${rootDir}/release-key/keystore.properties")
+def releaseKey = new Properties()
+if (releaseKeyProps.exists()) {
+    releaseKeyProps.withInputStream { releaseKey.load(it) }
+}
 
 android {
     namespace 'org.afedecomp.dobutsunomori'
@@ -52,6 +61,17 @@ android {
         }
     }
 
+    signingConfigs {
+        if (releaseKeyProps.exists()) {
+            release {
+                storeFile new File(releaseKeyProps.parentFile, releaseKey['storeFile'])
+                storePassword releaseKey['storePassword']
+                keyAlias releaseKey['keyAlias']
+                keyPassword releaseKey['keyPassword']
+            }
+        }
+    }
+
     buildTypes {
         debug {
             // The decomp is built without optimization (see pc/CMakeLists.txt)
@@ -59,7 +79,7 @@ android {
         }
         release {
             minifyEnabled false
-            signingConfig signingConfigs.debug
+            signingConfig releaseKeyProps.exists() ? signingConfigs.release : signingConfigs.debug
         }
     }
 
