@@ -111,6 +111,55 @@ if(PC_BUILD_TESTS)
     endif()
 endif()
 
+# =============================================================================
+# GameCube saves (.gci): the e+ save data between the PC's byte order and the
+# GameCube's, and the afe_gci tool. Needs the decomp's headers, no game data.
+# =============================================================================
+if(EXISTS "${DECOMP_ROOT}/include/m_common_data.h" AND NOT ANDROID)
+    add_library(pc_save_swap STATIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_save_swap.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_gci.c
+    )
+    # the defines and layout flags the game is built with (below), so the
+    # structures have the game's layout; the tables check it at compile time
+    target_compile_definitions(pc_save_swap PRIVATE
+        TARGET_PC VERSION=${AFE_VERSION_NUM} F3DEX_GBI_2 NDEBUG BUGFIXES _LANGUAGE_C nullptr=NULL)
+    target_include_directories(pc_save_swap PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_include_directories(pc_save_swap PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_include_directories(pc_save_swap SYSTEM PRIVATE ${DECOMP_ROOT}/include ${DECOMP_ROOT}/src ${DECOMP_ROOT})
+    target_compile_options(pc_save_swap PRIVATE -Wall -Wextra -Wno-unused-function "SHELL:-idirafter ${DECOMP_ROOT}/include/dolphin")
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(i.86|x86|X86|AMD64|x86_64)$")
+        target_compile_options(pc_save_swap PRIVATE -malign-double)
+    endif()
+    if(MINGW)
+        target_compile_options(pc_save_swap PRIVATE -mno-ms-bitfields)
+    endif()
+
+    add_executable(afe_gci ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_gci_tool.c)
+    target_link_libraries(afe_gci PRIVATE pc_save_swap)
+    target_compile_options(afe_gci PRIVATE -Wall -Wextra)
+    # next to the game, where save/card_a is
+    set_target_properties(afe_gci PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
+    if(PC_BUILD_TESTS)
+        add_executable(test_save_swap ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_save_swap.c)
+        target_link_libraries(test_save_swap PRIVATE pc_save_swap)
+        target_compile_definitions(test_save_swap PRIVATE
+            TARGET_PC VERSION=${AFE_VERSION_NUM} F3DEX_GBI_2 NDEBUG BUGFIXES _LANGUAGE_C nullptr=NULL)
+        target_include_directories(test_save_swap SYSTEM PRIVATE ${DECOMP_ROOT}/include ${DECOMP_ROOT}/src ${DECOMP_ROOT})
+        target_compile_options(test_save_swap PRIVATE -Wall -Wextra -Wno-unused-function "SHELL:-idirafter ${DECOMP_ROOT}/include/dolphin")
+        if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(i.86|x86|X86|AMD64|x86_64)$")
+            target_compile_options(test_save_swap PRIVATE -malign-double)
+        endif()
+        if(MINGW)
+            target_compile_options(test_save_swap PRIVATE -mno-ms-bitfields)
+        endif()
+        add_test(NAME save_swap COMMAND test_save_swap)
+    endif()
+else()
+    message(STATUS "afe-decomp not found: skipping the GCI save tool")
+endif()
+
 # CI: the tests need no disc (and only the card test needs the decomp)
 if(PC_TESTS_ONLY)
     return()

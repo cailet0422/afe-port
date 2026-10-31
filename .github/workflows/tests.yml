@@ -16,7 +16,8 @@ jobs:
         submodules: true # the decomp, for the SDK types the card test uses
 
     - name: Install
-      run: sudo apt-get update && sudo apt-get install -y ninja-build
+      # gcc-multilib and pyelftools: the save swap table check below
+      run: sudo apt-get update && sudo apt-get install -y ninja-build gcc-multilib python3-pyelftools
 
     - name: Build
       run: |
@@ -28,3 +29,8 @@ jobs:
 
     - name: Tools
       run: python3 -m py_compile pc/tools/*.py
+
+    # The GCI conversion's field table is generated from the e+ headers; it must
+    # match them (pc/tools/gen_save_swap.py writes it again if not)
+    - name: Save swap table
+      run: python3 pc/tools/gen_save_swap.py --check
