@@ -106,6 +106,7 @@ cmake -S pc -B pc/build32clang -G Ninja -DCMAKE_TOOLCHAIN_FILE=/tmp/Toolchain-cl
 | 장치 없음(`make_device_script.py all`·`station`: 사진 메뉴 SD, 우체국 카드e 단말, 에이블 GBA, 역 외출) | 51·25장 같음, 세이브 같음 |
 | 부팅 징글(`--audio-dump`) | 32비트와 같은 소리(아래) |
 | 패미컴 소리(`make_famicom_script.py --game 0·1·2·13` + `--audio-dump`, 쿠루쿠루랜드·벌룬 파이트·동키콩·익사이트바이크) | 4개 모두 WAV가 샘플 단위로 같음 |
+| 패미컴 최고 점수(`--game 4`, 핀볼 6000프레임 플레이) | 31장 같음, 최고 점수(016860)가 든 패미컴 세이브까지 같음 |
 | GLES 64비트(`-DPC_GLES=ON`, Mesa GLES 3.2) | 건물 안 71장·타이틀 데모 38장이 데스크톱 GL 64비트와 같음 |
 
 gcc 32비트 빌드도 위 경로를 모두 크래시 없이 돈다(마을이 달라 화면은 비교하지 않음). 64비트 크래시 없음.
