@@ -5,7 +5,7 @@
  * init/frame/render/cleanup API for the game's famicom.cpp integration.
  *
  * Produces a 256x240 RGB565 framebuffer uploaded as a GL texture.
- * Audio samples are pushed to the game's audio system via AIInitDMA. */
+ * Its sound replaces the game's mix callback while it runs (fixnes_sound_start). */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -83,8 +83,6 @@ extern bool ppuMapper5;
 /* Input state — written by set_input, read by fixNES input.c */
 extern uint8_t inValReads[8];
 
-/* Audio output to game engine */
-extern void AIInitDMA(uintptr_t addr, uint32_t size);
 
 /* ======================================================================
  * GL rendering state
@@ -163,46 +161,135 @@ static void fixnes_init_gl(void) {
 }
 
 /* ======================================================================
- * Audio buffer capture — convert fixNES APU output to stereo s16 for
- * the game's audio system
+ * Sound: like the original's EmuSound (jaudio_NES emusound_hvc), the NES
+ * replaces the game's mix callback (the N64-style music) while it runs. The
+ * emulator makes a frame of APU output per game frame on the game thread; the
+ * sound thread takes it at the output rate through a ring.
  * ====================================================================== */
-#define FIXNES_AUDIO_BUF_SIZE 2048
-static int16_t fixnes_audio_buf[FIXNES_AUDIO_BUF_SIZE * 2]; /* stereo */
-static int fixnes_audio_pos = 0;
+#define FIXNES_OUTPUT_RATE 32000 /* pc_audio.c */
+#define FIXNES_RING 8192 /* stereo frames, a power of two */
+#define FIXNES_RING_PRIME 1120 /* frames ahead before playing (2 sound frames of 560) */
+#define FIXNES_RING_KEEP 2240 /* most frames kept ahead */
+#define FIXNES_MIX_MAX 2048
+
+typedef int16_t* (*FixnesMixCallback)(int32_t n_samples);
+extern FixnesMixCallback Jac_GetMixcallback(uint8_t* mixmode);
+extern void Jac_RegisterMixcallback(FixnesMixCallback mixcallback, uint8_t mixmode);
+extern int OSDisableInterrupts(void);
+extern int OSRestoreInterrupts(int level);
+#define FIXNES_MIXMODE_INTERLEAVE 3 /* MixMode_Interleave */
+
+static int16_t fixnes_ring[FIXNES_RING * 2];
+static SDL_atomic_t fixnes_ring_write; /* game thread */
+static SDL_atomic_t fixnes_ring_read;  /* sound thread */
+static uint32_t fixnes_resample_pos; /* 16.16 position in the APU's samples */
+static int16_t fixnes_last[2]; /* the APU sample before this frame's */
+static int fixnes_primed = 0; /* sound thread */
+static int16_t fixnes_held[2]; /* the last sample played */
+static int fixnes_mix_registered = 0;
+static FixnesMixCallback fixnes_old_mixcall = NULL;
+static uint8_t fixnes_old_mixmode = 0;
 
 static void fixnes_capture_audio(void) {
     uint32_t buf_size = apuGetBufSize();
-    if (buf_size == 0) return;
+    int16_t* src = (int16_t*)apuGetBuf();
+    uint32_t n = buf_size / (2 * sizeof(int16_t)); /* stereo frames */
+    /* a NES frame (60.1 Hz) becomes a 60th of a second, as the game paces it */
+    uint32_t step = (uint32_t)((((uint64_t)n << 16) * 60) / FIXNES_OUTPUT_RATE);
+    uint32_t wp, rp;
 
-    uint8_t *raw = apuGetBuf();
-    if (!raw) return;
+    if (src == NULL || n == 0) return;
+    wp = (uint32_t)SDL_AtomicGet(&fixnes_ring_write);
+    rp = (uint32_t)SDL_AtomicGet(&fixnes_ring_read);
+    /* linear interpolation from the APU rate (about 224 kHz) to the output
+     * rate; position 0 is the last sample of the previous frame */
+    while ((fixnes_resample_pos >> 16) < n) {
+        uint32_t i = fixnes_resample_pos >> 16;
+        int32_t frac = (int32_t)(fixnes_resample_pos & 0xFFFF);
+        const int16_t* a = i == 0 ? fixnes_last : &src[(i - 1) * 2];
+        const int16_t* b = &src[i * 2];
 
-    /* fixNES APU outputs stereo int16_t samples (L,R interleaved).
-     * curBufPos advances by 2 per sample, so buf_size = curBufPos * 2 bytes.
-     * Total stereo frames = buf_size / (2 * sizeof(int16_t)). */
-    int16_t *src = (int16_t *)raw;
-    int num_frames = buf_size / (2 * sizeof(int16_t)); /* stereo frames */
-
-    /* Downsample from fixNES APU frequency to game's 32kHz audio output */
-    #define FIXNES_OUTPUT_RATE 32000
-    int target_frames = FIXNES_OUTPUT_RATE / 60;
-    if (target_frames > FIXNES_AUDIO_BUF_SIZE)
-        target_frames = FIXNES_AUDIO_BUF_SIZE;
-
-    fixnes_audio_pos = 0;
-    if (num_frames > 0) {
-        for (int i = 0; i < target_frames; i++) {
-            int src_frame = (int)((int64_t)i * num_frames / target_frames);
-            if (src_frame >= num_frames) src_frame = num_frames - 1;
-            fixnes_audio_buf[fixnes_audio_pos * 2 + 0] = src[src_frame * 2 + 0]; /* L */
-            fixnes_audio_buf[fixnes_audio_pos * 2 + 1] = src[src_frame * 2 + 1]; /* R */
-            fixnes_audio_pos++;
+        if (wp - rp < FIXNES_RING) {
+            for (int c = 0; c < 2; c++) {
+                fixnes_ring[(wp & (FIXNES_RING - 1)) * 2 + c] =
+                    (int16_t)(a[c] + (((b[c] - a[c]) * (frac >> 1)) >> 15));
+            }
+            wp++;
         }
+        fixnes_resample_pos += step;
     }
+    fixnes_resample_pos -= n << 16;
+    fixnes_last[0] = src[(n - 1) * 2];
+    fixnes_last[1] = src[(n - 1) * 2 + 1];
+    SDL_MemoryBarrierRelease();
+    SDL_AtomicSet(&fixnes_ring_write, (int)wp);
+}
 
-    if (fixnes_audio_pos > 0) {
-        AIInitDMA((uintptr_t)fixnes_audio_buf, fixnes_audio_pos * 4);
+/* the sound thread's mix callback (Jac_VframeWork): n stereo frames */
+static int16_t* fixnes_mix_callback(int32_t n) {
+    static int16_t out[FIXNES_MIX_MAX * 2];
+    uint32_t wp = (uint32_t)SDL_AtomicGet(&fixnes_ring_write);
+    uint32_t rp, avail;
+    int32_t i;
+
+    SDL_MemoryBarrierAcquire();
+    rp = (uint32_t)SDL_AtomicGet(&fixnes_ring_read);
+    if (n > FIXNES_MIX_MAX) n = FIXNES_MIX_MAX;
+    avail = wp - rp;
+    if (avail > FIXNES_RING_KEEP + (uint32_t)n) { /* fell behind: drop the oldest */
+        rp = wp - FIXNES_RING_KEEP - (uint32_t)n;
+        avail = FIXNES_RING_KEEP + (uint32_t)n;
     }
+    /* The game makes a 60th of a second per frame and the sound thread takes
+     * 560 frames at a time: keep some ahead so the two never meet */
+    if (!fixnes_primed && avail < FIXNES_RING_PRIME) {
+        avail = 0;
+    } else {
+        fixnes_primed = 1;
+    }
+    for (i = 0; i < n && (uint32_t)i < avail; i++, rp++) {
+        fixnes_held[0] = fixnes_ring[(rp & (FIXNES_RING - 1)) * 2 + 0];
+        fixnes_held[1] = fixnes_ring[(rp & (FIXNES_RING - 1)) * 2 + 1];
+        out[i * 2 + 0] = fixnes_held[0];
+        out[i * 2 + 1] = fixnes_held[1];
+    }
+    if (i < n) {
+        fixnes_primed = 0; /* ran dry: wait for some again */
+    }
+    for (; i < n; i++) {
+        out[i * 2 + 0] = fixnes_held[0];
+        out[i * 2 + 1] = fixnes_held[1];
+    }
+    SDL_AtomicSet(&fixnes_ring_read, (int)rp);
+    return out;
+}
+
+static void fixnes_sound_start(void) {
+    int level;
+
+    SDL_AtomicSet(&fixnes_ring_write, 0);
+    SDL_AtomicSet(&fixnes_ring_read, 0);
+    fixnes_resample_pos = 0;
+    fixnes_last[0] = fixnes_last[1] = 0;
+    fixnes_primed = 0;
+    fixnes_held[0] = fixnes_held[1] = 0;
+    level = OSDisableInterrupts(); /* the sound thread reads the pair per frame */
+    if (!fixnes_mix_registered) {
+        fixnes_old_mixcall = Jac_GetMixcallback(&fixnes_old_mixmode);
+        fixnes_mix_registered = 1;
+    }
+    Jac_RegisterMixcallback(fixnes_mix_callback, FIXNES_MIXMODE_INTERLEAVE);
+    OSRestoreInterrupts(level);
+}
+
+static void fixnes_sound_exit(void) {
+    int level;
+
+    if (!fixnes_mix_registered) return;
+    level = OSDisableInterrupts();
+    Jac_RegisterMixcallback(fixnes_old_mixcall, fixnes_old_mixmode);
+    fixnes_mix_registered = 0;
+    OSRestoreInterrupts(level);
 }
 
 /* ======================================================================
@@ -307,7 +394,7 @@ void pc_fixnes_init(uint8_t *ines_data, int ines_size) {
     fixnes_initialized = 1;
 
     memset(textureImage, 0, sizeof(textureImage));
-    fixnes_audio_pos = 0;
+    fixnes_sound_start();
 }
 
 void pc_fixnes_write_wram(unsigned int ofs, const uint8_t *data, unsigned int size) {
@@ -356,6 +443,9 @@ uint16_t *pc_fixnes_frame(void) {
 }
 
 void pc_fixnes_cleanup(void) {
+    /* The game's music again */
+    fixnes_sound_exit();
+
     /* Free APU output buffers */
     apuDeinitBufs();
 
