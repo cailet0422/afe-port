@@ -19,6 +19,7 @@
  *                                     prefix (ALARMIN, TIMEIN, HBOARD, PASSWORDMAKE, NOTICE,
  *                                     WARNING, FILM ...) or number, with its two arguments
  *     <frame> VOICELOG [0|1]          print the talking voice chosen for each character
+ *     <frame> BGM <id>                debug: start a piece of music (hex, audio_defs.h)
  *     <frame> TYPE <keys>             type into the text editor (pc_input_script.c)
  *     <frame> EDIT [<utf8>]           system input method: text being composed
  *     <frame> TEXT <utf8>             system input method: committed text

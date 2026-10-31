@@ -22,6 +22,80 @@
  * ~4 audio frames ahead = ~70ms of buffer at 32kHz stereo. */
 #define AUDIO_PRODUCE_THRESHOLD 4480
 
+/* --audio-dump: everything the sound system outputs, as a WAV file (testing) */
+static FILE* audio_dump_file = NULL;
+static u32 audio_dump_bytes = 0;
+static u32 audio_dump_header_at = 0;
+
+static void audio_dump_put32(u8* p, u32 v) {
+    p[0] = (u8)v;
+    p[1] = (u8)(v >> 8);
+    p[2] = (u8)(v >> 16);
+    p[3] = (u8)(v >> 24);
+}
+
+/* the RIFF header, with the sizes written so far: the file stays readable if
+ * the game never gets to pc_audio_shutdown */
+static void audio_dump_header(void) {
+    u8 h[44];
+
+    memcpy(h, "RIFF", 4);
+    audio_dump_put32(h + 4, 36 + audio_dump_bytes);
+    memcpy(h + 8, "WAVEfmt ", 8);
+    audio_dump_put32(h + 16, 16);
+    h[20] = 1; h[21] = 0; /* PCM */
+    h[22] = 2; h[23] = 0; /* stereo */
+    audio_dump_put32(h + 24, PC_AUDIO_SAMPLE_RATE);
+    audio_dump_put32(h + 28, PC_AUDIO_SAMPLE_RATE * 4);
+    h[32] = 4; h[33] = 0; /* bytes per frame */
+    h[34] = 16; h[35] = 0;
+    memcpy(h + 36, "data", 4);
+    audio_dump_put32(h + 40, audio_dump_bytes);
+    fseek(audio_dump_file, 0, SEEK_SET);
+    fwrite(h, 1, sizeof(h), audio_dump_file);
+    fseek(audio_dump_file, 0, SEEK_END);
+    fflush(audio_dump_file);
+    audio_dump_header_at = audio_dump_bytes;
+}
+
+int pc_audio_dump_open(const char* path) {
+    audio_dump_file = fopen(path, "wb");
+    if (audio_dump_file == NULL) {
+        fprintf(stderr, "[AUDIO] cannot write %s\n", path);
+        return 0;
+    }
+    audio_dump_bytes = 0;
+    audio_dump_header();
+    return 1;
+}
+
+/* samples as the game made them (before the volume setting), little-endian */
+static void audio_dump_write(const s16* src, u32 n_samples) {
+    u8 buf[2048];
+    u32 i = 0;
+
+    while (i < n_samples) {
+        u32 n = 0;
+
+        for (; i < n_samples && n < sizeof(buf); i++, n += 2) {
+            buf[n] = (u8)src[i];
+            buf[n + 1] = (u8)((u16)src[i] >> 8);
+        }
+        fwrite(buf, 1, n, audio_dump_file);
+        audio_dump_bytes += n;
+    }
+    if (audio_dump_bytes - audio_dump_header_at >= PC_AUDIO_SAMPLE_RATE * 4) {
+        audio_dump_header(); /* once a second */
+    }
+}
+
+static void audio_dump_close(void) {
+    if (audio_dump_file == NULL) return;
+    audio_dump_header();
+    fclose(audio_dump_file);
+    audio_dump_file = NULL;
+}
+
 static s16 ring_buffer[RING_BUF_SAMPLES];
 static SDL_atomic_t ring_write_pos; /* written by audio producer thread */
 static SDL_atomic_t ring_read_pos;  /* written by SDL audio callback */
@@ -70,6 +144,17 @@ void pc_audio_frame(void) {
         pc_audio_process_frame();
         if (audio_produced == before) break;
     }
+}
+
+/* msleep: with --deterministic, the sound of that much time instead of a wait */
+int pc_audio_sleep(u32 ms) {
+    u32 frames = ms * 60 / 1000;
+
+    if (!audio_frame_driven) return 0;
+    while (frames-- > 0) {
+        pc_audio_frame();
+    }
+    return 1;
 }
 
 void pc_audio_start_producer_thread(void) {
@@ -153,6 +238,9 @@ void AIInitDMA(uintptr_t addr, u32 size) {
     u32 n_samples = size / sizeof(s16);
     n_samples &= ~1u; /* whole stereo frames */
     audio_produced += n_samples;
+    if (audio_dump_file != NULL) {
+        audio_dump_write(src, n_samples);
+    }
 
     u32 wp = (u32)SDL_AtomicGet(&ring_write_pos);
     u32 rp = (u32)SDL_AtomicGet(&ring_read_pos);
@@ -246,4 +334,5 @@ void pc_audio_shutdown(void) {
         SDL_CloseAudioDevice(audio_device);
         audio_device = 0;
     }
+    audio_dump_close();
 }

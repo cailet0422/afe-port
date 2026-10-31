@@ -87,6 +87,14 @@ if(PC_BUILD_TESTS)
     target_compile_options(test_ko_patch PRIVATE -Wall -Wextra)
     add_test(NAME ko_patch COMMAND test_ko_patch)
 
+    add_executable(test_dsp_voice
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/audio/dsp_voice.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_dsp_voice.c
+    )
+    target_include_directories(test_dsp_voice PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_compile_options(test_dsp_voice PRIVATE -Wall -Wextra)
+    add_test(NAME dsp_voice COMMAND test_dsp_voice)
+
     # The memory card layer uses the SDK's card types from the decomp
     if(EXISTS "${DECOMP_ROOT}/include/dolphin/card.h")
         add_executable(test_pc_card
@@ -365,6 +373,9 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_card.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_vi.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_audio.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_dsp.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_jaudio_bswap.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/audio/dsp_voice.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_aram.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_misc.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_mtx.c

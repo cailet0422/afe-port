@@ -75,6 +75,22 @@ cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
 - 보통 속도 확인: `--no-framelimit` 없이(필요하면 `--script-fast`만) 돌리면 소리가 별도 스레드에서 돈다.
   `--deterministic`이 아니면 마을이 매번 달라 `--save` 경로가 저장까지 가지 못할 수 있지만 끝까지 크래시·멈춤
   없이 도는지 보는 데 쓴다(llvmpipe에서 모든 프레임을 그리면 30fps 안팎이라 시간이 두 배쯤 걸린다).
+- 소리 확인: `--audio-dump 파일.wav`를 더하면 소리 출력(32kHz 스테레오 16비트, 볼륨 설정을 적용하기 전)을 WAV로
+  남긴다. `SDL_AUDIODRIVER=dummy`에서도 된다. `--deterministic`이면 소리를 프레임마다 1/60초씩 만들므로 같은 스크립트가
+  샘플 하나까지 같은 WAV를 낸다(프레임 F는 대략 샘플 F×32000/60). `python3 pc/tools/audio_stats.py 파일.wav
+  --seg 이름:F1-F2 ... --gaps 200`이 구간(프레임)마다 길이·음량(RMS/피크 dBFS)·무음 비율·가장 긴 무음·튐·클리핑·
+  DC·좌우 상관·가장 센 주파수를 보여 주고, `--gaps`는 소리 사이의 끊김, `--every 초`는 시간별 음량,
+  `--compare 다른.wav`는 두 덤프가 같은지 본다.
+- 소리 확인에서 본 것(한글 디스크, `--deterministic`): 오디오 덤프의 첫 0.7초가 부팅 징글(JAudio, `pc_dsp.c`),
+  오프닝 음악의 피크는 A440 평균율 기준 평균 약 −1센트. 첫날 세이브(아르바이트 중)의 마을 음악은 시간과 무관한
+  `BGM_INTRO_FIND_SHOP`이 원래 동작이라, 시간대 음악은 `BGM <id>`(입력 스크립트 디버그 명령, `audio_defs.h`의 번호:
+  01–18이 0–23시)로 틀어 본다. 보통 속도에서도 `--audio-dump`가 실제 시간 길이로 생기고 `audio_stats.py --gaps`로
+  끊김을 본다.
+- 패미컴: `python3 pc/tools/make_famicom_script.py > /tmp/fc.txt`(옵션 `--game N`: 1DE8+4N의 패미컴 가구,
+  `--play F`)를 `--save` 세이브로 돌리면 가구를 받아 집에 들어가 놓고(소지품 → 배치하기), 마주 보고 A → "놀자!" →
+  종료 방법 안내 → 쿠루쿠루랜드 타이틀에서 START → 플레이 → L+R+Z → 방, 단계마다 `shots/fc_번호_단계.ppm`(약 1분).
+  NES 소리는 대략 5400프레임부터 종료까지(`audio_stats.py --seg nes:5600-6700`). 가구는 플레이어 앞 칸(위·오른쪽)에
+  놓이므로 반 칸 오른쪽으로 비켜 아래에서 마주 본다(맞닿고 정면이 아니면 A가 밀기·당기기가 된다).
 - 저장·불러오기 확인: `make_newgame_script.py --korean --save`가 옆집 주민(밀크)에게 인사하고 하니와에서
   저장한다(첫날 하니와는 주민을 한 명도 만나지 않았으면 저장을 거절한다). `save/card_a/DobutsunomoriE_MURA`가
   생기면 `make_opening_script.py 5200`으로 다시 실행해 이어하기 — 밀크가 맞이하고 집 앞에서 시작한다.

@@ -39,7 +39,9 @@ void EXIInit(void) {}
 BOOL EXIAttach(s32 chan, void* extCallback) { (void)chan; (void)extCallback; return TRUE; }
 BOOL EXIDetach(s32 chan) { (void)chan; return TRUE; }
 BOOL EXIProbe(s32 chan) { (void)chan; return FALSE; }
-BOOL EXIProbeEx(s32 chan) { (void)chan; return FALSE; }
+/* -1: nothing in the slot (0 would mean "still probing", and the SD card
+ * check behind the Z button waits for anything else) */
+s32  EXIProbeEx(s32 chan) { (void)chan; return -1; }
 s32  EXIGetID(s32 chan, u32 dev, u32* id) { if (id) *id = 0; return 0; }
 void EXISetExiCallback(s32 chan, void* cb) { (void)chan; (void)cb; }
 
