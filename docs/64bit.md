@@ -107,7 +107,7 @@ cmake -S pc -B pc/build32clang -G Ninja -DCMAKE_TOOLCHAIN_FILE=/tmp/Toolchain-cl
 | 부팅 징글(`--audio-dump`) | 32비트와 같은 소리(아래) |
 | 패미컴 소리(`make_famicom_script.py --game 0·1·2·13` + `--audio-dump`, 쿠루쿠루랜드·벌룬 파이트·동키콩·익사이트바이크) | 4개 모두 WAV가 샘플 단위로 같음 |
 | 패미컴 최고 점수(`--game 4`, 핀볼 6000프레임 플레이) | 31장 같음, 최고 점수(016860)가 든 패미컴 세이브까지 같음 |
-| 한 번에 일주일(`make_days_script.py week`: `CLOCK`으로 자정 다섯 번, 저장·이어하기, 답장, K.K.) | 98장 같음, 세이브 같음 |
+| 한 번에 일주일(`make_days_script.py week`: `CLOCK`으로 자정 다섯 번, 저장·이어하기, 답장, K.K.) | 99장 같음, 세이브 같음 |
 | 이벤트(`broker`·`harvest`·`countdown`: 브로커 텐트, 추수감사절 프랭클, 새해 카운트다운) | 7·10·17장 같음, 세이브 같음 |
 | `static` 팔레트(리셋 센터 `FG 2140,1540 008D`, 분홍일기장) | 17·4장 같음 |
 | GLES 64비트(`-DPC_GLES=ON`, Mesa GLES 3.2) | 건물 안 71장·타이틀 데모 38장이 데스크톱 GL 64비트와 같음 |
