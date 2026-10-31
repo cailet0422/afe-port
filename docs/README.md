@@ -303,8 +303,16 @@ ninja -C pc/build32strip
 
 - 정적(static)으로 선언된 데이터 3개(`int_iid_diary`, `int_ike_molcenter_locker`, `int_ike_molcenter_wall`)는
   부팅 시 바이트 순서 보정을 못 하고 있음(빌드할 때 `gen_data_fixups.py`가 경고).
-- 세이브는 PC의 바이트 순서 그대로 `save/card_a/`에 파일로 저장된다. 게임큐브 메모리 카드에서 꺼낸 세이브(GCI)와는
-  호환되지 않는다(`pc_m_card.c`·`pc_save_bswap.c`는 ACGC에서 온 변환 코드로, 아직 빌드에 들어가지 않음).
+- 세이브는 PC의 바이트 순서(리틀엔디언) 그대로 `save/card_a/`에 파일로 저장된다. 게임큐브 메모리 카드에서 꺼낸
+  세이브(GCI)는 `afe_gci` 도구로 가져오고 내보낸다(마을 `DobutsunomoriE_MURA`, 패미컴 공통 세이브
+  `DobutsunomoriE_F_SAVE`; 사용법은 [dev_setup.md](dev_setup.md)). 필드 표는 e+ 헤더에서 생성하고
+  (`pc/tools/gen_save_swap.py`), 체크섬은 바꾼 바이트 순서로 다시 계산한다. 확인한 것: 합성 데이터의 왕복·필드별
+  값·체크섬(`pc/tests/test_save_swap.c`), 실제 마을 GCI 하나(저장소에 없음)를 PC 형식으로 바꿔 체크섬이 맞고
+  값(마을 id, 주민, 지갑, 집 크기)이 그럴듯하며, 다시 GCI로 바꾸면 데이터가 원본과 바이트까지 같음(32·64비트 같음).
+  **확인하지 못한 것**: 가져온 마을을 PC 게임에서 실제로 불러와 플레이하는 것, 내보낸 GCI를 게임큐브(또는 Dolphin)에서
+  불러오는 것, 실제 패미컴 세이브 GCI(합성 데이터로만 시험). 패미컴 세이브를 템플릿 없이 내보내면 코멘트만 있고
+  배너·아이콘이 없다(PC는 그 그림을 갖고 있지 않음; `--template`으로 원래 GCI의 그림을 쓸 수 있음). 플레이어
+  파일(`DobutsunomoriE_PL_*`, 외출 중), 편지·디자인 파일 등 다른 파일은 아직 변환하지 않는다.
 - SD 카드, e-Reader, GBA 연동은 "장치 없음"으로 응답(`EXIProbeEx` -1, GBA 호출 실패). 게임은 각자의 "없음" 문구로
   끝난다: 사진 메뉴의 SD 저장(전에는 `EXIProbeEx`가 0, "확인 중"이라 `mCsd_sdcard_slot_chk`가 무한히 돌아 A를 누르면
   멈췄다 — Z 버튼 멈춤과 같은 원인으로 M3에서 함께 고쳐짐), 우체국 카드e 단말(읽기·리더 준비하기), 에이블의 GBA 디자인

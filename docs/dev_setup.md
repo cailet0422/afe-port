@@ -11,8 +11,8 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y gcc-multilib g++-multilib libs
     binutils-powerpc-linux-gnu ninja-build cmake
 ```
 
-단위 테스트(한글 입력기·화면 키보드·문자표·패치 적용기·메모리 카드)는 게임 데이터 없이 돌아간다(CI와 같음, 메모리 카드 테스트만
-`decomp/` 서브모듈의 헤더가 필요):
+단위 테스트(한글 입력기·화면 키보드·문자표·패치 적용기·메모리 카드·GCI 세이브 변환)는 게임 데이터 없이 돌아간다(CI와 같음,
+메모리 카드와 GCI 변환 테스트만 `decomp/` 서브모듈의 헤더가 필요):
 
 ```sh
 cmake -S pc -B pc/build-tests -G Ninja -DPC_TESTS_ONLY=ON && ninja -C pc/build-tests && ctest --test-dir pc/build-tests
@@ -224,3 +224,31 @@ WINEPREFIX=/tmp/wineprefix WINEDEBUG=-all wine DobutsuNoMoriEPlus.exe --no-frame
 `apt-get install -y libgles-dev:i386 libegl-dev:i386` 후 `-DPC_GLES=ON`으로 따로 빌드한다
 (`pc/build32gles`). SDL이 ES 3.0 컨텍스트를 만들고, 셰이더의 `#version 330 core`는 `pc_gl.h`가
 `#version 300 es`로 바꾼다. 로그에 `OpenGL OpenGL ES 3.x Mesa`가 나오면 된다.
+
+## 8. 게임큐브 세이브(GCI) 가져오기·내보내기
+
+게임큐브 메모리 카드의 세이브(Dolphin 등에서 꺼낸 `.gci`)를 PC 포트의 `save/card_a/`로 가져오고, 반대로 내보낸다.
+대상은 마을(`DobutsunomoriE_MURA`, 데이터 0x72000바이트)과 패미컴 공통 세이브(`DobutsunomoriE_F_SAVE` →
+PC의 `DobutsunomoriP_F_SAVE.sav`). 도구 `afe_gci`는 게임과 함께 `bin/`에 빌드된다(`PC_TESTS_ONLY` 빌드에도 있음).
+`bin/`에서 실행하면 기본 폴더가 게임과 같은 `save/card_a`다.
+
+```sh
+cd pc/build32/bin
+./afe_gci info  ~/01-GAEJ-DobutsunomoriE_MURA.gci        # 어떤 파일인지, 체크섬이 맞는지
+./afe_gci import ~/01-GAEJ-DobutsunomoriE_MURA.gci       # → save/card_a/DobutsunomoriE_MURA
+./afe_gci import ~/F_SAVE.gci --force                     # 있던 파일은 .bak으로 남기고 바꿈
+./afe_gci export land -o ~/mura.gci                       # save/card_a의 마을 → GCI
+./afe_gci export famicom -o ~/fsave.gci [--template 원래의_F_SAVE.gci]
+```
+
+- `--card DIR`로 다른 폴더(예: `save/card_b`)를 쓴다. 게임을 끈 상태에서 바꾼다.
+- 게임 코드 GAEJ01(일본판 e+)의 파일만 받는다. 마을 세이브는 본·백업 두 벌 중 하나라도 체크섬이 맞아야 가져온다;
+  체크섬이 틀린 쪽은 틀린 채로 옮긴다(게임이 원래처럼 다른 벌을 쓰거나 고장 난 마을로 본다).
+- 변환: 필드 표 `pc/src/pc_save_swap_table.inc`는 `pc/tools/gen_save_swap.py`가 e+ 헤더를 32·64비트로
+  컴파일한 DWARF에서 만든다(`gcc-multilib`와 `pip install pyelftools` 필요; CI는 `--check`로 헤더와 맞는지
+  본다). 헤더가 바뀌면 다시 실행한다. 어느 멤버를 쓰는지 정할 수 없는 공용체가 나오면 멈추므로, 게임 코드에서
+  쓰임을 확인해 스크립트의 `UNION_POLICY`(또는 태그로 고르는 경우 `pc_save_swap.c`의 처리기)에 적는다.
+- 체크섬: 마을 데이터(0x2E000)와 일기(0xD1C0)는 u16 단어의 합이 0이 되게 한다(`m_flashrom.c`). 게임큐브는
+  빅엔디언 단어로 더하므로 변환한 뒤 다시 계산한다. 패미컴 세이브는 바이트 합이라 순서와 무관하다.
+- 확인하지 못한 것: 가져온 마을을 PC 게임에서 불러오는 것, 내보낸 GCI를 게임큐브·Dolphin에서 불러오는 것,
+  실제 패미컴 세이브 GCI. 확인할 때는 가져온 마을로 `make_opening_script.py 5200`처럼 이어하기를 해 본다.
