@@ -112,10 +112,22 @@ cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
     하니와 알람 메시지(한글을 넣어 폭으로 줄이 나뉘는지), 알림판(날짜 "2026/11/01")을 차례로 연다.
   - `warning`: 소지품 메뉴 경고 24종(`MENU WARNING n`)을 차례로 띄운다(패치가 옮긴 긴 문구).
   - `boards`: 알림판과 일기(달력 → 오늘 → 일기 쓰기)에 한글을 써서 올리고, 비밀번호 확인 화면("암호 입력")과 사진 메뉴
-    ("사진을, SD카드에 저장?")를 연다. 사진 메뉴에서 A를 누르면 SD 저장을 시도하다 멈추므로(PC에 SD 없음) B로 닫는다.
+    ("사진을, SD카드에 저장?")를 연다(B로 닫는다; A로 저장을 시도하는 것은 아래 `make_device_script.py film`).
   - `voice`: `VOICELOG 1`을 켜고 밀크에게 말을 건다. 로그의 `[VOICE] msg 055C 1BDC U+C557 voice 1`은 메시지 번호, 바이트,
     글자, 고른 말소리 번호(가나 말소리 표의 번호, 둘째 바이트는 나오지 않음).
   - 시나리오마다 `--save`로 만든 세이브를 새로 복사해 쓴다(`letter`·`ephrase`는 저장하므로 `*-check`는 그 뒤에).
+- 없는 장치 확인(한글패치 디스크, `--save`로 만든 세이브, `--days 1`):
+  `python3 pc/tools/make_device_script.py 시나리오 > /tmp/d.txt` 후 건물 안 확인과 같이 실행(각 1분 안팎,
+  스크린샷 `shots/d_시나리오_번호_단계.ppm`). 어느 것도 멈추지 않고 게임의 "없음" 문구로 끝나야 한다.
+  - `film`: 사진 메뉴(`MENU FILM`)에서 SD 저장 → "SD카드 없음." → 어댑터 안내 → 다시 저장? → 한 번 더 → "사진을 저장할 수
+    없었어요.".
+  - `terminal`, `terminal-send`: 우체국 카드e 단말(60,220; x>90, 43 안에서 서쪽을 보고 A)에서 "카드e로 읽기"·"리더
+    준비하기" → "게임보이 어드밴스가 제대로 연결되지 않았습니다.". 메시지 속도 때문에 한 번 대화한 뒤 같은 자리에서 다시
+    고르는 것은 타이밍이 흔들려 시나리오를 나눴다.
+  - `tailors`: 고순이에게 "어드밴스 얘기" → GBA에 디자인 도구 기록 → "제대로 연결이 안 된 것 같아예.".
+  - `station`: `NOJOB`을 마을을 불러오기 전에(역무원은 생길 때 아르바이트 여부를 본다) 하고 역무원에게 "외출할 거야" →
+    SD 확인 → 슬롯 B 메모리 카드에 플레이어, 슬롯 A에 마을 기록 → 기차 → 타이틀. 세이브가 바뀐다(`save/card_b/`).
+  - `all`: `film`, `terminal`, `tailors`.
 - 건물 안 확인(한글패치 디스크, `--save`로 만든 세이브에서 시작, 다음 날로 돌린다):
   `python3 pc/tools/make_interior_script.py 건물 > /tmp/i.txt` 후
   `./DobutsuNoMoriEPlus --no-framelimit --script-fast --deterministic --days 1 --verbose --input-script /tmp/i.txt`

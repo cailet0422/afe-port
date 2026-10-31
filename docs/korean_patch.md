@@ -143,7 +143,11 @@ PC 포트는 자체 번역을 만드는 대신, 사용자가 직접 적용한 �
 - 경고(`wr_*_line`, 소지품 메뉴) 24종·사진 메뉴(`fl_strb_*`, `fl_selb_*`): 줄 표의 문자열 포인터를 s7로 돌리고 길이를 바꿈
   (예: "편지를 더 못 가져!" 12→18). 줄 표는 포인터가 있어 데이터 오버레이에서 빠지므로, PC는 메뉴를 열 때 디스크
   `.data`의 표(`wr_win_data`, `fl_strb_str_data`, `fl_selb_str_data`)에서 각 줄의 포인터와 길이를 읽어 PC 표를 고친다
-  (`pc_ko_data_target`, `pc_ko_redirect_strings`).
+  (`pc_ko_data_target`, `pc_ko_redirect_strings`). 사진 메뉴의 SD 실패 문구는 실제 화면으로 확인했다
+  (`make_device_script.py film`): "사진을, SD카드에 저장?" → 네 → "SD카드에 기록중 / 잠시만요" → "SD카드 없음." →
+  "SD카드가 들어 있는지, SD카드 어댑터 / 슬롯B에 연결하세요. / 준비되면 A버튼 누르세요" → "다시 이 사진을 SD카드에
+  저장?", 닫으면 "사진을 저장할 수 없었어요.". 우체국 카드e 단말("게임보이 어드밴스가 제대로 연결되지 않았습니다."),
+  고순이의 어드밴스 얘기("게임보이 어드밴스가 제대로 연결이 안 된 것 같아예.")도 한국어로 끝까지 나온다.
 - RTC 연도 상한: 패치는 `sChk_*`, `mTM_rtcTime_limit_check`, `lbRTC_GetNukegaraTime`, `lbRk_*`, `mTI_*`의 2030–2032를
   2099–2100으로, 음력 표(`l_lbRk_ConvertTable`, `l_lbRk_leapdays`)를 s7의 2100년까지 늘린 표로 바꾼다. PC는 이미
   `TARGET_PC`에서 모든 모드에 2100까지 늘려 두었다(`GAME_YEAR_MAX`, `mTM_MAX_YEAR`, `mTI_MAX_YEAR`, 자체 음력 표).
