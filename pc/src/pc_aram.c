@@ -41,11 +41,22 @@ void ARFree(u32* addr) {
 void ARStartDMA(u32 type, uintptr_t mram_addr, u32 aram_addr, u32 length) {
     if (!aram_base) return;
 
-    /* some code passes (aram_base + offset) instead of just the offset */
-    u32 base = (u32)(uintptr_t)aram_base;
-    if (aram_addr >= base && aram_addr < base + PC_ARAM_SIZE) {
-        aram_addr -= base;
+    /* ARAM addresses are offsets (ARGetBaseAddress is 0). The imported port
+     * also took (aram_base + offset) here; no caller passes that (checked
+     * with a breakpoint through a week of play, 32- and 64-bit). On 64-bit
+     * the guess compared offsets with the buffer's address cut to 32 bits,
+     * which ASLR sometimes makes small (0x0023c010): every offset above it
+     * was then moved, the audio banks read garbage, and the game crashed in
+     * Nas_BankOfsToAddr64 or hung at start (about 1 run in 70). Only a
+     * 32-bit buffer above the offsets' range is still recognized. */
+#if UINTPTR_MAX <= 0xFFFFFFFFu
+    {
+        u32 base = (u32)(uintptr_t)aram_base;
+        if (base >= PC_ARAM_SIZE && aram_addr >= base && aram_addr - base < PC_ARAM_SIZE) {
+            aram_addr -= base;
+        }
     }
+#endif
 
     if (length > PC_ARAM_SIZE || aram_addr > PC_ARAM_SIZE - length) {
         /* OOB read: zero-fill dest so caller doesn't get garbage (cap 1MB) */
