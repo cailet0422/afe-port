@@ -439,6 +439,12 @@ void OSInit(void) {
     }
 }
 
+void pc_os_advance_clock(long long seconds) {
+    if (seconds > 0) {
+        gc_epoch_offset_ticks += (s64)seconds * (s64)GC_TIMER_CLOCK;
+    }
+}
+
 void OSInitAlarm(void) { }
 
 void __osInitialize_common(void) { }

@@ -185,5 +185,8 @@ void pc_boot_fixup_data(void) {
     for (i = 0; i < pc_data_fixup_count; i++) {
         apply_fixup(&pc_data_fixups[i]);
     }
-    OSReport("[PC] swapped %d big-endian data blobs\n", pc_data_fixup_count);
+    for (i = 0; i < pc_static_data_fixup_count; i++) {
+        apply_fixup(pc_static_data_fixups[i]);
+    }
+    OSReport("[PC] swapped %d big-endian data blobs\n", pc_data_fixup_count + pc_static_data_fixup_count);
 }

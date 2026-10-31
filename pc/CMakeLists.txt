@@ -366,7 +366,7 @@ endif()
 set(WINDOW_ICON_C "${CMAKE_BINARY_DIR}/gen/pc_window_icon.c")
 add_custom_command(
     OUTPUT "${WINDOW_ICON_C}"
-    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin2c.py"
+    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin2c.py" --own
             "${CMAKE_CURRENT_SOURCE_DIR}/res/icon64.rgba" "${WINDOW_ICON_C}" pc_window_icon_rgba 4
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/res/icon64.rgba" "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin2c.py"
     COMMENT "Embedding window icon"
@@ -508,6 +508,9 @@ set(DECOMP_WARN_FLAGS "-w;-fpermissive")
 set_source_files_properties(${DECOMP_C_SOURCES} ${DECOMP_CXX_SOURCES}
     PROPERTIES COMPILE_OPTIONS "${DECOMP_WARN_FLAGS}"
 )
+# Static blobs the boot fixups swap: their entries are force-included into
+# their own sources (after the line above, which sets COMPILE_OPTIONS anew)
+include("${MODULE_DATA_DIR}/static_fixups.cmake")
 set(PC_C_SOURCES ${PC_SOURCES})
 list(FILTER PC_C_SOURCES EXCLUDE REGEX "\\.cpp$")
 set(PC_CXX_SOURCES ${PC_SOURCES})

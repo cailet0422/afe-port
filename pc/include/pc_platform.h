@@ -143,6 +143,9 @@ void pc_audio_mq_shutdown(void);
 BOOL OSDisableInterrupts(void);
 BOOL OSRestoreInterrupts(BOOL level);
 void pc_os_interrupts_release(void);
+/* Move the clock (OSGetTime, so the game's RTC) forward by that many seconds:
+ * the input script's CLOCK, to cross into another day without a restart */
+void pc_os_advance_clock(long long seconds);
 
 /* --- Graphics (pc_gx.c): a point of the window (0-1) in the 640x480 screen
  * the game's 2D drawing uses, after widescreen correction --- */

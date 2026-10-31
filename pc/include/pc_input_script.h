@@ -33,6 +33,13 @@
  *     <frame> BELLS <n>               debug: n bells in the wallet
  *     <frame> WARP <x>,<z> [<dir>]    debug: the town again with the player at x,z (as on
  *                                     leaving a building), facing mSc_DIRECT_* (4 north)
+ *     <frame> CLOCK <h>[:<m>[:<s>]]   debug: the clock forward to the next h:m:s (today if
+ *                                     later, else tomorrow); the game goes on into that
+ *                                     time, past midnight into the next day, without a
+ *                                     restart (--days starts a run on another day)
+ *     <frame> FG <x>,<z> <item>       debug: an item (hex id) on the ground in the unit at x,z,
+ *                                     as the game sets one (008D Resetti's hole: walking in
+ *                                     falls into the Reset Center)
  *     <frame> WEATHER <type> [<n>]    debug: today's weather (1 rain, 2 snow ...) and its
  *                                     intensity (0-3), shown from the next scene (WARP)
  *     <frame> MENU <name> [<a0> [<a1>]] debug: open a submenu by its mSM_OVL_ name without the

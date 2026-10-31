@@ -11,6 +11,9 @@ is back in the room. Every step leaves a screenshot fc_<n>_<step>.
   --game N    which of the common Famicom furniture (FTR_FAMICOM_COMMON00 +
               N, item 1DE8 + 4N; 0 is Clu Clu Land, the timings are its)
   --play F    frames of play before quitting (default 900)
+  --keys K,.. what to press in turn while playing (default SR,SD,SL,SU: walk
+              around), --every frames apart (default 100), each held
+              --hold frames (default 40)
 
 With --audio-dump the NES sound replaces the town's music from about frame
 5400 (the title) until the quit; audio_stats.py --seg nes:5600-6700 looks
@@ -29,6 +32,9 @@ FREE = 3000     # the player can move (in front of the house, by the haniwa)
 ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
 ap.add_argument("--game", type=int, default=0)
 ap.add_argument("--play", type=int, default=900)
+ap.add_argument("--keys", default="SR,SD,SL,SU")
+ap.add_argument("--every", type=int, default=100)
+ap.add_argument("--hold", type=int, default=40)
 args = ap.parse_args()
 
 ev = []
@@ -72,11 +78,14 @@ ev += ["5000 START",        # through the explanation
 shot(5500, "title")
 ev.append("5520 START 6")   # the game
 f = 5900
-for i in range(args.play // 100):
-    if f % 300 == 0:
-        shot(f, "play")
-    ev.append(f"{f} {('SR', 'SD', 'SL', 'SU')[i % 4]} 40")
-    f += 100
+keys = args.keys.split(",")
+next_shot = 6000
+for i in range(args.play // args.every):
+    if f >= next_shot:
+        shot(next_shot, "play")
+        next_shot += 300
+    ev.append(f"{f} {keys[i % len(keys)]} {args.hold}")
+    f += args.every
 shot(f, "play")
 quit_at = f + 100
 ev.append(f"{quit_at} L+R+Z 20")

@@ -25,6 +25,31 @@ player go, so a scenario can start on what the game makes of day two.
               the room upstairs, down, the basement (on the island-buy save)
   island [CHOICES]  the next day: to the dock from the north, Kapp'n, the boat
               trip with his song, a walk on the island, and the trip back
+  week        one run through the week, the clock moved on with CLOCK (an
+              input script debug command) instead of a new run per day
+              (--days 1, on the save make_newgame_script.py --save leaves):
+              Monday the letter to Milk; on past midnight into Tuesday, save
+              and quit at the haniwa and continue from the title (her answer
+              is made when the town loads); 16:59, her letter in the
+              mailbox; on through four more midnights to Saturday 20:00,
+              K.K.'s song; save. POS prints the game's date (time ...)
+
+Events, each on the save make_newgame_script.py --save leaves (the job is
+still on there: NOJOB first). Where things stand is that town's: the lot the
+broker's tent goes on, Franklin's block, the pond (POS prints the pool block,
+the visitor's place and today's events with their blocks):
+
+  broker      the broker's sale (--days 26: 11/27; the week's visitor is
+              decided a day or two ahead, POS "special event 75"): CLOCK 18:01,
+              when it opens; the tent goes on a lot out of sight (WARP home
+              first), then in front of it: Redd at the door, into the tent
+  harvest     the harvest festival (--days 25 --time 18:30, 11/26): the
+              announcement at the station on the first scene change, Franklin
+              (D08D) and his talk
+  countdown   New Year's Eve (--days 60 --time 23:45): the announcement, the
+              countdown by the pond (walked into from the north: the event's
+              people are set while the block is out of sight), CLOCK 23:59:40,
+              midnight: HAPPY NEW YEAR, fireworks, a villager's talk
 
 Every step leaves a screenshot n_<scenario>_<n>_<step>; with --verbose the
 POS at each shows where the player is.
@@ -168,7 +193,7 @@ def write_letter(body):
     shot("letter_done", 30)
 
 
-def letter():
+def letter(save=True):
     do("JOBDONE", 20)
     # A villager answers a letter the game rates good (enough words from its
     # Japanese keyword table, m_mail_check_ovl.c) or bad (under 5 characters,
@@ -192,6 +217,42 @@ def letter():
     do("A", 60)
     presses(3, every=60, name="bye")
     go_out("post")
+    if save:
+        save_at_haniwa()
+
+
+def midnight(day):
+    """The clock to 23:59:40, then 40 seconds of the game on into the next
+    day (the game reads the clock every frame: the date changes, the stalk
+    market and the day's renewals run as when playing on at night)"""
+    do("CLOCK 23:59:40", 30)
+    shot(f"{day}_2359", 0)
+    shot(f"{day}_past", 2400)
+
+
+def continue_game():
+    """After save and quit (writing the town takes a while): A through Milk's
+    questions (who the player is, the town) until the town is loaded"""
+    presses(40, every=90, name="load", each=8)
+    shot("continued", 300)
+
+
+def week():
+    letter(save=False)                          # Monday, 2026-11-02
+    midnight("mon")                             # into Tuesday
+    save_at_haniwa()
+    continue_game()                             # the town loads on Tuesday: Milk answers
+    do("CLOCK 16:59", 30)
+    shot("tue_1659", 0)
+    reply()
+    for _ in range(4):                          # the mailbox shut
+        do("B", 40)
+    shot("mailbox_shut", 30)
+    for day in ("tue", "wed", "thu", "fri"):    # on to Saturday
+        midnight(day)
+    do("CLOCK 20:00", 30)
+    shot("sat_2000", 0)
+    kk()
     save_at_haniwa()
 
 
@@ -337,9 +398,64 @@ def house_next():
     save_at_haniwa()
 
 
+def announcement():
+    """The first scene change of an event day shows its announcement at the
+    station; A through it, back by the house"""
+    do("NOJOB", 10)
+    do("WARP 2128,1488", 400)
+    for i in range(6):
+        shot(f"announce{i}", 0)
+        do("A", 300)
+
+
+def broker():
+    do("NOJOB", 10)
+    do("CLOCK 18:01", 10)                      # the sale opens at 18:00
+    do("WARP 2128,1488", 680)                  # home: the tent goes on a lot out of sight
+    do("WARP 1420,1700 4", 400)                # south of the lot by the sign (1420,1580)
+    shot("tent", 0)
+    do("SU 30", 50)
+    do("A", 240)
+    shot("redd", 0)                             # 이야~, 어이쿠 이거 참! 손님, 어서옵쇼~~!
+    do("TALKEND 3000 60", 10)
+    shot("talked", 0)
+    do("SU 120", 260)
+    shot("door", 400)
+    shot("inside", 0)                           # scene 12
+    do("SU 60", 90)
+    do("A", 290)
+    shot("redd_inside", 0)                      # 자, 어서어서, 손님~!
+    do("TALKEND 2000 60", 10)
+
+
+def harvest():
+    announcement()                              # 여러분~! 추수감사절이에요!
+    do("WARP 3520,2880 4", 400)                # Franklin's block in that run
+    shot("franklin", 0)
+    do("SEEK D08D 600", 610)
+    do("A", 270)
+    shot("franklin_talk", 0)                    # 으아아아! 뭐, 뭐, 뭐야? ...
+    do("TALKEND 3000 60", 10)
+    shot("franklin_after", 0)
+
+
+def countdown():
+    announcement()                              # 여러분~! 새해맞이 카운트다운에 와 주세요~!!
+    do("WARP 2240,1800", 400)                  # north of the pond's block (3,3)
+    do("SEEK 2240,2100 400", 410)
+    shot("pond", 0)
+    do("CLOCK 23:59:40", 10)
+    for i in range(8):                          # 1분 전이야!!! ... HAPPY NEW YEAR!!
+        shot(f"midnight{i}", 300)
+    do("SEEK D047 300", 310)
+    do("A", 290)
+    shot("villager", 0)
+    do("TALKEND 3000 60", 10)
+
+
 SCENARIOS = {"letter": letter, "reply": reply, "kk": kk, "house": house, "house-next": house_next,
              "island-buy": island_buy, "island": island,
-             "rooms": rooms}
+             "rooms": rooms, "week": week, "broker": broker, "harvest": harvest, "countdown": countdown}
 ISLAND_CHOICES = [int(c) for c in sys.argv[2].split(",")] if len(sys.argv) > 2 and sys.argv[1] == "island" else [0]
 PAYS = int(sys.argv[2]) if len(sys.argv) > 2 else 1
 OFFER = [int(c) for c in sys.argv[3].split(",")] if len(sys.argv) > 3 else [0, 9]
