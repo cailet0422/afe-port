@@ -9,6 +9,10 @@
 #include "m_field_info.h"
 #include "m_random_field_h.h"
 #include "m_submenu.h"
+#include "m_event.h"
+#include "m_player.h"
+#include "m_scene.h"
+#include "m_collision_bg.h"
 
 #include <ctype.h>
 #include <dolphin/pad.h>
@@ -39,6 +43,9 @@ typedef enum {
     SCRIPT_RESETS,
     SCRIPT_CATCH,
     SCRIPT_ITEM,
+    SCRIPT_NOJOB,
+    SCRIPT_BELLS,
+    SCRIPT_WARP,
 } ScriptKind;
 
 typedef struct {
@@ -167,6 +174,15 @@ int pc_input_script_load(const char* path) {
             ev.value[0] = (u32)strtoul(arg, NULL, 16);
         } else if (strcmp(word, "ITEM") == 0) {
             ev.kind = SCRIPT_ITEM;
+        } else if (strcmp(word, "NOJOB") == 0) {
+            ev.kind = SCRIPT_NOJOB;
+        } else if (strcmp(word, "WARP") == 0 && fields >= 3 &&
+                   sscanf(arg, "%f,%f", &ev.seek_pos[0], &ev.seek_pos[1]) == 2) {
+            ev.kind = SCRIPT_WARP;
+            ev.value[0] = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : mSc_DIRECT_NORTH;
+        } else if (strcmp(word, "BELLS") == 0 && fields >= 3) {
+            ev.kind = SCRIPT_BELLS;
+            ev.value[0] = (u32)strtoul(arg, NULL, 10);
         } else if (strcmp(word, "TYPE") == 0 && fields >= 3) {
             ev.kind = SCRIPT_TYPE;
             snprintf(ev.name, sizeof(ev.name), "%s", arg);
@@ -466,6 +482,7 @@ static void log_positions(u32 frame) {
                    home->bx, home->bz, home_x(home), home_z(home));
         }
     }
+    printf("[POS] frame %u scene %d\n", (unsigned)frame, (int)Save_Get(scene_no));
     printf("[POS] frame %u camera %d center %.0f,%.0f,%.0f eye %.0f,%.0f,%.0f dir %d,%d dist %.0f\n", (unsigned)frame,
            play->camera.now_main_index, play->camera.lookat.center.x, play->camera.lookat.center.y,
            play->camera.lookat.center.z, play->camera.lookat.eye.x, play->camera.lookat.eye.y, play->camera.lookat.eye.z,
@@ -474,8 +491,15 @@ static void log_positions(u32 frame) {
         ACTOR* actor;
 
         for (actor = play->actor_info.list[parts[i]].actor; actor != NULL; actor = actor->next_actor) {
-            printf("[POS] frame %u %s %04X x %.0f z %.0f\n", (unsigned)frame, parts[i] == ACTOR_PART_PLAYER ? "player" : "npc",
-                   actor->npc_id, actor->world.position.x, actor->world.position.z);
+            if (parts[i] == ACTOR_PART_PLAYER) {
+                /* and what is in front of the player (a house's door is a dummy item) */
+                printf("[POS] frame %u player %04X x %.0f z %.0f facing %04X in front %04X\n", (unsigned)frame,
+                       actor->npc_id, actor->world.position.x, actor->world.position.z,
+                       (u16)actor->shape_info.rotation.y, ((PLAYER_ACTOR*)actor)->item_in_front);
+                continue;
+            }
+            printf("[POS] frame %u npc %04X x %.0f z %.0f\n", (unsigned)frame, actor->npc_id,
+                   actor->world.position.x, actor->world.position.z);
         }
     }
     /* buildings: the blocks they are in, and the ones loaded nearby by actor profile */
@@ -554,6 +578,33 @@ static void debug_command(const ScriptEvent* ev) {
             mSM_open_submenu_new(&play->submenu, mSM_OVL_LEDIT, (int)ev->value[0], 0,
                                  animal != NULL ? (void*)animal->catchphrase : (void*)scratch);
         }
+    } else if (ev->kind == SCRIPT_NOJOB) {
+        /* as when Nook lets the player go: the shops, the post office and
+         * the villagers' houses act as on any later day */
+        mEv_EventOFF(mEv_SAVED_FIRSTJOB_PLR0 + Common_Get(player_no));
+        mEv_EventOFF(mEv_SAVED_HRAWAIT_PLR0 + Common_Get(player_no));
+        mEv_EventOFF(mEv_SAVED_HRATALK_PLR0 + Common_Get(player_no));
+        printf("[INPUT] frame %u: part-time job over\n", (unsigned)s_frame);
+    } else if (ev->kind == SCRIPT_WARP) {
+        /* the scene again with the player at x,z, as when leaving a building
+         * (a fade out and in): a route starts by the door it needs instead
+         * of finding a way around rivers and cliffs */
+        Door_data_c door;
+
+        memset(&door, 0, sizeof(door));
+        door.next_scene_id = Save_Get(scene_no);
+        door.exit_orientation = (u8)ev->value[0];
+        door.exit_position.x = (s16)ev->seek_pos[0];
+        door.exit_position.y = (s16)mCoBG_GetBgY_OnlyCenter_FromWpos2(
+            (xyz_t){ ev->seek_pos[0], 0.0f, ev->seek_pos[1] }, 0.0f);
+        door.exit_position.z = (s16)ev->seek_pos[1];
+        door.door_actor_name = EMPTY_NO;
+        door.wipe_type = WIPE_TYPE_FADE_BLACK;
+        printf("[INPUT] frame %u: warp to %d,%d: %d\n", (unsigned)s_frame, door.exit_position.x, door.exit_position.z,
+               goto_other_scene(play, &door, FALSE));
+    } else if (ev->kind == SCRIPT_BELLS) {
+        Now_Private->inventory.wallet = ev->value[0];
+        printf("[INPUT] frame %u: %u bells\n", (unsigned)s_frame, (unsigned)ev->value[0]);
     } else if (ev->kind == SCRIPT_ITEM) {
         /* what a menu chose, e.g. the song a request to K.K. named */
         printf("[INPUT] frame %u: menu item %04X\n", (unsigned)s_frame,
@@ -604,7 +655,7 @@ int pc_input_script_frame(u32 frame) {
             push_key_or_pad(ev);
         } else if (ev->kind == SCRIPT_POS) {
             log_positions(frame);
-        } else if (ev->kind >= SCRIPT_GIVE && ev->kind <= SCRIPT_ITEM) {
+        } else if (ev->kind >= SCRIPT_GIVE && ev->kind <= SCRIPT_WARP) {
             debug_command(ev);
         } else if (ev->kind == SCRIPT_QUIT) {
             printf("[INPUT] frame %u: quit\n", frame);

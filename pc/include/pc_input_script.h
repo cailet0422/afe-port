@@ -15,6 +15,11 @@
  *                                     the town just loaded is one (Resetti comes)
  *     <frame> CATCH <id>              print a villager's catchphrase bytes
  *     <frame> ITEM                    print the item a menu chose (a song requested of K.K.)
+ *     <frame> NOJOB                   debug: end the part-time job for Nook (day one), so
+ *                                     the shops, post office and houses act as later on
+ *     <frame> BELLS <n>               debug: n bells in the wallet
+ *     <frame> WARP <x>,<z> [<dir>]    debug: the town again with the player at x,z (as on
+ *                                     leaving a building), facing mSc_DIRECT_* (4 north)
  *     <frame> TYPE <keys>             type into the text editor (pc_input_script.c)
  *     <frame> EDIT [<utf8>]           system input method: text being composed
  *     <frame> TEXT <utf8>             system input method: committed text
