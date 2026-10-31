@@ -100,6 +100,12 @@ cmake -S pc -B pc/build32clang -G Ninja -DCMAKE_TOOLCHAIN_FILE=/tmp/Toolchain-cl
 | 타이틀 데모(원래 디스크·한글패치, `make_opening_script.py --idle 12000`) | 38장씩 같음 |
 | 다른 날·시간(`town`: 첫날 밤, 11/4 아침, 눈 오는 12/21, 2/9 저녁, `town-rain`: 큰비) | 13장씩 같음 |
 | 패미컴(`famicom`: 집에 놓고 켜기, 크루크루랜드) | 14장 같음 |
+| 아르바이트 전 과정(`make_job_script.py` plant·hello·furniture·letter·carpet·axe·notice, 단계마다 앞 단계의 세이브로) | 13·17·8·10·8·8·9장 같음, 단계마다 세이브 바이트까지 같음 |
+| 여러 날(`make_days_script.py` letter·reply·kk: 편지와 다음 날 답장, 토요일 밤 K.K.) | 24·14·42장 같음, 세이브 같음 |
+| 집 증축·섬(`house`·`house-next`·`island-buy`·`island`·`rooms`: 대출 갚기와 증축, 섬 왕복, 2층·지하) | 16·16·21·59·12장 같음, 세이브 같음 |
+| 장치 없음(`make_device_script.py all`·`station`: 사진 메뉴 SD, 우체국 카드e 단말, 에이블 GBA, 역 외출) | 51·25장 같음, 세이브 같음 |
+| 부팅 징글(`--audio-dump`) | 32비트와 같은 소리(아래) |
+| 패미컴 소리(`make_famicom_script.py --game 0·1·2·13` + `--audio-dump`, 쿠루쿠루랜드·벌룬 파이트·동키콩·익사이트바이크) | 4개 모두 WAV가 샘플 단위로 같음 |
 | GLES 64비트(`-DPC_GLES=ON`, Mesa GLES 3.2) | 건물 안 71장·타이틀 데모 38장이 데스크톱 GL 64비트와 같음 |
 
 gcc 32비트 빌드도 위 경로를 모두 크래시 없이 돈다(마을이 달라 화면은 비교하지 않음). 64비트 크래시 없음.
@@ -112,14 +118,15 @@ gcc 32비트 빌드도 위 경로를 모두 크래시 없이 돈다(마을이 �
   선택지 문자열을 72바이트 읽어 66바이트 칸에 넣는 원래 코드라 마지막 칸이 호출한 쪽 배열 밖을 덮었다
   (`mChoice_Load_ChoseStringFromRom`, `TARGET_PC`에서 72바이트 버퍼에 읽어 맞는 만큼 복사).
 - 패미컴(`make_famicom_script.py`, gcc 빌드의 `--save` 세이브): 가구 놓기 → 쿠루쿠루랜드 실행·플레이 → L+R+Z로 복귀까지
-  스크린샷 14장이 clang 32비트와 모두 같고, NES 구간 소리도 샘플 단위로 같다. 크래시 없음. 소리가 다른 곳은 부팅 징글
-  뿐인데, 64비트는 징글을 등록하지 않는다(`BootSound`, WSYS/IBNK 표가 32비트 포인터를 제자리에 담음).
+  스크린샷 14장이 clang 32비트와 모두 같고, NES 구간 소리도 샘플 단위로 같다. 크래시 없음.
+- 부팅 징글: JAudio의 WSYS(파형)·IBNK(악기 뱅크) 표는 디스크 바이트를 제자리에서 32비트 포인터로 고쳐 쓰는
+  구조라 64비트에서는 쓸 수 없어, 64비트에서만 같은 내용을 호스트 구조체로 다시 만든다(`pc_jaudio_host_wsys`·
+  `pc_jaudio_host_ibnk`, `pc_jaudio_bswap.c`; 32비트는 원래 표를 그대로 돌려줌). 그 밖에 게임큐브 구조체 오프셋을
+  숫자로 쓰던 곳(`seqsetup.c` 트랙 주소, `jammain_2.c` 트랙 필드·자식 목록, `oneshot_getchannel.c_inc` 파형 주소,
+  `waveread.c`), DSP 채널 주인을 `u32`로 넘기던 곳(`dspdriver.c`)을 `TARGET_PC`에서 고쳤다. 징글 소리는 clang
+  32비트와 같다.
 - Android APK에 arm64-v8a 라이브러리를 함께 넣는다([android.md](android.md)). arm64 실행은 기기가 없어
   확인하지 못했다(같은 LP64 모델인 x86_64로 확인). 이번 점검으로 Android 빌드 설정은 바뀌지 않았다.
 - 남은 것:
-  - 섬: 첫날 세이브(아르바이트 중)와 그다음 날 모두 부두에 배(뱃사공 Kapp'n)가 오지 않아 가지 못했다. `WARP`로 섬 블록에 바로
-    옮기면 섬 데이터가 준비되지 않아 32·64비트 모두 죽는다(배를 타야 섬 집·주민이 설정됨). 배가 오는 조건을 찾아
-    경로를 만들어야 한다.
-  - 2층·지하(집 증축 뒤), 역(들어가는 건물이 아님), 브로커 텐트·이벤트 장면은 경로가 없다.
-  - 64비트 부팅 징글(위 패미컴 항목: 64비트는 징글을 등록하지 않는다).
+  - 브로커 텐트·이벤트 장면은 경로가 없다.
   - arm64 실기기.
