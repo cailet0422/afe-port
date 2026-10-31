@@ -5,3 +5,8 @@ app/.cxx/
 local.properties
 # SDL2 source (see docs/android.md)
 SDL/
+# Release signing key and its passwords (app/build.gradle); keep them private
+release-key/
+keystore.properties
+*.jks
+*.keystore

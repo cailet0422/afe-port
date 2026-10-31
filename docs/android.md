@@ -40,6 +40,33 @@ APK는 12MB(라이브러리 armeabi-v7a 9.6MB, arm64-v8a 15.5MB). 매칭 빌드�
 표와 우연히 같은 것; 데스크톱 에셋 없는 빌드도 같은 1개)만 찾힌다. 그전에는 창 아이콘(`pc_window_icon_rgba`)을
 디스크 에셋으로 잘못 보아 `--require-assets`가 링크를 실패시켰다(`bin2c.py --own`으로 고침). 기기에서 실행은 하지 못했다.
 
+## 정식 서명(릴리스 APK)
+
+`gradle assembleRelease`는 `pc/android/release-key/keystore.properties`가 있으면 그 키로 서명한다(없으면 예전처럼 디버그 키).
+다른 곳의 파일은 `-PreleaseKeyProps=경로/keystore.properties`로 준다. `storeFile`은 그 파일이 있는 폴더 기준이다.
+
+```properties
+storeFile=afe-port-release.jks
+storePassword=…
+keyAlias=afe-port
+keyPassword=…
+```
+
+키 만들기(한 번만): `keytool -genkeypair -keystore afe-port-release.jks -storetype PKCS12 -alias afe-port -keyalg RSA
+-keysize 4096 -validity 36500`. `release-key/`, `keystore.properties`, `*.jks`는 `.gitignore`에 있어 커밋되지 않는다.
+**키와 비밀번호는 저장소 밖에 안전하게 보관한다**: 다음 판의 APK도 같은 키로 서명해야 기존 설치 위에 업데이트되고,
+키를 잃으면 사용자가 앱을 지우고(세이브를 옮긴 뒤) 다시 설치해야 한다.
+
+```sh
+cd pc/android
+gradle assembleRelease -PsdlDir=/path/to/SDL2-2.30.9 -PstripAssets
+# → app/build/outputs/apk/release/app-release.apk (디버그 불가, v1·v2 서명)
+apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
+```
+
+릴리스 빌드 끝의 lint 검사가 Maven에서 파일을 받는다. 그 서버가 429(요청 과다)를 돌려주면 잠시 뒤 다시 실행한다
+(네이티브 빌드는 이미 끝나 있어 금방 끝난다).
+
 ## 실행
 
 1. 디스크 이미지(`.iso`/`.ciso`/`.gcm`, 한글패치 적용본 가능)를 폰의 아무 폴더에나 둔다(예: `Download/동물의숲`).
