@@ -15,6 +15,10 @@
  *                                     the town just loaded is one (Resetti comes)
  *     <frame> CATCH <id>              print a villager's catchphrase bytes
  *     <frame> ITEM                    print the item a menu chose (a song requested of K.K.)
+ *     <frame> MENU <name> [<a0> [<a1>]] debug: open a submenu by its mSM_OVL_ name without the
+ *                                     prefix (ALARMIN, TIMEIN, HBOARD, PASSWORDMAKE, NOTICE,
+ *                                     WARNING, FILM ...) or number, with its two arguments
+ *     <frame> VOICELOG [0|1]          print the talking voice chosen for each character
  *     <frame> TYPE <keys>             type into the text editor (pc_input_script.c)
  *     <frame> EDIT [<utf8>]           system input method: text being composed
  *     <frame> TEXT <utf8>             system input method: committed text

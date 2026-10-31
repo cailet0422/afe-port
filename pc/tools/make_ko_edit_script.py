@@ -12,11 +12,15 @@ Starts from the save that make_newgame_script.py --korean --save leaves
   ephrase        give Milk a new catchphrase (the name editor through the LEDIT
                  debug command), hear it when talking to her, save
   ephrase-check  after an ephrase run: print it (CATCH) and talk to her again
+  voice          talk to Milk with VOICELOG: the voice of each character
   request        the song request editor (LEDIT 4): a name with a dictionary
                  code, one typed with and without a space, one that is no song;
                  ITEM prints the song each gives (2A0A, 2A13, 2A13, 2A8C)
   reset          Resetti on his third visit (RESETS 6) asks for an apology: a
                  wrong one, then his phrase with a space he does not mind
+  ui             the time input, the haniwa's alarm (two kinds) and message board,
+                 the password screen and the notice board (MENU debug command)
+  warning        the 24 warnings of the pocket menu (MENU WARNING n)
 
 Every step leaves a screenshot k_<scenario>_<n>_<step>; CATCH and ITEM print
 with --verbose. GIVE, LEDIT, RESETS, CATCH and ITEM are the input script's
@@ -151,8 +155,11 @@ elif scenario == "letter-check":
     open_letter()
     do("A", 150)
     shot("reopened", 0)
-elif scenario in ("ephrase", "ephrase-check"):
-    do("CATCH E038", 0)
+elif scenario in ("ephrase", "ephrase-check", "voice"):
+    if scenario == "voice":
+        do("VOICELOG 1", 0)                      # print the voice of every character
+    else:
+        do("CATCH E038", 0)
     if scenario == "ephrase":
         do("LEDIT 2 E038", 60)                   # Milk's catchphrase
         shot("open", 0)
@@ -165,7 +172,7 @@ elif scenario in ("ephrase", "ephrase-check"):
     for _ in range(6):
         do("SEEK E038 120", 125)
         do("A", 35)
-    for i in range(36):
+    for i in range(36 if scenario != "voice" else 12):
         do("A", 40)
         shot(f"talk{i:02d}", -10)
     for _ in range(30):
@@ -201,6 +208,67 @@ elif scenario == "reset":
         for i in range(12):
             do("A", 60)
             shot(f"{name}_talk{i:02d}", -20)
+elif scenario == "ui":
+    # screens the game opens only now and then, through the MENU debug command
+    for name, menu, keys, close in (
+            ("timein", "TIMEIN 0 0", "", "START"),                  # 시간을 맞춰보자
+            ("alarm_play", "ALARMIN 0 0", "", "START"),             # 시간 / 분 뒤에
+            ("alarm_time", "ALARMIN 1 0", "", "START"),             # 분에
+            ("password", "PASSWORDMAKE 0 0", "", "START"),          # 마을 / 이름
+            ("hboard", "HBOARD 0 0", "dkssudgktpdy{SP}qksrkdnj,{SP}wkf{SP}wkfkqhk."
+             "{SP}rmfjgrp{SP}qkqns{SP}eotm{SP}dkcla", "START"),     # the haniwa's alarm message
+            ("notice", "NOTICE 0 0", "", "B")):                     # the date on the board
+        do(f"MENU {menu}", 90)
+        shot(f"{name}_open", 0)
+        if keys:
+            typed(keys, f"{name}_typed")
+        do(close, 60)
+        do("B", 40)
+        shot(f"{name}_closed", 30)
+        do("B", 60)
+elif scenario == "boards":
+    # writing on the notice board (A on its page) and in the diary (calendar)
+    do("MENU NOTICE 0 0", 90)
+    do("A", 90)
+    shot("notice_editor", 0)
+    typed("dkssudgktpdy{ENTER}qksrkqtmqslek.{SP}{SP}wkf{SP}qnxkrgody!", "notice_typed")
+    do("START", 90)
+    shot("notice_end", 0)
+    do("A", 60)                                  # 괜찮아? yes
+    shot("notice_posted", 30)
+    presses(2, 60)
+    do("B", 60)
+    do("MENU CALENDAR 0 0", 120)
+    shot("calendar", 0)
+    do("A", 120)                                 # today
+    do("A", 120)                                 # its diary page
+    shot("diary", 0)
+    do("A", 90)                                  # write
+    typed("dhsmfdms{SP}qkrhks{SP}dkswjsgkrp{SP}tkftkfgotek.{ENTER}dlqkdmfh{SP}rkTek", "diary_typed")
+    do("START", 90)
+    shot("diary_end", 0)
+    do("A", 90)
+    do("A", 90)                                  # 괜찮아? yes
+    shot("diary_lock", 0)
+    do("A", 120)                                 # 남이 봐도 돼? yes
+    shot("diary_saved", 0)
+    for _ in range(4):
+        do("B", 60)
+    do("MENU PASSWORDCHK 0 0", 90)
+    shot("passwordchk", 0)
+    do("START", 60)
+    do("B", 60)
+    do("MENU FILM 0 0", 120)                     # the photo menu; A would try the SD card
+    shot("film", 0)
+    do("B", 120)
+    shot("film_closed", 0)
+elif scenario == "warning":
+    # the pocket menu's warnings (wr_win_data) and the photo menu's messages
+    for n in range(24):
+        do(f"MENU WARNING {n} 0", 60)
+        shot(f"w{n:02d}", 0)
+        do("A", 60)
+        do("B", 60)
 else:
     sys.exit(__doc__)
 
