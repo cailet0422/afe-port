@@ -245,6 +245,9 @@ def week():
     do("CLOCK 16:59", 30)
     shot("tue_1659", 0)
     reply()
+    for _ in range(4):                          # the mailbox shut
+        do("B", 40)
+    shot("mailbox_shut", 30)
     for day in ("tue", "wed", "thu", "fri"):    # on to Saturday
         midnight(day)
     do("CLOCK 20:00", 30)
