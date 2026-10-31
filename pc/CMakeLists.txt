@@ -7,6 +7,15 @@ set(CMAKE_CXX_STANDARD 17)
 # Do NOT set a default build type. Optimization exposes undefined behavior in
 # the decompiled code (see ACGC-PC-Port's notes); GCC's default -O0 is used.
 # NDEBUG is defined below so decomp asserts stay disabled.
+#
+# A build type's optimization flags are dropped as well, so a configured build
+# type still builds at -O0: Android's Gradle plugin builds the release APK as
+# RelWithDebInfo (-O2), and that library crashed as soon as it started.
+foreach(_lang C CXX)
+    foreach(_cfg RELEASE RELWITHDEBINFO MINSIZEREL)
+        string(REGEX REPLACE "(^| )-O[0-9sz]*( |$)" " " CMAKE_${_lang}_FLAGS_${_cfg} "${CMAKE_${_lang}_FLAGS_${_cfg}}")
+    endforeach()
+endforeach()
 
 option(PC_CONSOLE "Show console window (disables -mwindows, useful for debugging)" OFF)
 if(ANDROID)

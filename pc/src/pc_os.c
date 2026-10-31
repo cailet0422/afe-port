@@ -369,10 +369,15 @@ void LCDisable(void) {}
 /* --- Init --- */
 void OSInit(void) {
     if (!arena_memory) {
-        /* alloc arena at >=0x10000000 to avoid collision with N64 segment addresses */
+        /* alloc arena at >=0x10000000 to avoid collision with N64 segment
+           addresses, and below 4 GB: the game keeps arena addresses in 32-bit
+           variables (boot.c's ARENA print and memory size check), so a 64-bit
+           build crashed at boot with the arena anywhere else. 64-bit Android
+           has the Java heap and boot image in the low 4 GB (often from
+           0x12c00000), so the whole range is searched, below 0x80000000 first. */
         {
             u32 base;
-            for (base = 0x10000000; base <= 0x50000000; base += 0x01000000) {
+            for (base = 0x10000000; base < 0xF0000000u; base += 0x01000000) {
 #ifdef _WIN32
                 arena_memory = (u8*)VirtualAlloc((void*)(uintptr_t)base,
                     PC_MAIN_MEMORY_SIZE, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
@@ -383,17 +388,25 @@ void OSInit(void) {
                 arena_memory = (u8*)mmap((void*)(uintptr_t)base, PC_MAIN_MEMORY_SIZE,
                     PROT_READ | PROT_WRITE,
                     MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED_NOREPLACE, -1, 0);
-                if (arena_memory == MAP_FAILED) arena_memory = NULL;
+                if (arena_memory == MAP_FAILED) {
+                    arena_memory = NULL;
+                } else if (arena_memory != (u8*)(uintptr_t)base) {
+                    /* kernels before 4.17 take the address only as a hint */
+                    munmap(arena_memory, PC_MAIN_MEMORY_SIZE);
+                    arena_memory = NULL;
+                }
 #endif
                 if (arena_memory) break;
             }
         }
         if (!arena_memory) {
-            /* fallback (may cause seg2k0 issues) */
-            fprintf(stderr, "[PC] WARNING: VirtualAlloc at high address failed, "
+            /* fallback (may cause seg2k0 issues; a 64-bit build crashes if
+               malloc's address is above 4 GB) */
+            fprintf(stderr, "[PC] WARNING: no room for the arena at 0x10000000-0xF0000000, "
                             "falling back to malloc (seg2k0 may misfire)\n");
             arena_memory = (u8*)malloc(PC_MAIN_MEMORY_SIZE);
         }
+        printf("[PC] arena at %p\n", (void*)arena_memory);
         if (!arena_memory) {
             fprintf(stderr, "Failed to allocate main memory arena\n");
             exit(1);
