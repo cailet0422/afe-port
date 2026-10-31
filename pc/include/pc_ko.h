@@ -71,6 +71,13 @@ void pc_ko_fix_josa(u8* text, int len);
 #define PC_KO_S7_LOST_ITEM 0xC13C       /* str$521 in watch_my_step_move, 6 bytes */
 #define PC_KO_S7_TURI_LAND 0xC154       /* l_name$572 in aTRC_clip_random_topsize, 6 bytes */
 #define PC_KO_S7_BOARD_FOOTER 0xC15C    /* footer_str$885 in mBD_board_ovl_init, 4 bytes */
+#define PC_KO_S7_PLAYER_SELECT 0xC6EC   /* _debug_player_select in player_select_draw_title, 13 bytes */
+#define PC_KO_S7_PM_TOWN 0xC6FC         /* countory_title_str$540 in mPM_set_character, 4 bytes */
+#define PC_KO_S7_PM_NAME 0xC704         /* person_title_str$541 in mPM_set_character, 4 bytes */
+#define PC_KO_S7_AL_TIMER2 0xC70C       /* mes2_timer$595 in mAL_set_character, 4 bytes */
+#define PC_KO_S7_AL_TIMER3 0xC714       /* mes3_timer$596 in mAL_set_character, 7 bytes */
+#define PC_KO_S7_AL_TIME2 0xC71C        /* str_time_mes2$599 in mAL_set_character, 4 bytes */
+#define PC_KO_S7_TI_TITLE 0xD30C        /* replaces chr_table$667 in mTI_set_character, 15 bytes */
 const u8* pc_ko_s7(u32 offset);
 const u8* pc_ko_patched_str(u32 s7_offset, const u8* original);
 
@@ -84,8 +91,35 @@ const u8* pc_ko_patched_str(u32 s7_offset, const u8* original);
 #define PC_KO_DATA_ESTRING_CLASS1 0x604BC   /* eString_string1_class */
 #define PC_KO_DATA_ESTRING_CLASS2 0x604D4   /* eString_string2_class */
 #define PC_KO_DATA_LEDIT_WIN 0x595B4        /* mLE_win_data, 52 bytes each, edit_max at +0x20 */
+#define PC_KO_DATA_HELLO_VOICE 0x3D730      /* voice$3952 in aNPC_act_say_hello_voice, {u8*, int} */
+#define PC_KO_DATA_WARNING_WIN 0x5D518      /* wr_win_data, 16 bytes each: {lines, count, scale x, y} */
+#define PC_KO_DATA_FILM_STRB 0x5E180        /* fl_strb_str_data, 28 bytes each: {lines, count, ...} */
+#define PC_KO_DATA_FILM_SELB 0x5E724        /* fl_selb_str_data, 8 bytes each: {lines, count} */
 const void* pc_ko_data_ptr(u32 offset, const void* original);
 u32 pc_ko_data_u32(u32 offset, u32 original);
+
+/* The foresta .data offset that the pointer at offset points to on the
+ * disc, or PC_KO_NO_TARGET (not Korean mode, not a pointer into .data). */
+#define PC_KO_NO_TARGET 0xFFFFFFFFu
+u32 pc_ko_data_target(u32 offset);
+
+/* Points count {text, length} pairs of a PC table at the disc's text and
+ * length, for tables of lines whose text the patch moved or lengthened: the
+ * PC fields are text[i * stride] and len[i * stride] (bytes), the disc's a
+ * pointer at table_offset + i * disc_stride and a 32-bit length after it.
+ * Does nothing for table_offset PC_KO_NO_TARGET. */
+void pc_ko_redirect_strings(u8** text, int* len, size_t stride, int count, u32 table_offset, u32 disc_stride);
+
+/* Talking voice of the patch for the character at p (prev: the byte before
+ * it, or -1): a voice number, -1 for no sound (second byte of a syllable),
+ * or PC_KO_VOICE_DEFAULT to use the game's table (and outside Korean mode). */
+#define PC_KO_VOICE_DEFAULT (-2)
+int pc_ko_voice(const u8* p, int prev);
+
+/* Prints the voice chosen for the character at p of message msg_no while
+ * g_pc_ko_voice_log is set (input script VOICELOG) */
+extern int g_pc_ko_voice_log;
+void pc_ko_voice_log(int msg_no, const u8* p, int voice);
 
 /* Width of the character at p in the board, diary and notice editors'
  * line checks, as the patch measures it (one-byte half-width punctuation,
