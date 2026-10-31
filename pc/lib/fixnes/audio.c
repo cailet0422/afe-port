@@ -1,5 +1,5 @@
 /* audio.c — stub for fixNES integration.
- * Audio output is handled by the wrapper (pc_nes_fixnes.c) via AIInitDMA.
+ * Audio output is handled by the wrapper (pc_nes_fixnes.c) through the game's mixer.
  * These stubs satisfy linker references from fixNES core. */
 
 #include "audio.h"

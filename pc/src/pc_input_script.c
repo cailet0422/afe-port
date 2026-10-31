@@ -14,6 +14,9 @@
 #include "m_scene.h"
 #include "m_collision_bg.h"
 #include "m_weather_type.h"
+#include "pc_ko.h"
+#include "charmap.h"
+#include "audio.h"
 
 #include <ctype.h>
 #include <dolphin/pad.h>
@@ -43,11 +46,14 @@ typedef enum {
     SCRIPT_LEDIT,
     SCRIPT_RESETS,
     SCRIPT_CATCH,
+    SCRIPT_MENU,
+    SCRIPT_VOICELOG,
     SCRIPT_ITEM,
     SCRIPT_NOJOB,
     SCRIPT_BELLS,
     SCRIPT_WARP,
     SCRIPT_WEATHER,
+    SCRIPT_BGM,
 } ScriptKind;
 
 typedef struct {
@@ -61,7 +67,8 @@ typedef struct {
     int touch_moves;
     u16 seek_id;     /* SEEK: villager to walk to, or 0 for seek_pos */
     float seek_pos[2];
-    u32 value[2]; /* GIVE item; LEDIT type and villager; RESETS count; CATCH villager */
+    u32 value[3]; /* GIVE item; LEDIT type and villager; RESETS count; CATCH villager; MENU
+                     submenu and its two arguments; VOICELOG on */
     char name[128];
 } ScriptEvent;
 
@@ -109,6 +116,29 @@ static int parse_inputs(char* text, ScriptEvent* ev) {
     return 1;
 }
 
+/* MENU: a submenu by its mSM_OVL_ name (without the prefix) or number */
+static u32 menu_type(const char* name) {
+    static const struct {
+        const char* name;
+        int type;
+    } menus[] = {
+        { "HBOARD", mSM_OVL_HBOARD },     { "TIMEIN", mSM_OVL_TIMEIN },
+        { "NOTICE", mSM_OVL_NOTICE },     { "WARNING", mSM_OVL_WARNING },
+        { "CALENDAR", mSM_OVL_CALENDAR }, { "PASSWORDMAKE", mSM_OVL_PASSWORDMAKE },
+        { "PASSWORDCHK", mSM_OVL_PASSWORDCHK }, { "ALARMIN", mSM_OVL_ALARMIN },
+        { "FILM", mSM_OVL_FILM },         { "DIARY", mSM_OVL_DIARY },
+        { "BOARD", mSM_OVL_BOARD },
+    };
+    int i;
+
+    for (i = 0; i < (int)(sizeof(menus) / sizeof(menus[0])); i++) {
+        if (strcmp(name, menus[i].name) == 0) {
+            return (u32)menus[i].type;
+        }
+    }
+    return (u32)strtoul(name, NULL, 10);
+}
+
 int pc_input_script_load(const char* path) {
     char line[256];
     int line_no = 0;
@@ -125,6 +155,7 @@ int pc_input_script_load(const char* path) {
         char word[64] = "";
         char arg[128] = "";
         char arg2[32] = "";
+        char arg3[32] = "";
         char* hash = strchr(line, '#');
         unsigned long frame;
         int fields;
@@ -133,7 +164,7 @@ int pc_input_script_load(const char* path) {
         if (hash != NULL) {
             *hash = '\0';
         }
-        fields = sscanf(line, "%lu %63s %127s %31s", &frame, word, arg, arg2);
+        fields = sscanf(line, "%lu %63s %127s %31s %31s", &frame, word, arg, arg2, arg3);
         if (fields <= 0) {
             continue; /* blank or comment */
         }
@@ -174,6 +205,22 @@ int pc_input_script_load(const char* path) {
         } else if (strcmp(word, "CATCH") == 0 && fields >= 3) {
             ev.kind = SCRIPT_CATCH;
             ev.value[0] = (u32)strtoul(arg, NULL, 16);
+        } else if (strcmp(word, "MENU") == 0 && fields >= 3) {
+            unsigned a0 = 0, a1 = 0;
+
+            ev.kind = SCRIPT_MENU;
+            ev.value[0] = menu_type(arg);
+            if (fields >= 4) {
+                sscanf(arg2, "%u", &a0);
+            }
+            if (fields >= 5) {
+                sscanf(arg3, "%u", &a1);
+            }
+            ev.value[1] = a0;
+            ev.value[2] = a1;
+        } else if (strcmp(word, "VOICELOG") == 0) {
+            ev.kind = SCRIPT_VOICELOG;
+            ev.value[0] = fields >= 3 ? (u32)strtoul(arg, NULL, 10) : 1;
         } else if (strcmp(word, "ITEM") == 0) {
             ev.kind = SCRIPT_ITEM;
         } else if (strcmp(word, "NOJOB") == 0) {
@@ -189,6 +236,9 @@ int pc_input_script_load(const char* path) {
         } else if (strcmp(word, "BELLS") == 0 && fields >= 3) {
             ev.kind = SCRIPT_BELLS;
             ev.value[0] = (u32)strtoul(arg, NULL, 10);
+        } else if (strcmp(word, "BGM") == 0 && fields >= 3) {
+            ev.kind = SCRIPT_BGM;
+            ev.value[0] = (u32)strtoul(arg, NULL, 16);
         } else if (strcmp(word, "TYPE") == 0 && fields >= 3) {
             ev.kind = SCRIPT_TYPE;
             snprintf(ev.name, sizeof(ev.name), "%s", arg);
@@ -554,6 +604,10 @@ static void debug_command(const ScriptEvent* ev) {
     Animal_c* animal;
     int i;
 
+    if (ev->kind == SCRIPT_VOICELOG) {
+        g_pc_ko_voice_log = (int)ev->value[0];
+        return;
+    }
     if (ev->kind == SCRIPT_RESETS) {
         /* as when a town that was not saved again is loaded; repeated over
          * the loading, which sets both */
@@ -621,10 +675,26 @@ static void debug_command(const ScriptEvent* ev) {
     } else if (ev->kind == SCRIPT_BELLS) {
         Now_Private->inventory.wallet = ev->value[0];
         printf("[INPUT] frame %u: %u bells\n", (unsigned)s_frame, (unsigned)ev->value[0]);
+    } else if (ev->kind == SCRIPT_MENU) {
+        /* a submenu the game opens only now and then; the third argument
+         * (a string some of them edit) is a scratch buffer */
+        static u8 menu_scratch[64];
+
+        if (!play->submenu.open_flag) {
+            memset(menu_scratch, CHAR_SPACE, sizeof(menu_scratch));
+            mSM_open_submenu_new(&play->submenu, (int)ev->value[0], (int)ev->value[1], (int)ev->value[2],
+                                 menu_scratch);
+            printf("[INPUT] frame %u: submenu %u (%u, %u)\n", (unsigned)s_frame, (unsigned)ev->value[0],
+                   (unsigned)ev->value[1], (unsigned)ev->value[2]);
+        }
     } else if (ev->kind == SCRIPT_ITEM) {
         /* what a menu chose, e.g. the song a request to K.K. named */
         printf("[INPUT] frame %u: menu item %04X\n", (unsigned)s_frame,
                play->submenu.item_p != NULL ? (unsigned)play->submenu.item_p->item : 0u);
+    } else if (ev->kind == SCRIPT_BGM) {
+        /* a piece of music by number (audio_defs.h), as the game starts one */
+        sAdo_BgmStart((u16)ev->value[0]);
+        printf("[INPUT] frame %u: music %02X\n", (unsigned)s_frame, (unsigned)ev->value[0]);
     } else if (ev->kind == SCRIPT_CATCH && (animal = find_animal((u16)ev->value[0])) != NULL) {
         /* the field and the padding after it, where the Korean patch packs it */
         printf("[INPUT] frame %u: catchphrase of %04X:", (unsigned)s_frame, (unsigned)ev->value[0]);
@@ -671,7 +741,7 @@ int pc_input_script_frame(u32 frame) {
             push_key_or_pad(ev);
         } else if (ev->kind == SCRIPT_POS) {
             log_positions(frame);
-        } else if (ev->kind >= SCRIPT_GIVE && ev->kind <= SCRIPT_WEATHER) {
+        } else if (ev->kind >= SCRIPT_GIVE && ev->kind <= SCRIPT_BGM) {
             debug_command(ev);
         } else if (ev->kind == SCRIPT_QUIT) {
             printf("[INPUT] frame %u: quit\n", frame);

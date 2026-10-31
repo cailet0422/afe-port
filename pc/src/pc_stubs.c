@@ -56,8 +56,11 @@ void OSFillFPUContext(void* context) { (void)context; }
 u16 OSGetFontEncode(void) { return 0; }
 u32 OSGetProgressiveMode(void) { return 0; }
 void OSSetProgressiveMode(u32 on) { (void)on; }
-u32 OSGetSoundMode(void) { return 0; }
-void OSSetSoundMode(u32 mode) { (void)mode; }
+/* the console's sound setting (IPL, SRAM): stereo, as a GameCube ships. In mono
+ * the game ignores its own stereo/mono/headphones option (sAdo_SetOutMode) */
+static u32 os_sound_mode = 1; /* OS_SOUND_MODE_STEREO */
+u32 OSGetSoundMode(void) { return os_sound_mode; }
+void OSSetSoundMode(u32 mode) { os_sound_mode = mode ? 1 : 0; }
 void OSProtectRange(u32 chan, void* addr, u32 nBytes, u32 control) {
     (void)chan; (void)addr; (void)nBytes; (void)control;
 }

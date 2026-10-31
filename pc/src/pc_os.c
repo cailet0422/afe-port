@@ -522,7 +522,14 @@ OSSramEx* __OSLockSramEx(void) {
 }
 void __OSUnlockSramEx(BOOL commit) { (void)commit; }
 
-void msleep(int ms) { SDL_Delay(ms); }
+/* With --deterministic the sound is made per frame (pc_audio_frame): a sleep
+ * makes as much as plays in that time, as the GameCube's sound thread would
+ * while the game sleeps (the boot jingle plays in sound_initial's) */
+void msleep(int ms) {
+    if (!pc_audio_sleep((u32)ms)) {
+        SDL_Delay(ms);
+    }
+}
 
 typedef struct OSMutex { int lock; } OSMutex;
 void OSInitMutex(OSMutex* mutex) { mutex->lock = 0; }
