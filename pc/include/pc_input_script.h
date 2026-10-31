@@ -17,6 +17,9 @@
  *     <frame> ITEM                    print the item a menu chose (a song requested of K.K.)
  *     <frame> NOJOB                   debug: end the part-time job for Nook (day one), so
  *                                     the shops, post office and houses act as later on
+ *     <frame> JOBDONE                 debug: the part-time job finished as the game ends it
+ *                                     (the errand cleared, Nook waits to tell of the HRA,
+ *                                     the payment message); the town acts as on day two
  *     <frame> BELLS <n>               debug: n bells in the wallet
  *     <frame> WARP <x>,<z> [<dir>]    debug: the town again with the player at x,z (as on
  *                                     leaving a building), facing mSc_DIRECT_* (4 north)

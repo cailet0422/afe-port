@@ -10,6 +10,9 @@
 #include "m_random_field_h.h"
 #include "m_submenu.h"
 #include "m_event.h"
+#include "m_quest.h"
+#include "m_time.h"
+#include "m_actor.h"
 #include "m_player.h"
 #include "m_scene.h"
 #include "m_collision_bg.h"
@@ -50,6 +53,7 @@ typedef enum {
     SCRIPT_VOICELOG,
     SCRIPT_ITEM,
     SCRIPT_NOJOB,
+    SCRIPT_JOBDONE,
     SCRIPT_BELLS,
     SCRIPT_WARP,
     SCRIPT_WEATHER,
@@ -225,6 +229,8 @@ int pc_input_script_load(const char* path) {
             ev.kind = SCRIPT_ITEM;
         } else if (strcmp(word, "NOJOB") == 0) {
             ev.kind = SCRIPT_NOJOB;
+        } else if (strcmp(word, "JOBDONE") == 0) {
+            ev.kind = SCRIPT_JOBDONE;
         } else if (strcmp(word, "WARP") == 0 && fields >= 3 &&
                    sscanf(arg, "%f,%f", &ev.seek_pos[0], &ev.seek_pos[1]) == 2) {
             ev.kind = SCRIPT_WARP;
@@ -646,6 +652,24 @@ static void debug_command(const ScriptEvent* ev) {
         mEv_EventOFF(mEv_SAVED_HRAWAIT_PLR0 + Common_Get(player_no));
         mEv_EventOFF(mEv_SAVED_HRATALK_PLR0 + Common_Get(player_no));
         printf("[INPUT] frame %u: part-time job over\n", (unsigned)s_frame);
+    } else if (ev->kind == SCRIPT_JOBDONE) {
+        /* as aID_first_job does once Nook has let the player go
+         * (ac_intro_demo_move.c_inc): the first job's errand cleared, the
+         * job's event off and the HRA one on, the clock running again */
+        ACTOR* intro_demo = Actor_info_name_search(&play->actor_info, mAc_PROFILE_INTRO_DEMO, ACTOR_PART_CONTROL);
+
+        if (mEv_CheckFirstJob()) {
+            mQst_ClearErrand(mQst_GetFirstJobData(), 1);
+            mEv_UnSetFirstJob();
+            mTM_off_renew_time(1);
+            Common_Set(complete_payment_type, mPlayer_COMPLETE_PAYMENT_TYPE_ARBEIT);
+            play->event.day = 0;
+            if (intro_demo != NULL) {
+                Actor_delete(intro_demo);
+            }
+        }
+        printf("[INPUT] frame %u: part-time job finished (job %d, HRA wait %d)\n", (unsigned)s_frame,
+               mEv_CheckFirstJob(), mEv_CheckEvent(mEv_SAVED_HRAWAIT_PLR0 + Common_Get(player_no)));
     } else if (ev->kind == SCRIPT_WARP) {
         /* the scene again with the player at x,z, as when leaving a building
          * (a fade out and in): a route starts by the door it needs instead
