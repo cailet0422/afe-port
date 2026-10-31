@@ -188,7 +188,7 @@ ninja -C pc/build32strip
 | M1 | Linux/Windows에서 타이틀 화면까지 부팅 | 완료: Linux, Windows(리눅스에서 MinGW 교차 빌드, Wine으로 실행 확인) |
 | M2 | 마을 플레이, 세이브(메모리 카드 파일), e+ 전용 기능(SD/e-Reader/GBA)은 우회 | 진행 중: 한글 디스크로 역 → 너굴 → 집 구경·선택 → 자유 이동 → 소지품 화면까지 크래시 없음(`pc/tools/make_newgame_script.py`). 저장·불러오기: 토용군(하니와)에게서 첫 저장(첫날은 주민 한 명에게 인사해야 받아 줌), 이어하기, 덮어쓰기 저장, 저장 없이 끈 뒤 도루묵씨까지 확인(`make_newgame_script.py --save`, 메모리 카드 계층 테스트 `pc/tests/test_pc_card.c`). 남은 것: 아르바이트 전체, 여러 날에 걸친 플레이 |
 | M3 | 오디오 정상화, 패미컴(FixNES) | 예정 |
-| M4 | 64비트 정리(포인터↔u32), Android(arm64, SDL2 + GLES3, 터치 입력) | 진행 중: 렌더러 OpenGL ES 3.0 지원(`-DPC_GLES=ON`, 리눅스 Mesa GLES로 오프닝·마을 확인), Android(armeabi-v7a) APK 빌드, 화면 게임패드(터치)·Android 키보드 한글 입력([android.md](android.md)). 64비트: clang 32비트 빌드와 `--deterministic` 비교로 오프닝(52장)·한국어 새 게임 경로(202장 중 201장)가 같은 화면, 이름 입력 창·편집기 버튼 수정, APK에 arm64-v8a 포함([64bit.md](64bit.md)). 남은 것: 건물 안·패미컴·저장의 64비트 점검, 실기기 확인 |
+| M4 | 64비트 정리(포인터↔u32), Android(arm64, SDL2 + GLES3, 터치 입력) | 진행 중: 렌더러 OpenGL ES 3.0 지원(`-DPC_GLES=ON`, 리눅스 Mesa GLES로 오프닝·마을 확인), Android(armeabi-v7a) APK 빌드, 화면 게임패드(터치)·Android 키보드 한글 입력([android.md](android.md)). 64비트: clang 32비트 빌드와 `--deterministic` 비교로 오프닝(52장)·한국어 새 게임 경로(202장 중 201장)가 같은 화면, 이름 입력 창·편집기 버튼 수정, 한국어 편집기 시나리오(편지·말버릇·저장·이어하기, 134장)도 같은 화면, APK에 arm64-v8a 포함([64bit.md](64bit.md)). 남은 것: 건물 안·패미컴의 64비트 점검, 실기기 확인 |
 | M5 | 한국어 패치 | 사용자 한글패치 디스크 지원: 대사·로고·이름표·글자 폭 표시, 키보드 한글 입력(이름·마을 이름·영어 이름, 편지의 머리말·본문·맺음말, 말버릇·도루묵씨 대답·K.K. 신청곡 확인), 사전 코드·말버릇·조사 자동 선택, 패치가 옮긴 문자열·표, 게시판/일기/알림판 줄 폭, 설정 메뉴에서 패치 zip을 골라 바로 적용(`korean/`에 한글판 이미지를 만들고 다시 시작). 게임패드·터치용 화면 키보드(QWERTY 두벌식 + 한/영, 십자키로 커서). 남은 것: 편지 보내기·주민 답장(우체국에 아직 들어가지 못함), 게시판·일기 화면 확인, 시간·비밀번호 입력 등 UI 상수, 말소리, SD 경고 문구 ([korean_patch.md](korean_patch.md)) |
 | M6 | 런타임 에셋 로더, 배포 패키징 | 진행 중: 에셋 없는 빌드(`-DPC_STRIP_ASSETS=ON`) — 실행 파일에 디스크에서 꺼낸 에셋 없이, 시작할 때 디스크에서 읽는다. 일반 빌드와 스크린샷·세이브가 같다. `dist` 타깃으로 Linux·Windows zip(Windows는 Wine에서 확인). 남은 것: 실제 Windows·Android 기기 확인, Android APK(`-PstripAssets`) 빌드 확인 |
 
@@ -267,7 +267,8 @@ ninja -C pc/build32strip
   버퍼(8·18·18바이트, `pc_ko_ledit_buf`)에 입력한다. 말버릇은 4바이트에 들어가면 그대로, 아니면 `0xFE` + 12비트
   값 4개로 주민의 4바이트 칸과 그 뒤 3바이트 여백에 넣는다(`ko_charset_pack_ending`, 저장 파일에도 그대로
   남는다). 신청곡과 대답은 사전 코드를 펼치고 공백을 모두 뺀 뒤 곡 이름·도루묵씨의 문구와 비교한다
-  (`pc_ko_ledit_match`). 자세한 것은 [korean_patch.md](korean_patch.md).
+  (`pc_ko_ledit_match`). 입력한 공백에 붙는 "SP" 표시는 한국어 모드의 공백이 반 폭이라 반 크기로 그린다.
+  자세한 것은 [korean_patch.md](korean_patch.md).
 - 원본 디스크에서는 ACGC처럼 `Tab`으로 켜며, 일본어 글꼴에 확실히 있는 영문·숫자·공백·`!?,.`만 받는다.
 - **시스템 입력기** (`settings.ini` `[Input]`의 `text_input = 1`, Android 기본값): 내장 두벌식 대신
   OS 입력기(Android 화면 키보드, Windows IME 등)를 쓴다. 편집기가 열리면 `SDL_StartTextInput`으로
