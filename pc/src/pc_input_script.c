@@ -9,6 +9,7 @@
 #include "m_field_info.h"
 #include "m_random_field_h.h"
 #include "m_submenu.h"
+#include "audio.h"
 
 #include <ctype.h>
 #include <dolphin/pad.h>
@@ -39,6 +40,7 @@ typedef enum {
     SCRIPT_RESETS,
     SCRIPT_CATCH,
     SCRIPT_ITEM,
+    SCRIPT_BGM,
 } ScriptKind;
 
 typedef struct {
@@ -167,6 +169,9 @@ int pc_input_script_load(const char* path) {
             ev.value[0] = (u32)strtoul(arg, NULL, 16);
         } else if (strcmp(word, "ITEM") == 0) {
             ev.kind = SCRIPT_ITEM;
+        } else if (strcmp(word, "BGM") == 0 && fields >= 3) {
+            ev.kind = SCRIPT_BGM;
+            ev.value[0] = (u32)strtoul(arg, NULL, 16);
         } else if (strcmp(word, "TYPE") == 0 && fields >= 3) {
             ev.kind = SCRIPT_TYPE;
             snprintf(ev.name, sizeof(ev.name), "%s", arg);
@@ -558,6 +563,10 @@ static void debug_command(const ScriptEvent* ev) {
         /* what a menu chose, e.g. the song a request to K.K. named */
         printf("[INPUT] frame %u: menu item %04X\n", (unsigned)s_frame,
                play->submenu.item_p != NULL ? (unsigned)play->submenu.item_p->item : 0u);
+    } else if (ev->kind == SCRIPT_BGM) {
+        /* a piece of music by number (audio_defs.h), as the game starts one */
+        sAdo_BgmStart((u16)ev->value[0]);
+        printf("[INPUT] frame %u: music %02X\n", (unsigned)s_frame, (unsigned)ev->value[0]);
     } else if (ev->kind == SCRIPT_CATCH && (animal = find_animal((u16)ev->value[0])) != NULL) {
         /* the field and the padding after it, where the Korean patch packs it */
         printf("[INPUT] frame %u: catchphrase of %04X:", (unsigned)s_frame, (unsigned)ev->value[0]);
@@ -604,7 +613,7 @@ int pc_input_script_frame(u32 frame) {
             push_key_or_pad(ev);
         } else if (ev->kind == SCRIPT_POS) {
             log_positions(frame);
-        } else if (ev->kind >= SCRIPT_GIVE && ev->kind <= SCRIPT_ITEM) {
+        } else if (ev->kind >= SCRIPT_GIVE && ev->kind <= SCRIPT_BGM) {
             debug_command(ev);
         } else if (ev->kind == SCRIPT_QUIT) {
             printf("[INPUT] frame %u: quit\n", frame);

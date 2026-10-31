@@ -15,6 +15,7 @@
  *                                     the town just loaded is one (Resetti comes)
  *     <frame> CATCH <id>              print a villager's catchphrase bytes
  *     <frame> ITEM                    print the item a menu chose (a song requested of K.K.)
+ *     <frame> BGM <id>                debug: start a piece of music (hex, audio_defs.h)
  *     <frame> TYPE <keys>             type into the text editor (pc_input_script.c)
  *     <frame> EDIT [<utf8>]           system input method: text being composed
  *     <frame> TEXT <utf8>             system input method: committed text
