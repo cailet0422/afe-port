@@ -48,7 +48,12 @@ int           g_pc_widescreen_stretch = 0;
 uintptr_t pc_image_base = 0;
 uintptr_t pc_image_end  = 0;
 
-static jmp_buf* pc_active_jmpbuf = NULL;
+static jmp_buf* volatile pc_active_jmpbuf = NULL;
+/* The thread that armed it: a fault on another thread (audio, the Android UI
+ * thread) must not jump onto the game thread's stack, where both threads would
+ * then run the game's code (seen on Android as GL calls from the UI thread and
+ * a "stack corruption detected" abort on the game thread) */
+static volatile SDL_threadID pc_jmpbuf_thread = 0;
 static volatile unsigned int pc_last_crash_addr = 0;
 
 static volatile unsigned int pc_last_crash_data_addr = 0;
@@ -58,7 +63,7 @@ static volatile unsigned int pc_last_crash_data_addr = 0;
  * GCC doesn't have __try/__except and checking every pointer in emu64 is impractical. */
 static LONG WINAPI pc_veh_handler(PEXCEPTION_POINTERS ep) {
     DWORD code = ep->ExceptionRecord->ExceptionCode;
-    if (pc_active_jmpbuf != NULL &&
+    if (pc_active_jmpbuf != NULL && pc_jmpbuf_thread == SDL_ThreadID() &&
         (code == EXCEPTION_ACCESS_VIOLATION ||
          code == EXCEPTION_ILLEGAL_INSTRUCTION ||
          code == EXCEPTION_INT_DIVIDE_BY_ZERO ||
@@ -78,7 +83,7 @@ static LONG WINAPI pc_veh_handler(PEXCEPTION_POINTERS ep) {
 /* POSIX equivalent of VEH — longjmp from signal handler (POSIX-defined for program faults) */
 static void pc_signal_handler(int sig, siginfo_t* info, void* ucontext) {
     (void)ucontext;
-    if (pc_active_jmpbuf != NULL) {
+    if (pc_active_jmpbuf != NULL && pc_jmpbuf_thread == SDL_ThreadID()) {
         pc_last_crash_addr = (unsigned int)(uintptr_t)info->si_addr;
         pc_last_crash_data_addr = (sig == SIGSEGV) ?
             (unsigned int)(uintptr_t)info->si_addr : 0;
@@ -121,6 +126,9 @@ void pc_crash_protection_init(void) {
 }
 
 void pc_crash_set_jmpbuf(jmp_buf* buf) {
+    if (buf != NULL) {
+        pc_jmpbuf_thread = SDL_ThreadID();
+    }
     pc_active_jmpbuf = buf;
 }
 

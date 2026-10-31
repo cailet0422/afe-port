@@ -16,18 +16,25 @@
         android:hardwareAccelerated="true"
         android:extractNativeLibs="true"
         android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+        <!-- Shows the last crash, if any, then starts the game (LaunchActivity.java) -->
         <activity
-            android:name=".MainActivity"
+            android:name=".LaunchActivity"
             android:exported="true"
-            android:screenOrientation="sensorLandscape"
-            android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
-            android:preferMinimalPostProcessing="true"
-            android:launchMode="singleInstance">
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".MainActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:preferMinimalPostProcessing="true"
+            android:launchMode="singleInstance" />
         <!-- Restarts the game after the Korean patch is installed (MainActivity.restartApp) -->
         <activity
             android:name=".RestartActivity"

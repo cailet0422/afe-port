@@ -221,8 +221,10 @@ def main():
     local_static_keys = set(local_static_var)
 
     decl_cache = {}
+    unresolved = set()
 
     build_dir = Path(args.map).resolve().parent
+    pc_dir = Path(__file__).resolve().parent.parent  # the target's source dir
 
     def source_info(obj):
         """({name: type}, {asset names}, {name: [(type, bytes, element bytes)]}) of the
@@ -233,10 +235,19 @@ def main():
         if not m:
             return {}, {}, {}
         rel = m.group(2)
-        # absolute sources keep their path minus the leading '/'; others are
-        # relative to the target's binary dir, with ".." written as "__"
+        # absolute sources keep their path minus the leading '/'; sources in the
+        # target's binary dir are relative to it, others to its source dir (pc/),
+        # with ".." written as "__". The Android build generates its sources in
+        # the top project's binary dir, outside the target's (afe/), so their
+        # objects are named after the path from pc/
+        rel_up = rel.replace("__/", "../")
         target_dir = build_dir / m.group(1)
-        path = Path("/" + rel) if Path("/" + rel).exists() else (target_dir / rel.replace("__/", "../")).resolve()
+        for path in (Path("/" + rel), (target_dir / rel_up).resolve(), (pc_dir / rel_up).resolve()):
+            if path.is_file():
+                break
+        else:
+            unresolved.add(obj)
+            return {}, {}, {}
         if path not in decl_cache:
             text = source_text(path)
             decls = {d.group(2): d.group(1).strip() for d in DECL_SCALAR.finditer(text)}
@@ -416,6 +427,8 @@ def main():
     # every asset the executable carries should come from the disc
     missing = sorted({(obj, name) for (obj, name), places in entries.items()
                       if is_asset(obj, name) and any(vma not in covered for vma, _ in places)})
+    # zero-filled data of a source that was not found could be assets nobody checked
+    unknown_bss = sorted({obj for (obj, name) in bss if obj in unresolved})
     stats["assets"] = len(covered)
 
     blob = b"RELO" + struct.pack("<III", 2, len(out), anchor)
@@ -428,6 +441,13 @@ def main():
         print(f"rel overlay: {len(missing)} assets not found on the disc:", file=sys.stderr)
         for obj, name in missing[:30]:
             print(f"    {name} ({Path(obj).name})", file=sys.stderr)
+        if args.require_assets:
+            sys.exit(1)
+    if unknown_bss:
+        print(f"rel overlay: {len(unknown_bss)} object files with zero-filled data whose source was not found:",
+              file=sys.stderr)
+        for obj in unknown_bss[:30]:
+            print(f"    {obj}", file=sys.stderr)
         if args.require_assets:
             sys.exit(1)
 
