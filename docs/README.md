@@ -146,8 +146,9 @@ ninja -C pc/build32strip
 
 ### 한국어(한글패치)로 실행
 
-한글패치는 원 배포처(한식구, `https://cafe.naver.com/hansicgu`)에서 받는다. 이 저장소에는
-패치 파일·번역문·글꼴 데이터를 넣지 않는다.
+한글패치는 원 배포처로 가는 페이지([retrodb 한글패치 — 동물의 숲 e+](https://retrodb.info/krpatch/7428/%EB%8F%99%EB%AC%BC%EC%9D%98-%EC%88%B2-e))에서 받는다.
+한글패치는 이 저장소와 관계없는 별도 제작자(역전맞고)의 작업이며, 이 저장소에는 패치 파일·번역문·글꼴 데이터를
+넣지 않는다.
 
 **게임 안에서 적용** (Windows·Android·Linux 공통, `pc/src/pc_ko_patch.c`):
 
