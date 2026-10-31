@@ -70,6 +70,15 @@ if(PC_BUILD_TESTS)
     target_compile_options(test_ko_osk PRIVATE -Wall -Wextra)
     add_test(NAME ko_osk COMMAND test_ko_osk)
 
+    add_executable(test_ko_voice
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_voice.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_charset.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_ko_voice.c
+    )
+    target_include_directories(test_ko_voice PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_compile_options(test_ko_voice PRIVATE -Wall -Wextra)
+    add_test(NAME ko_voice COMMAND test_ko_voice)
+
     add_executable(test_ko_patch
         ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_patch.c
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_ko_patch.c
@@ -384,6 +393,7 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_ime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_osk.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_charset.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_voice.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_patch.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_ko_patch.c
     ${SYSTEM_FONT_C}

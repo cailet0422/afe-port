@@ -6,6 +6,7 @@
 #include "pc_bswap.h"
 #include "jsyswrap.h"
 #include "ko_charset.h"
+#include "ko_voice.h"
 #include "charmap.h"
 #include "m_font.h"
 
@@ -33,7 +34,10 @@ static const u8 ko_leads[] = {
 
 /* Tables in the patch's code section (foresta.rel section 7, v0.9.2) */
 #define S7_JOSA 0xA0CA        /* 5 particles x {after a final consonant, after a vowel} */
-#define S7_BYTE_FINAL 0xA0DE  /* u16 per one-byte code: syllable index + 1, or 0 */
+#define S7_VOICE_KANA 0xA08E /* kana voices, 5 per consonant row */
+#define S7_BYTE_FINAL 0xA0DE  /* u16 per one-byte code: syllable index + 1, or 0; then per glyph: syllable */
+#define S7_VOICE_JAMO 0xB53A  /* rows of the 19 initials, columns and flags of the 21 vowels */
+#define S7_LEAD_TABLE 0x6B7C  /* per byte: lead index + 1, or 0 */
 #define S7_ZERO_FINAL 0xB563  /* finals of 십 백 천 만 */
 #define S7_DIGIT_FINAL 0xB567 /* finals of 영 일 이 삼 사 오 육 칠 팔 구 */
 #define S7_DICT 0xD340        /* dictionary of long strings, see dict_entry */
@@ -162,6 +166,45 @@ const void* pc_ko_data_ptr(u32 offset, const void* original) {
         }
     }
     return original;
+}
+
+u32 pc_ko_data_target(u32 offset) {
+    int lo = 0;
+    int hi = data_redirect_count - 1;
+
+    if (!g_pc_ko_mode) {
+        return PC_KO_NO_TARGET;
+    }
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        const DataRedirect* r = &data_redirects[mid];
+
+        if (r->offset == offset) {
+            return (r->section == REL_SECTION_DATA && r->target < rel_data_size) ? r->target : PC_KO_NO_TARGET;
+        }
+        if (r->offset < offset) {
+            lo = mid + 1;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    return PC_KO_NO_TARGET;
+}
+
+void pc_ko_redirect_strings(u8** text, int* len, size_t stride, int count, u32 table_offset, u32 disc_stride) {
+    int i;
+
+    if (table_offset == PC_KO_NO_TARGET) {
+        return;
+    }
+    for (i = 0; i < count; i++) {
+        u32 entry = table_offset + (u32)i * disc_stride;
+        u8** t = (u8**)((u8*)text + i * stride);
+        int* l = (int*)((u8*)len + i * stride);
+
+        *t = (u8*)pc_ko_data_ptr(entry, *t);
+        *l = (int)pc_ko_data_u32(entry + 4, (u32)*l);
+    }
 }
 
 u32 pc_ko_data_u32(u32 offset, u32 original) {
@@ -639,6 +682,36 @@ void pc_ko_fix_josa(u8* text, int len) {
     }
     p[0] = s7[S7_JOSA + josa * 4 + (has_final ? 0 : 2)];
     p[1] = s7[S7_JOSA + josa * 4 + (has_final ? 1 : 3)];
+}
+
+int pc_ko_voice(const u8* p, int prev) {
+    KoVoiceTables t;
+
+    if (!g_pc_ko_mode || s7 == NULL) {
+        return KO_VOICE_DEFAULT;
+    }
+    t.lead = s7 + S7_LEAD_TABLE;
+    t.sound = s7 + S7_BYTE_FINAL;
+    t.jamo = s7 + S7_VOICE_JAMO;
+    t.kana = s7 + S7_VOICE_KANA;
+    return ko_voice_code(&t, p, prev);
+}
+
+int g_pc_ko_voice_log = 0;
+
+void pc_ko_voice_log(int msg_no, const u8* p, int voice) {
+    int g;
+
+    if (!g_pc_ko_voice_log) {
+        return;
+    }
+    g = pc_ko_glyph_index(p);
+    if (g >= 0) {
+        printf("[VOICE] msg %04X %02X%02X U+%04X voice %d\n", (unsigned)msg_no, p[0], p[1],
+               (unsigned)ko_charset_unicode(g), voice);
+    } else {
+        printf("[VOICE] msg %04X %02X voice %d\n", (unsigned)msg_no, p[0], voice);
+    }
 }
 
 int pc_ko_line_char_width(const u16* p) {
