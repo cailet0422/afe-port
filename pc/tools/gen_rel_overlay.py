@@ -341,6 +341,11 @@ def main():
                 # PE maps list sections padded to their alignment (3 bytes as 4)
                 sized = [(c, v) for c in cands for v in entries[c]
                          if c[0].endswith(".obj") and size < v[1] <= (size + 31) & ~31]
+            if not sized:
+                # a struct of which only the leading text is overlaid is larger
+                # where it also holds pointers (64-bit)
+                sized = [(c, v) for c in cands for v in entries[c]
+                         if decl_type(c[0], local_static_var.get(c[1], c[1])) in STRUCT_PREFIXES and v[1] >= size]
             if len(sized) > 1 and by_range:
                 rng = next(((sec, a, b) for (u, s_, a, b) in splits if s_ == sec and a <= off < b), None)
                 sized = [x for x in sized if x[0][0] == by_range.get(rng)] or sized
