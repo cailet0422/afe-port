@@ -91,6 +91,21 @@ cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
   - `reset`: `RESETS 6`으로 도루묵씨의 세 번째 방문을 불러 틀린 대답(몰라) → 다시 묻기 → 그가 시키는 문구를 띄어
     써서 입력 → "참말이제?!"(맞음). 문구는 세이브마다 다르다(`--save`의 세이브에서는 "정말죄송합니다").
   - 시나리오마다 `--save`로 만든 세이브를 새로 복사해 쓴다(`letter`·`ephrase`는 저장하므로 `*-check`는 그 뒤에).
+- 건물 안 확인(한글패치 디스크, `--save`로 만든 세이브에서 시작, 다음 날로 돌린다):
+  `python3 pc/tools/make_interior_script.py 건물 > /tmp/i.txt` 후
+  `./DobutsuNoMoriEPlus --no-framelimit --script-fast --deterministic --days 1 --verbose --input-script /tmp/i.txt`
+  (건물 하나에 1–3분, 스크린샷은 `shots/i_건물_번호_단계.ppm`, `POS`가 장면 번호를 찍는다).
+  - 경로는 `WARP x,z [방향]`(그 자리에서 마을을 다시 불러옴, 건물에서 나올 때처럼)으로 문 앞에 가서 `NOJOB`(너굴
+    아르바이트를 끝냄: 첫날 세이브는 아르바이트 중이라 가게·집이 평소와 다르다)을 하고 게임대로 문으로 들어간다.
+    문 위치·방향은 스크립트의 `DOORS`(그 세이브의 마을 기준).
+  - `shop`, `museum`(홀·부엉 방·물고기 방), `post`, `tailors`, `police`, `myhouse`, `house주민id`(예 `houseE015`),
+    `all`(앞의 것과 주민 집 둘을 한 번에).
+  - `state`: 집에 상자를 놓고(소지품 → 배치하기; 놓은 가구를 마주 보고 B를 누르면 다시 집어 든다), 부엉에게 물고기를
+    기증하고(`GIVE`), 너굴 상점 서쪽 벽의 물건을 사고(`BELLS`) 하니와에서 저장한다. `state-check`는 그 세이브를
+    불러와 같은 방을 돌고 다시 저장한다(다른 빌드의 세이브로도).
+  - `town`(마을 몇 군데, `--days`·`--time`과 같이: 밤, 눈), `town-rain`(`WEATHER 1 3`으로 큰비; 아르바이트 중에는
+    게임이 비를 맑음으로 바꾼다), `famicom`(집에 패미컴을 놓고 켠다, 돌아 나오지 않음).
+- 타이틀 데모: `make_opening_script.py --idle 12000`(아무것도 누르지 않음, 300프레임마다 스크린샷).
 - 메모리 문제는 `-fsanitize=address -fsanitize-recover=address`로 별도 빌드 디렉터리를 만들어 본다
   (`ASAN_OPTIONS=detect_leaks=0:halt_on_error=0`). 원래 게임의 읽기 범위 초과
   (`mFM_LoadBGCommonTex` 등)는 무해한 것도 있다.
