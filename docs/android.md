@@ -160,6 +160,14 @@ Settings → Controls → Buttons에서 블루투스 게임패드의 버튼(과 
     시그널, 죽은 스레드의 호출 스택, 그 프로세스의 마지막 logcat 40줄을 붙인다(`Tombstone.java`).
   - 앱 버전·기기·Android 버전과 `log.txt`의 끝 40줄. 전체는 `crash_prev.txt`로 남고, 같은 크래시는 한 번만 보인다.
   `log.txt`는 줄 단위로 바로 쓴다.
+- 그래픽 설정: Video 탭에는 VSync, MSAA, Textures만 있다. Android는 늘 화면 전체를 쓰므로 PC의 창 모드·해상도
+  (Display, Resolution)는 숨기고 `settings.ini`에 있어도 쓰지 않는다. GPU가 고른 MSAA를 지원하지 않으면 창을 만들 때
+  8x→4x→2x→끔으로 낮춰 다시 시도한다(`[PC] MSAA 8x is not available, using 4x`). 예전에는 Galaxy Z Flip6에서 MSAA 8x를
+  고르면 `Couldn't find matching EGL config`로 창을 못 만들고, 설정이 저장돼 있어 매번 시작하자마자 끝났다.
+- 종료: Android에서는 `exit()` 대신 `_exit()`로 끝낸다(`pc_exit`; Quit Game, 한글패치 뒤 다시 시작, 시작 실패).
+  `exit()`는 C++ 정적 소멸자를 돌리는데, 그동안 시스템의 렌더 스레드(libhwui)가 이미 정리된 뮤텍스를 써서
+  "FORTIFY: pthread_mutex_lock called on a destroyed mutex"로 abort했다. 시작 실패(`pc_fatal`)는 이유를 메시지 창으로
+  보여 주고 `log.txt`에도 남긴다.
 - 크래시 보호(`pc_crash_set_jmpbuf`, emu64가 디스플레이 리스트에서 잘못된 주소를 읽으면 그 프레임을 건너뜀)는
   `jmp_buf`를 건 스레드의 폴트에서만 `longjmp`한다. 예전에는 다른 스레드(Android UI 스레드, 오디오)의 SIGSEGV도
   게임 스레드의 스택으로 뛰어, 두 스레드가 게임 코드를 함께 돌다 "stack corruption detected"로 죽었다(에뮬레이터에서

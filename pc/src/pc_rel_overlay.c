@@ -238,9 +238,7 @@ static void assets_missing(const char* why) {
     char msg[256];
 
     snprintf(msg, sizeof(msg), "The game's pictures and models could not be read from the disc image (%s).", why);
-    printf("[PC] %s\n", msg);
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, PC_WINDOW_TITLE, msg, NULL);
-    exit(1);
+    pc_fatal("%s", msg);
 #else
     (void)why;
 #endif

@@ -408,8 +408,7 @@ void OSInit(void) {
         }
         printf("[PC] arena at %p\n", (void*)arena_memory);
         if (!arena_memory) {
-            fprintf(stderr, "Failed to allocate main memory arena\n");
-            exit(1);
+            pc_fatal("Failed to allocate the game's main memory (%d MB).", PC_MAIN_MEMORY_SIZE >> 20);
         }
         memset(arena_memory, 0, PC_MAIN_MEMORY_SIZE);
 
