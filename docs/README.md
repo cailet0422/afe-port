@@ -163,6 +163,8 @@ ninja -C pc/build32strip
      내장 해시로, 그 밖은 패치 안의 창별 Adler-32로 확인). 원본이 Rev 1이 아니면 "not the one the patch is
      for"로 멈춘다.
    - 같은 탭의 **Korean: < On / Off >**(Apply 후 다시 시작)로 한국어판과 원래 디스크를 오갈 수 있다.
+   - v0.9.2와 v0.9.3을 확인했다. v0.9.3에서 바뀐 것(GBA e카드 화면, 구역 경계 달리기)은 디스크의 GBA 프로그램과
+     패치 코드라 PC에서는 보이지 않고, PC가 읽는 데이터는 같다([korean_patch.md](korean_patch.md)).
 
 **직접 적용**: 패치에 들어 있는 도구(또는 `pc/tools/apply_ko_patch.py`)로 Rev 1 ISO에 적용한 뒤 그 ISO를
 `rom/`에 넣어도 된다. 어느 쪽이든 실행 로그에 `Korean patch detected`가 나오면 한국어 모드다(글자 폭·한글
