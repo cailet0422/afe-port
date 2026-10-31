@@ -11,6 +11,8 @@
 #include "m_submenu.h"
 #include "m_event.h"
 #include "m_quest.h"
+#include "m_npc.h"
+#include "m_soncho.h"
 #include "m_house.h"
 #include "m_choice.h"
 #include "m_msg.h"
@@ -700,8 +702,11 @@ static void log_positions(u32 frame) {
             /* the part-time job: kind - mQst_ERRAND_FIRSTJOB_CHANGE_CLOTH is Nook's job number */
             mQst_errand_c* job = mQst_GetFirstJobData();
 
-            printf("[POS] frame %u first job %d progress %d\n", (unsigned)frame,
-                   (int)job->base.quest_kind - mQst_ERRAND_FIRSTJOB_CHANGE_CLOTH, (int)job->base.progress);
+            printf("[POS] frame %u first job %d progress %d to %04X item %04X friends %d of %d tortimer %u\n",
+                   (unsigned)frame, (int)job->base.quest_kind - mQst_ERRAND_FIRSTJOB_CHANGE_CLOTH,
+                   (int)job->base.progress, (unsigned)job->recipient.npc_id, (unsigned)job->item,
+                   mNpc_GetFriendAnimalNum(&Now_Private->player_ID), mNpc_GetAnimalNum(),
+                   (unsigned)mSC_check_ArbeitPlayer());
         }
     }
     printf("[POS] frame %u camera %d center %.0f,%.0f,%.0f eye %.0f,%.0f,%.0f dir %d,%d dist %.0f\n", (unsigned)frame,
