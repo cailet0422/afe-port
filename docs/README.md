@@ -55,7 +55,9 @@ afe-decomp를 기반으로 한 PC(Windows/Linux)·Android 포트와 한국어 �
   콜백(N64식 음악)을 대신한다(`pc_nes_fixnes.c`).
 - 원래 빅엔디언 원시 바이트(`u8[]`)로 들어 있는 데이터를 다른 곳에서 `u16`/구조체로 읽는
   경우가 있어, `pc/tools/gen_data_fixups.py`가 그런 블롭을 찾아 부팅 시 한 번 바이트 순서를
-  바꾸는 표(`pc_data_fixups.c`)를 만든다.
+  바꾸는 표(`pc_data_fixups.c`)를 만든다. `static`으로 선언된 블롭(리셋 센터 방·의자, 일기장 가구의 팔레트 6개)은
+  밖에서 이름을 부를 수 없으므로, 그 소스 파일에 `-include`로 넣는 헤더(`gen/static_fixups/`)가 블롭을 미리
+  선언하고 표의 항목을 그 파일 안에서 정의한다(소스와 오브젝트 파일 이름은 그대로).
 - 디컴프가 포인터를 `u32`로 다루는 곳이 많아 데스크톱은 **32비트(x86) 빌드**가 기본이다. 64비트
   (Android arm64용)는 `TARGET_PC` 안에서 포인터 크기를 따르도록 고쳐 리눅스 x86_64에서 새 게임 진행까지
   확인했다([64bit.md](64bit.md), CMake `-DPC_ALLOW_64BIT=ON`).
@@ -192,7 +194,8 @@ ninja -C pc/build32strip
 가끔만 나오는 장면을 위한 디버그 명령: `GIVE`(소지품에 아이템), `LEDIT`(이름 입력 편집기 열기: 주민의 말버릇
 등), `RESETS`(저장 없이 끈 횟수 — 도루묵씨가 온다), `CATCH`(주민의 말버릇 바이트 출력), `ITEM`(메뉴가 고른
 아이템 출력), `JOBDONE`(아르바이트를 게임이 끝내는 것처럼 끝냄: 심부름을 지우고 HRA 안내를 기다리게 하고 시계를 다시 돌림),
-`NOJOB`(아르바이트 이벤트만 끔).
+`NOJOB`(아르바이트 이벤트만 끔), `FG x,z 아이템`(땅의 그 칸에 아이템을 놓음: `008D` 도루묵씨 구멍에 걸어 들어가면
+리셋 센터로 떨어진다).
 
 ## 마일스톤
 
@@ -301,8 +304,6 @@ ninja -C pc/build32strip
 
 ## 알려진 문제
 
-- 정적(static)으로 선언된 데이터 3개(`int_iid_diary`, `int_ike_molcenter_locker`, `int_ike_molcenter_wall`)는
-  부팅 시 바이트 순서 보정을 못 하고 있음(빌드할 때 `gen_data_fixups.py`가 경고).
 - 세이브는 PC의 바이트 순서(리틀엔디언) 그대로 `save/card_a/`에 파일로 저장된다. 게임큐브 메모리 카드에서 꺼낸
   세이브(GCI)는 `afe_gci` 도구로 가져오고 내보낸다(마을 `DobutsunomoriE_MURA`, 패미컴 공통 세이브
   `DobutsunomoriE_F_SAVE`; 사용법은 [dev_setup.md](dev_setup.md)). 필드 표는 e+ 헤더에서 생성하고

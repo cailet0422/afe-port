@@ -22,6 +22,10 @@ typedef struct {
 
 extern const PCDataFixup pc_data_fixups[];
 extern const int pc_data_fixup_count;
+/* Blobs declared static: each entry is defined in the blob's own source file
+ * (gen_data_fixups.py force-includes it there) */
+extern const PCDataFixup* const pc_static_data_fixups[];
+extern const int pc_static_data_fixup_count;
 
 /* A raw display list blob as the host's Gfx[]: the copy made at boot when
  * Gfx is wider than the disc's 8 bytes, else p itself */

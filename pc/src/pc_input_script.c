@@ -66,6 +66,7 @@ typedef enum {
     SCRIPT_BELLS,
     SCRIPT_WARP,
     SCRIPT_WEATHER,
+    SCRIPT_FG,
     SCRIPT_BGM,
 } ScriptKind;
 
@@ -263,6 +264,10 @@ int pc_input_script_load(const char* path) {
                    sscanf(arg, "%f,%f", &ev.seek_pos[0], &ev.seek_pos[1]) == 2) {
             ev.kind = SCRIPT_WARP;
             ev.value[0] = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : mSc_DIRECT_NORTH;
+        } else if (strcmp(word, "FG") == 0 && fields >= 4 &&
+                   sscanf(arg, "%f,%f", &ev.seek_pos[0], &ev.seek_pos[1]) == 2) {
+            ev.kind = SCRIPT_FG;
+            ev.value[0] = (u32)strtoul(arg2, NULL, 16);
         } else if (strcmp(word, "WEATHER") == 0 && fields >= 3) {
             ev.kind = SCRIPT_WEATHER;
             ev.value[0] = (u32)strtoul(arg, NULL, 10);
@@ -868,6 +873,13 @@ static void debug_command(const ScriptEvent* ev) {
         door.wipe_type = WIPE_TYPE_FADE_BLACK;
         printf("[INPUT] frame %u: warp to %d,%d: %d\n", (unsigned)s_frame, door.exit_position.x, door.exit_position.z,
                goto_other_scene(play, &door, FALSE));
+    } else if (ev->kind == SCRIPT_FG) {
+        /* an item on the ground (the unit at x,z), as the game puts one:
+         * Resetti's hole, a fence, a buried thing ... */
+        xyz_t wpos = { ev->seek_pos[0], 0.0f, ev->seek_pos[1] };
+
+        printf("[INPUT] frame %u: item %04X at %d,%d: %d\n", (unsigned)s_frame, (unsigned)ev->value[0],
+               (int)wpos.x, (int)wpos.z, mFI_SetFG_common((mActor_name_t)ev->value[0], wpos, TRUE));
     } else if (ev->kind == SCRIPT_WEATHER) {
         /* today's weather, as the game decides it at the start of a day (the
          * town shows it from the next scene on, e.g. after a WARP); while

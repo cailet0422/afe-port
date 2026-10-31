@@ -508,6 +508,9 @@ set(DECOMP_WARN_FLAGS "-w;-fpermissive")
 set_source_files_properties(${DECOMP_C_SOURCES} ${DECOMP_CXX_SOURCES}
     PROPERTIES COMPILE_OPTIONS "${DECOMP_WARN_FLAGS}"
 )
+# Static blobs the boot fixups swap: their entries are force-included into
+# their own sources (after the line above, which sets COMPILE_OPTIONS anew)
+include("${MODULE_DATA_DIR}/static_fixups.cmake")
 set(PC_C_SOURCES ${PC_SOURCES})
 list(FILTER PC_C_SOURCES EXCLUDE REGEX "\\.cpp$")
 set(PC_CXX_SOURCES ${PC_SOURCES})
