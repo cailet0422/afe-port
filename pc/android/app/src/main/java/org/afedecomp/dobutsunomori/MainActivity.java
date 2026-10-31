@@ -1,33 +1,17 @@
 package org.afedecomp.dobutsunomori;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
-import android.content.ClipData;
-import android.content.ClipboardManager;
 import android.content.ContentResolver;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
 import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
-import android.widget.Toast;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
-import java.io.Writer;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayDeque;
 import java.util.Locale;
 
 import org.libsdl.app.SDLActivity;
@@ -39,8 +23,7 @@ import org.libsdl.app.SDLActivity;
  * patch file comes from the system file picker. The static methods are
  * called from the game thread, see pc/src/pc_rom_dir.c.
  *
- * If the last run crashed (crash.txt, written by pc/src/pc_android.c or by
- * the Java exception handler here), the next start shows what happened. */
+ * LaunchActivity starts it, after showing the last crash if there was one. */
 public class MainActivity extends SDLActivity {
     private static final int REQUEST_DISC_FOLDER = 0x4166;
     private static final int REQUEST_PATCH_FILE = 0x4167;
@@ -57,115 +40,19 @@ public class MainActivity extends SDLActivity {
         return new String[] { "SDL2", "main" };
     }
 
+    /* pc_platform.h defines SDL_MAIN_HANDLED, so pc_main.c's main() keeps its
+     * name instead of becoming SDL_main. Without this SDL found no SDL_main
+     * in libmain.so and closed the app right away (v0.1.0-v0.1.2). */
+    @Override
+    protected String getMainFunction() {
+        return "main";
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        /* Before SDL starts the game, which writes a new log.txt */
-        final String lastCrash = readLastCrash();
-
-        installCrashHandler();
+        /* Java exceptions go to crash.txt; LaunchActivity shows them next time */
+        CrashReport.installHandler(this);
         super.onCreate(savedInstanceState);
-        if (lastCrash != null) {
-            showLastCrash(lastCrash);
-        }
-    }
-
-    /* The folder the game runs in (pc_android_prepare) */
-    private File dataFolder() {
-        File dir = getExternalFilesDir(null);
-
-        return dir != null ? dir : getFilesDir();
-    }
-
-    /* A Java exception that ends the app is written to crash.txt as well */
-    private void installCrashHandler() {
-        final Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
-        final File crash = new File(dataFolder(), "crash.txt");
-
-        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-            @Override
-            public void uncaughtException(Thread thread, Throwable e) {
-                try (PrintWriter out = new PrintWriter(new OutputStreamWriter(new FileOutputStream(crash), StandardCharsets.UTF_8))) {
-                    out.println("Java exception in thread " + thread.getName());
-                    e.printStackTrace(out);
-                } catch (Throwable ignored) {
-                    // nothing more to do
-                }
-                if (previous != null) {
-                    previous.uncaughtException(thread, e);
-                }
-            }
-        });
-    }
-
-    /* The report of the run that crashed, with the end of its log, or null.
-     * Kept as crash_prev.txt; crash.txt is removed so it shows once. */
-    private String readLastCrash() {
-        File dir = dataFolder();
-        File crash = new File(dir, "crash.txt");
-        StringBuilder text = new StringBuilder();
-        String version = "?";
-
-        if (!crash.isFile()) {
-            return null;
-        }
-        try {
-            version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-        } catch (Exception e) {
-            // only for the report
-        }
-        text.append("version ").append(version).append(", Android ").append(Build.VERSION.RELEASE)
-            .append(" (API ").append(Build.VERSION.SDK_INT).append("), ").append(Build.MANUFACTURER)
-            .append(' ').append(Build.MODEL).append(", ").append(Build.SUPPORTED_ABIS[0]).append('\n');
-        text.append(readLines(crash, 200));
-        text.append("--- log.txt ---\n").append(readLines(new File(dir, "log.txt"), 40));
-        try (Writer out = new OutputStreamWriter(new FileOutputStream(new File(dir, "crash_prev.txt")), StandardCharsets.UTF_8)) {
-            out.write(text.toString());
-        } catch (Exception e) {
-            // the dialog still shows it
-        }
-        crash.delete();
-        return text.toString();
-    }
-
-    /* The last lines of a text file */
-    private static String readLines(File file, int count) {
-        ArrayDeque<String> lines = new ArrayDeque<String>();
-        StringBuilder text = new StringBuilder();
-        String line;
-
-        try (BufferedReader in = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
-            while ((line = in.readLine()) != null) {
-                if (lines.size() == count) {
-                    lines.removeFirst();
-                }
-                lines.addLast(line);
-            }
-        } catch (Exception e) {
-            return "(" + file.getName() + ": " + e.getMessage() + ")\n";
-        }
-        for (String l : lines) {
-            text.append(l).append('\n');
-        }
-        return text.toString();
-    }
-
-    private void showLastCrash(final String report) {
-        new AlertDialog.Builder(this)
-            .setTitle("지난번 실행이 비정상 종료됐습니다")
-            .setMessage("아래 내용을 복사해 이슈로 보내 주시면 원인을 찾는 데 도움이 됩니다.\n\n" + report)
-            .setPositiveButton("복사", new DialogInterface.OnClickListener() {
-                @Override
-                public void onClick(DialogInterface dialog, int which) {
-                    ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-
-                    if (clipboard != null) {
-                        clipboard.setPrimaryClip(ClipData.newPlainText("crash report", report));
-                        Toast.makeText(MainActivity.this, "복사했습니다", Toast.LENGTH_SHORT).show();
-                    }
-                }
-            })
-            .setNegativeButton("닫기", null)
-            .show();
     }
 
     /* Opens the folder picker; returns 1 if it did (then poll pickState) */

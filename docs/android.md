@@ -70,6 +70,26 @@ apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
 빌드였다. 라이브러리는 16KB 페이지 기기(Android 15 이후)에서도 올라가게 16KB로 정렬한다
 (`ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES`).
 
+## 에뮬레이터로 확인
+
+ABI를 `-Pabis=x86_64`로 바꿔 빌드하면 x86_64 에뮬레이터에서 돌릴 수 있다(기본은 `armeabi-v7a,arm64-v8a`).
+KVM이 없는 리눅스(이 작업 환경)에서 한 방법:
+
+```sh
+sdkmanager "emulator" "system-images;android-34;default;x86_64"
+avdmanager create avd -n x64 -k "system-images;android-34;default;x86_64" -d pixel_6
+# config.ini: disk.dataPartition.size = 2147483648 (디스크가 모자라면 AVD를 /dev/shm에 두고 ANDROID_AVD_HOME 지정)
+E=$ANDROID_SDK_ROOT/emulator
+LD_LIBRARY_PATH=$E/lib64:$E/lib64/qt/lib:$E/lib64/gles_swiftshader \
+  $E/qemu/linux-x86_64/qemu-system-x86_64-headless -avd x64 -no-window -no-boot-anim \
+  -gpu swiftshader_indirect -feature -Vulkan -no-snapshot -accel off
+```
+
+`emulator` 런처는 KVM 없이 x86_64 이미지를 거부하므로 그 안의 qemu를 직접 띄운다(부팅 약 5분 반, 게임은 매우 느림).
+ARM64 이미지는 x86 호스트용 qemu에 PCI 버스가 없어 부팅하지 못했다. 디스크 이미지는 `adb root` 뒤
+`/data/media/0/Android/data/org.afedecomp.dobutsunomori/files/rom/`에 넣고 소유자를 앱으로 바꾼다. 확인은
+`adb logcat`(SDL, `F libc`, `F DEBUG`)과 데이터 폴더의 `log.txt`·`crash.txt`, `adb exec-out screencap -p`로 한다.
+
 릴리스 빌드 끝의 lint 검사가 Maven에서 파일을 받는다. 그 서버가 429(요청 과다)를 돌려주면 잠시 뒤 다시 실행한다
 (네이티브 빌드는 이미 끝나 있어 금방 끝난다).
 
@@ -108,8 +128,18 @@ Settings → Controls → Buttons에서 블루투스 게임패드의 버튼(과 
 
 - 앱 아이콘: `res/mipmap-*/ic_launcher.png`(48–192px)와 적응형 아이콘(`mipmap-anydpi-v26`, 전경은 108dp 판의
   가운데 80dp, 배경색 `#5AAB49`). 원본은 `pc/res/icon.png`.
-- 빌드(컴파일·링크·APK 패키징)까지 확인했다. 이 작업 환경에는 Android 기기·에뮬레이터가 없어 실제
-  실행은 확인하지 못했다. 같은 렌더러는 리눅스에서 OpenGL ES 3.0 컨텍스트로 확인했다(dev_setup.md 7).
+- 실행 확인: x86_64 에뮬레이터(Android 14, 아래 "에뮬레이터로 확인")에서 디스크 폴더 안내, 디스크 읽기(에셋 17736개),
+  오프닝과 타이틀 로고까지 확인했다. 실제 기기에서는 아직 확인하지 못했다. 같은 렌더러는 리눅스에서 OpenGL ES 3.0
+  컨텍스트로 확인했다(dev_setup.md 7).
+- v0.1.0–v0.1.2의 APK는 누르자마자 닫혔다. 두 가지가 겹쳐 있었다.
+  - `pc_platform.h`의 `SDL_MAIN_HANDLED` 때문에 `main()`이 `SDL_main`으로 바뀌지 않는다. 그래서 SDL이
+    `libmain.so`에서 `SDL_main`을 찾지 못하고(`nativeRunMain(): Couldn't find function SDL_main`) 게임을 시작하지
+    않은 채 끝났다. 크래시가 아니라서 아무 기록도 남지 않았다. `MainActivity.getMainFunction()`이 `"main"`을 돌려준다.
+  - 그 뒤로는 부팅 중 `JUTResFont::getWidth`에서 죽었다(시스템 폰트가 비어 있음). Android 빌드는 생성 소스(`gen/`의
+    foresti/foresto 데이터, 시스템 폰트)가 대상(`afe/`)의 빌드 폴더 밖에 있어 CMake가 오브젝트 이름을 `pc/` 기준
+    경로로 짓는데, `gen_rel_overlay.py`가 그 소스를 찾지 못해 에셋 17736개 중 9962개만 표에 올렸다. 이제 `pc/` 기준
+    경로도 찾는다(데스크톱 표는 바이트까지 그대로). 소스를 못 찾은 오브젝트에 0으로 채운 데이터가 있으면
+    `--require-assets`가 빌드를 멈춘다.
 - 입력: 게임패드(블루투스 등)와 물리 키보드는 SDL이 처리한다. 글자 입력 화면(이름·편지 등)이 열리면
   Android 화면 키보드가 뜨고, 그 키보드로 한글을 입력한다(`settings.ini`의 `text_input = 1`,
   README의 "시스템 입력기"). 한글패치 디스크에서는 게임 화면 아래의 화면 키보드(QWERTY 두벌식)를 손가락이나
@@ -120,10 +150,20 @@ Settings → Controls → Buttons에서 블루투스 게임패드의 버튼(과 
   미끄러지면 손가락 아래 버튼이 눌린다. 크기는 화면의 짧은 변 기준이라 4:3·20:9 모두 가장자리에 붙는다.
   실제 게임패드 버튼을 누르면 숨고, 다시 화면을 만지면 나타난다. 그리기는 프레임이 끝난 뒤 자체
   셰이더로 하고 GX 상태를 다시 적용하게 표시한다(`pc_gx_restore_after_nes`).
-- 크래시 리포트: 게임이 죽으면(SIGSEGV·SIGABRT 등, `pc_android.c`) 데이터 폴더에 `crash.txt`(시그널, 주소,
-  `libmain.so+오프셋 (함수)` 형식의 호출 스택)를 쓰고 시스템의 처리기(tombstone)로 넘긴다. 자바 예외도 같은 파일에
-  쓴다(`MainActivity.installCrashHandler`). 다음 실행 때 앱 버전·기기·Android 버전과 `log.txt`의 끝 40줄을 붙여 대화상자로
-  보여 주고("복사" 버튼), `crash_prev.txt`로 남긴다. `log.txt`는 줄 단위로 바로 쓴다.
+- 크래시 리포트: 런처 아이콘은 `LaunchActivity`를 연다. 지난 실행이 비정상으로 끝났으면 게임(`MainActivity`, 네이티브
+  라이브러리를 올림)을 띄우기 전에 그 내용을 보여 주고("복사", "게임 시작", "닫기"), 아니면 바로 게임을 띄운다.
+  게임과 같은 프로세스에서 창을 띄우면 시작하자마자 다시 죽을 때 창도 같이 사라지기 때문이다(v0.1.2). 내용(`CrashReport.java`):
+  - `crash.txt`: 게임의 네이티브 크래시(SIGSEGV·SIGABRT 등, `pc_android.c`; 시그널, 주소, `libmain.so+오프셋 (함수)`
+    형식의 호출 스택. 쓴 뒤 시스템의 처리기로 넘긴다)나 자바 예외(`CrashReport.installHandler`).
+  - 시스템의 종료 기록(`ApplicationExitInfo`, Android 11+): 크래시, ANR, 오류 상태의 `exit()`. 게임의 처리기가 서기
+    전(라이브러리를 올리는 중 등)의 크래시도 남는다. Android 12+의 네이티브 크래시는 tombstone(protobuf)을 읽어
+    시그널, 죽은 스레드의 호출 스택, 그 프로세스의 마지막 logcat 40줄을 붙인다(`Tombstone.java`).
+  - 앱 버전·기기·Android 버전과 `log.txt`의 끝 40줄. 전체는 `crash_prev.txt`로 남고, 같은 크래시는 한 번만 보인다.
+  `log.txt`는 줄 단위로 바로 쓴다.
+- 크래시 보호(`pc_crash_set_jmpbuf`, emu64가 디스플레이 리스트에서 잘못된 주소를 읽으면 그 프레임을 건너뜀)는
+  `jmp_buf`를 건 스레드의 폴트에서만 `longjmp`한다. 예전에는 다른 스레드(Android UI 스레드, 오디오)의 SIGSEGV도
+  게임 스레드의 스택으로 뛰어, 두 스레드가 게임 코드를 함께 돌다 "stack corruption detected"로 죽었다(에뮬레이터에서
+  실행 중 `kill -SEGV`로 재현). 이제 그런 폴트는 그대로 크래시 리포트로 간다.
 - 뒤로 버튼은 앱을 끄지 않고 일시정지 메뉴를 연다(`SDL_HINT_ANDROID_TRAP_BACK_BUTTON`, Esc와 같음).
   일시정지 메뉴는 키 입력만 받으므로 화면 패드의 십자키/A/B(START)를 방향키/Enter/Esc로 바꿔 보낸다.
   글자 입력 중 화면 키보드를 내렸으면 패드가 없는 곳을 눌러 다시 띄운다. 터치는 마우스 클릭으로
