@@ -71,7 +71,7 @@ cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
   액터의 위치를 찍고(`POS`, `--verbose`일 때 나옴; 한 구역은 640),
   주민이나 지점까지는 `SEEK:E038:600`처럼 걷게 한다(막히면 옆으로 비켜 감).
   게임이 가끔만 여는 화면은 `MENU <이름> [인자0] [인자1]`(`ALARMIN`, `TIMEIN`, `HBOARD`, `PASSWORDMAKE`, `PASSWORDCHK`,
-  `NOTICE`, `WARNING`, `CALENDAR`, `FILM` …, `pc/include/pc_input_script.h`)로 연다.
+  `NOTICE`, `WARNING`, `CALENDAR`, `FILM`, `MAP` …, `pc/include/pc_input_script.h`)로 연다.
 - 보통 속도 확인: `--no-framelimit` 없이(필요하면 `--script-fast`만) 돌리면 소리가 별도 스레드에서 돈다.
   `--deterministic`이 아니면 마을이 매번 달라 `--save` 경로가 저장까지 가지 못할 수 있지만 끝까지 크래시·멈춤
   없이 도는지 보는 데 쓴다(llvmpipe에서 모든 프레임을 그리면 30fps 안팎이라 시간이 두 배쯤 걸린다).
