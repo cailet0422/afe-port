@@ -273,6 +273,25 @@ static void test_fields(void) {
     CHECK(s->melody == 0x0123456789ABCDEFull);
 }
 
+/* --- bridge_flags: the game uses both the bit-fields and `raw` --- */
+
+static void test_bridge_flags(void) {
+    static Save_t s;
+
+    /* as on the GameCube: bit 7 is used_all_locations, raw++ counts
+     * locations_used up (m_event.c, ac_event_manager.c, ac_ev_soncho_talk) */
+    s.event_save_common.bridge_flags.raw = 0x85;
+    CHECK(s.event_save_common.bridge_flags.used_all_locations == 1);
+    CHECK(s.event_save_common.bridge_flags.locations_used == 5);
+    s.event_save_common.bridge_flags.raw = 0;
+    s.event_save_common.bridge_flags.raw++;
+    s.event_save_common.bridge_flags.raw++;
+    CHECK(s.event_save_common.bridge_flags.locations_used == 2);
+    CHECK(s.event_save_common.bridge_flags.used_all_locations == 0);
+    s.event_save_common.bridge_flags.used_all_locations = 1;
+    CHECK(s.event_save_common.bridge_flags.raw == 0x82);
+}
+
 /* --- the whole town file: PC -> GameCube -> PC is the same bytes --- */
 
 static void make_land(u8* land) {
@@ -483,6 +502,7 @@ static void test_gci(void) {
 int main(void) {
     test_checksum();
     test_fields();
+    test_bridge_flags();
     test_land_roundtrip();
     test_famicom();
     test_gci();
