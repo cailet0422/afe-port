@@ -30,8 +30,8 @@ android {
         applicationId 'org.afedecomp.dobutsunomori'
         minSdk 21
         targetSdk 34
-        versionCode 1
-        versionName '0.1'
+        versionCode 2
+        versionName '0.1.2'
         ndk {
             // Many recent phones run only 64-bit apps (docs/64bit.md)
             abiFilters 'armeabi-v7a', 'arm64-v8a'
@@ -41,6 +41,8 @@ android {
                 arguments "-DSDL_SOURCE_DIR=${sdlDir}",
                           "-DPC_ANDROID_ASSET_DIR=${assetDir}",
                           '-DPC_ALLOW_64BIT=ON',
+                          // 16 KB-page devices (Android 15+) load only 16 KB-aligned libraries
+                          '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON',
                           "-DPC_STRIP_ASSETS=${stripAssets}",
                           '-DANDROID_STL=c++_shared'
             }

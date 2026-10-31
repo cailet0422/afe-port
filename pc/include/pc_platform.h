@@ -95,6 +95,7 @@ extern int g_pc_widescreen_stretch;
 void pc_platform_init(void);
 #ifdef __ANDROID__
 void pc_android_prepare(void); /* working folder and APK assets (pc_android.c) */
+void pc_android_crash(int sig, siginfo_t* info, void* ucontext); /* writes crash.txt, then the system's handler */
 #endif
 void pc_platform_shutdown(void);
 void pc_platform_swap_buffers(void);

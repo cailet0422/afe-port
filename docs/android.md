@@ -64,6 +64,12 @@ gradle assembleRelease -PsdlDir=/path/to/SDL2-2.30.9 -PstripAssets
 apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
 ```
 
+릴리스 빌드도 디컴프 코드를 데스크톱처럼 `-O0`으로 만든다. Gradle 플러그인은 릴리스를 CMake `RelWithDebInfo`(`-O2`)로
+빌드하는데, 최적화는 디컴프 코드의 정의되지 않은 동작을 드러내고 bionic의 FORTIFY 검사(최적화할 때만 켜짐)도 켠다.
+그래서 `pc/CMakeLists.txt`가 빌드 타입의 `-O` 플래그를 지운다(SDL2는 그대로 `-O2`). v0.1.1의 APK가 이 `-O2`
+빌드였다. 라이브러리는 16KB 페이지 기기(Android 15 이후)에서도 올라가게 16KB로 정렬한다
+(`ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES`).
+
 릴리스 빌드 끝의 lint 검사가 Maven에서 파일을 받는다. 그 서버가 429(요청 과다)를 돌려주면 잠시 뒤 다시 실행한다
 (네이티브 빌드는 이미 끝나 있어 금방 끝난다).
 
@@ -114,6 +120,10 @@ Settings → Controls → Buttons에서 블루투스 게임패드의 버튼(과 
   미끄러지면 손가락 아래 버튼이 눌린다. 크기는 화면의 짧은 변 기준이라 4:3·20:9 모두 가장자리에 붙는다.
   실제 게임패드 버튼을 누르면 숨고, 다시 화면을 만지면 나타난다. 그리기는 프레임이 끝난 뒤 자체
   셰이더로 하고 GX 상태를 다시 적용하게 표시한다(`pc_gx_restore_after_nes`).
+- 크래시 리포트: 게임이 죽으면(SIGSEGV·SIGABRT 등, `pc_android.c`) 데이터 폴더에 `crash.txt`(시그널, 주소,
+  `libmain.so+오프셋 (함수)` 형식의 호출 스택)를 쓰고 시스템의 처리기(tombstone)로 넘긴다. 자바 예외도 같은 파일에
+  쓴다(`MainActivity.installCrashHandler`). 다음 실행 때 앱 버전·기기·Android 버전과 `log.txt`의 끝 40줄을 붙여 대화상자로
+  보여 주고("복사" 버튼), `crash_prev.txt`로 남긴다. `log.txt`는 줄 단위로 바로 쓴다.
 - 뒤로 버튼은 앱을 끄지 않고 일시정지 메뉴를 연다(`SDL_HINT_ANDROID_TRAP_BACK_BUTTON`, Esc와 같음).
   일시정지 메뉴는 키 입력만 받으므로 화면 패드의 십자키/A/B(START)를 방향키/Enter/Esc로 바꿔 보낸다.
   글자 입력 중 화면 키보드를 내렸으면 패드가 없는 곳을 눌러 다시 띄운다. 터치는 마우스 클릭으로

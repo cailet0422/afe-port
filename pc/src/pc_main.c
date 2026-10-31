@@ -86,8 +86,12 @@ static void pc_signal_handler(int sig, siginfo_t* info, void* ucontext) {
         pc_active_jmpbuf = NULL;
         longjmp(*buf, 1);
     }
+#ifdef __ANDROID__
+    pc_android_crash(sig, info, ucontext); /* crash.txt for the next start */
+#else
     signal(sig, SIG_DFL);
     raise(sig);
+#endif
 }
 #endif
 
@@ -105,6 +109,9 @@ void pc_crash_protection_init(void) {
         memset(&sa, 0, sizeof(sa));
         sa.sa_sigaction = pc_signal_handler;
         sa.sa_flags = SA_SIGINFO;
+#ifdef __ANDROID__
+        sa.sa_flags |= SA_ONSTACK; /* Android gives each thread a signal stack */
+#endif
         sigaction(SIGSEGV, &sa, NULL);
         sigaction(SIGILL, &sa, NULL);
         sigaction(SIGFPE, &sa, NULL);
