@@ -38,11 +38,16 @@ typedef struct {
     int         restart;
 } Item;
 
+/* Android always fills the screen, so it has no window mode or size */
 static const Item tab_video_items[] = {
+#ifndef __ANDROID__
     { "Display",    ITEM_DISPLAY,  0 },
+#endif
     { "VSync",      ITEM_VSYNC,    0 },
     { "MSAA",       ITEM_MSAA,     1 },
+#ifndef __ANDROID__
     { "Resolution", ITEM_RES,      0 },
+#endif
     { "Textures",   ITEM_TEXTURES, 1 },
 };
 

@@ -3,6 +3,7 @@
 #define _GNU_SOURCE /* dladdr / Dl_info */
 #endif
 #include "pc_platform.h"
+#include <stdarg.h>
 #include "pc_gx_internal.h"
 #include "pc_texture_pack.h"
 #include "pc_settings.h"
@@ -136,14 +137,41 @@ unsigned int pc_crash_get_addr(void) {
     return pc_last_crash_addr;
 }
 
+/* Ends the process. On Android not with exit(): its C++ static destructors
+ * (libhwui's among them) run while the system's render thread still uses
+ * them, which aborted with "FORTIFY: pthread_mutex_lock called on a
+ * destroyed mutex" after every quit and restart */
+void pc_exit(int code) {
+    fflush(stdout);
+    fflush(stderr);
+#ifdef __ANDROID__
+    _exit(code);
+#else
+    exit(code);
+#endif
+}
+
+/* A start-up failure the player has to see: logged, shown in a message box
+ * (there is no console on Windows and Android), then the process ends */
+void pc_fatal(const char* fmt, ...) {
+    char msg[1024];
+    va_list ap;
+
+    va_start(ap, fmt);
+    vsnprintf(msg, sizeof(msg), fmt, ap);
+    va_end(ap);
+    fprintf(stderr, "FATAL: %s\n", msg);
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, PC_WINDOW_TITLE, msg, NULL);
+    pc_exit(1);
+}
+
 void pc_platform_init(void) {
 #ifdef _WIN32
     SetProcessDPIAware();
 
 #endif
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO | SDL_INIT_TIMER) < 0) {
-        fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
-        exit(1);
+        pc_fatal("SDL_Init failed: %s", SDL_GetError());
     }
 
 #ifdef PC_GLES
@@ -157,32 +185,56 @@ void pc_platform_init(void) {
 #endif
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-#ifdef PC_ENHANCEMENTS
-    if (g_pc_settings.msaa > 0) {
-        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, g_pc_settings.msaa);
-    }
-#endif
-
     {
         Uint32 flags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
         int win_w = g_pc_settings.window_width;
         int win_h = g_pc_settings.window_height;
+        int samples = 0;
+#ifdef PC_ENHANCEMENTS
+        samples = g_pc_settings.msaa;
+#endif
+#ifdef __ANDROID__
+        /* Always the whole screen; the window mode and size are the PC's */
+        flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+#else
         if (g_pc_settings.fullscreen == 1) {
             flags |= SDL_WINDOW_FULLSCREEN;
         } else if (g_pc_settings.fullscreen == 2) {
             flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
         }
-        g_pc_window = SDL_CreateWindow(
-            PC_WINDOW_TITLE,
-            SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-            win_w, win_h, flags
-        );
-    }
-    if (!g_pc_window) {
-        fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
-        SDL_Quit();
-        exit(1);
+#endif
+        /* A GPU may not offer the MSAA asked for (a Galaxy Z Flip6 has no 8x
+         * EGL config, and the game then ended at every start because the
+         * setting was saved): try fewer samples, down to none */
+        for (;;) {
+            SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, samples > 0 ? 1 : 0);
+            SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, samples);
+            g_pc_window = SDL_CreateWindow(
+                PC_WINDOW_TITLE,
+                SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                win_w, win_h, flags
+            );
+            if (g_pc_window) {
+                g_pc_gl_context = SDL_GL_CreateContext(g_pc_window);
+                if (g_pc_gl_context) {
+                    break;
+                }
+                fprintf(stderr, "SDL_GL_CreateContext failed (MSAA %dx): %s\n", samples, SDL_GetError());
+                SDL_DestroyWindow(g_pc_window);
+                g_pc_window = NULL;
+            } else {
+                fprintf(stderr, "SDL_CreateWindow failed (MSAA %dx): %s\n", samples, SDL_GetError());
+            }
+            if (samples <= 0) {
+                pc_fatal("The game window could not be opened: %s", SDL_GetError());
+            }
+            samples = samples > 4 ? 4 : samples / 2;
+        }
+#ifdef PC_ENHANCEMENTS
+        if (samples != g_pc_settings.msaa) {
+            printf("[PC] MSAA %dx is not available, using %dx\n", g_pc_settings.msaa, samples);
+        }
+#endif
     }
 #ifndef __ANDROID__
     {
@@ -198,21 +250,9 @@ void pc_platform_init(void) {
     }
 #endif
 
-    g_pc_gl_context = SDL_GL_CreateContext(g_pc_window);
-    if (!g_pc_gl_context) {
-        fprintf(stderr, "SDL_GL_CreateContext failed: %s\n", SDL_GetError());
-        SDL_DestroyWindow(g_pc_window);
-        SDL_Quit();
-        exit(1);
-    }
-
 #ifndef PC_GLES
     if (!gladLoadGL((GLADloadfunc)SDL_GL_GetProcAddress)) {
-        fprintf(stderr, "gladLoadGL failed\n");
-        SDL_GL_DeleteContext(g_pc_gl_context);
-        SDL_DestroyWindow(g_pc_window);
-        SDL_Quit();
-        exit(1);
+        pc_fatal("OpenGL 3.3 could not be loaded (gladLoadGL failed).");
     }
 #endif
 
@@ -256,6 +296,12 @@ void pc_platform_shutdown(void) {
         g_pc_window = NULL;
     }
     SDL_Quit();
+#ifdef __ANDROID__
+    /* Quit Game and the restart after the Korean patch end here (the game's
+     * main then calls exit(), see pc_exit); a restart was already handed to
+     * RestartActivity by pc_request_restart */
+    pc_exit(0);
+#endif
 }
 
 void pc_platform_update_window_size(void) {

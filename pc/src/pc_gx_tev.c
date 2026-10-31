@@ -96,12 +96,10 @@ void pc_gx_tev_init(void) {
     char* fs_src = load_shader("default.frag");
 
     if (!vs_src || !fs_src) {
-        fprintf(stderr, "FATAL: Shader files missing from shaders/ directory.\n"
-                        "Expected: shaders/default.vert and shaders/default.frag\n"
-                        "Make sure shader files are next to the executable.\n");
         free(vs_src);
         free(fs_src);
-        exit(1);
+        pc_fatal("Shader files missing from the shaders/ folder (default.vert and default.frag). "
+                 "Make sure the shaders folder is next to the executable.");
     }
 
     GLuint vs = compile_shader(GL_VERTEX_SHADER, vs_src);

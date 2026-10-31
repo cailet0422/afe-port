@@ -30,8 +30,8 @@ android {
         applicationId 'org.afedecomp.dobutsunomori'
         minSdk 21
         targetSdk 34
-        versionCode 3
-        versionName '0.1.3'
+        versionCode 4
+        versionName '0.1.4'
         ndk {
             // Many recent phones run only 64-bit apps (docs/64bit.md).
             // -Pabis=x86_64 builds for the emulator instead

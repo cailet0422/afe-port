@@ -226,6 +226,13 @@ void pc_settings_cycle_resolution(int* width, int* height, int dir) {
 void pc_settings_apply(void) {
     if (!g_pc_window) return;
 
+#ifdef __ANDROID__
+    /* The game always fills the screen; window mode and size are the PC's
+     * (changing them took the app out of full screen) */
+    SDL_GL_SetSwapInterval(g_pc_settings.vsync);
+    printf("[Settings] Applied: vsync=%d msaa=%d\n", g_pc_settings.vsync, g_pc_settings.msaa);
+    return;
+#endif
     int w = g_pc_settings.window_width;
     int h = g_pc_settings.window_height;
 

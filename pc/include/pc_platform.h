@@ -98,6 +98,8 @@ void pc_android_prepare(void); /* working folder and APK assets (pc_android.c) *
 void pc_android_crash(int sig, siginfo_t* info, void* ucontext); /* writes crash.txt, then the system's handler */
 #endif
 void pc_platform_shutdown(void);
+void pc_exit(int code);                  /* ends the process (_exit on Android, see pc_main.c) */
+void pc_fatal(const char* fmt, ...);     /* start-up failure: log, message box, end */
 void pc_platform_swap_buffers(void);
 int  pc_platform_poll_events(void);
 
