@@ -130,6 +130,7 @@ extern int pc_gx_draw_call_count;
 extern int pc_save_loaded;
 int  pc_audio_get_buffer_fill(void);
 void pc_audio_frame(void);
+int  pc_audio_sleep(u32 ms); /* msleep with --deterministic: makes the sound, returns 1 */
 int  pc_audio_is_active(void);
 void pc_audio_set_paused(int paused); // Can be used to pause the audio. Not used at the moment.
 void pc_audio_shutdown(void);

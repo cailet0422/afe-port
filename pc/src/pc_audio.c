@@ -146,6 +146,17 @@ void pc_audio_frame(void) {
     }
 }
 
+/* msleep: with --deterministic, the sound of that much time instead of a wait */
+int pc_audio_sleep(u32 ms) {
+    u32 frames = ms * 60 / 1000;
+
+    if (!audio_frame_driven) return 0;
+    while (frames-- > 0) {
+        pc_audio_frame();
+    }
+    return 1;
+}
+
 void pc_audio_start_producer_thread(void) {
     if (g_pc_deterministic) {
         audio_frame_driven = 1;
