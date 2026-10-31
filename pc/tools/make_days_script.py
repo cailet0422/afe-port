@@ -34,6 +34,23 @@ player go, so a scenario can start on what the game makes of day two.
               mailbox; on through four more midnights to Saturday 20:00,
               K.K.'s song; save. POS prints the game's date (time ...)
 
+Events, each on the save make_newgame_script.py --save leaves (the job is
+still on there: NOJOB first). Where things stand is that town's: the lot the
+broker's tent goes on, Franklin's block, the pond (POS prints the pool block,
+the visitor's place and today's events with their blocks):
+
+  broker      the broker's sale (--days 26: 11/27; the week's visitor is
+              decided a day or two ahead, POS "special event 75"): CLOCK 18:01,
+              when it opens; the tent goes on a lot out of sight (WARP home
+              first), then in front of it: Redd at the door, into the tent
+  harvest     the harvest festival (--days 25 --time 18:30, 11/26): the
+              announcement at the station on the first scene change, Franklin
+              (D08D) and his talk
+  countdown   New Year's Eve (--days 60 --time 23:45): the announcement, the
+              countdown by the pond (walked into from the north: the event's
+              people are set while the block is out of sight), CLOCK 23:59:40,
+              midnight: HAPPY NEW YEAR, fireworks, a villager's talk
+
 Every step leaves a screenshot n_<scenario>_<n>_<step>; with --verbose the
 POS at each shows where the player is.
 
@@ -378,9 +395,64 @@ def house_next():
     save_at_haniwa()
 
 
+def announcement():
+    """The first scene change of an event day shows its announcement at the
+    station; A through it, back by the house"""
+    do("NOJOB", 10)
+    do("WARP 2128,1488", 400)
+    for i in range(6):
+        shot(f"announce{i}", 0)
+        do("A", 300)
+
+
+def broker():
+    do("NOJOB", 10)
+    do("CLOCK 18:01", 10)                      # the sale opens at 18:00
+    do("WARP 2128,1488", 680)                  # home: the tent goes on a lot out of sight
+    do("WARP 1420,1700 4", 400)                # south of the lot by the sign (1420,1580)
+    shot("tent", 0)
+    do("SU 30", 50)
+    do("A", 240)
+    shot("redd", 0)                             # 이야~, 어이쿠 이거 참! 손님, 어서옵쇼~~!
+    do("TALKEND 3000 60", 10)
+    shot("talked", 0)
+    do("SU 120", 260)
+    shot("door", 400)
+    shot("inside", 0)                           # scene 12
+    do("SU 60", 90)
+    do("A", 290)
+    shot("redd_inside", 0)                      # 자, 어서어서, 손님~!
+    do("TALKEND 2000 60", 10)
+
+
+def harvest():
+    announcement()                              # 여러분~! 추수감사절이에요!
+    do("WARP 3520,2880 4", 400)                # Franklin's block in that run
+    shot("franklin", 0)
+    do("SEEK D08D 600", 610)
+    do("A", 270)
+    shot("franklin_talk", 0)                    # 으아아아! 뭐, 뭐, 뭐야? ...
+    do("TALKEND 3000 60", 10)
+    shot("franklin_after", 0)
+
+
+def countdown():
+    announcement()                              # 여러분~! 새해맞이 카운트다운에 와 주세요~!!
+    do("WARP 2240,1800", 400)                  # north of the pond's block (3,3)
+    do("SEEK 2240,2100 400", 410)
+    shot("pond", 0)
+    do("CLOCK 23:59:40", 10)
+    for i in range(8):                          # 1분 전이야!!! ... HAPPY NEW YEAR!!
+        shot(f"midnight{i}", 300)
+    do("SEEK D047 300", 310)
+    do("A", 290)
+    shot("villager", 0)
+    do("TALKEND 3000 60", 10)
+
+
 SCENARIOS = {"letter": letter, "reply": reply, "kk": kk, "house": house, "house-next": house_next,
              "island-buy": island_buy, "island": island,
-             "rooms": rooms, "week": week}
+             "rooms": rooms, "week": week, "broker": broker, "harvest": harvest, "countdown": countdown}
 ISLAND_CHOICES = [int(c) for c in sys.argv[2].split(",")] if len(sys.argv) > 2 and sys.argv[1] == "island" else [0]
 PAYS = int(sys.argv[2]) if len(sys.argv) > 2 else 1
 OFFER = [int(c) for c in sys.argv[3].split(",")] if len(sys.argv) > 3 else [0, 9]

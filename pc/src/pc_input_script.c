@@ -708,6 +708,32 @@ static void log_positions(u32 frame) {
         printf("[POS] frame %u special event %d day %04X state %d weekly %d\n", (unsigned)frame,
                (int)(s16)mEv_get_special_event_type(), (unsigned)mEv_get_special_event_day(),
                mEv_get_special_event_state(), (int)Save_Get(event_save_common).weekly_event.type);
+        {
+            /* where the week's visitor sets up (the broker's tent ...) */
+            int ev_type = (s16)mEv_get_special_event_type();
+            int bx, bz;
+
+            if (mEv_get_event_place(ev_type, &bx, &bz)) {
+                mEv_place_data_c* place = mEv_get_common_place(ev_type, 81); /* as mEv_get_event_place */
+
+                printf("[POS] frame %u special event place block %d,%d unit %d,%d actor %04X\n", (unsigned)frame, bx,
+                       bz, place->unit.x, place->unit.z, (unsigned)place->actor_name);
+            }
+        }
+        /* today's events (mEv_EVENT_*, by number: the harvest festival, the
+         * countdown, the visitor ...) and those running at this hour (*) */
+        printf("[POS] frame %u events today", (unsigned)frame);
+        for (int e = 0; e < mEv_EVENT_NUM; e++) {
+            if (mEv_check_run_today(e)) {
+                int bx, bz;
+
+                printf(" %d%s", e, mEv_check_schedule(e) ? "*" : "");
+                if (mEv_get_event_place(e, &bx, &bz)) {
+                    printf("@%d,%d", bx, bz); /* the block it is held in */
+                }
+            }
+        }
+        printf("\n");
     }
     if (Common_Get(player_no) < PLAYER_NUM) {
         /* the player's house and debt: a house is enlarged a day after its loan is paid */
@@ -762,6 +788,7 @@ static void log_positions(u32 frame) {
             { mRF_BLOCKKIND_POSTOFFICE, "post" }, { mRF_BLOCKKIND_TAILORS, "tailors" },
             { mRF_BLOCKKIND_POLICE, "police" },   { mRF_BLOCKKIND_SHRINE, "shrine" },
             { mRF_BLOCKKIND_DOCK, "dock" },       { mRF_BLOCKKIND_ISLAND, "island" },
+            { mRF_BLOCKKIND_POOL, "pool" }, /* the pond: the countdown, the fireworks */
         };
         ACTOR* actor;
         int bx, bz;
