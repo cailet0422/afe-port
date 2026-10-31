@@ -112,6 +112,22 @@ afe-decomp를 기반으로 한 PC(Windows/Linux)·Android 포트와 한국어 �
   텍스처). 버퍼 끝을 배열 크기로 잡는다. exe는 `0x10000000`에 링크해 120MB가 넘는 이미지가 N64 세그먼트
   주소(`0x03000000`–`0x0FFFFFFF`)와 겹치지 않게 한다.
 
+### Windows (64비트)
+
+- 리눅스에서 교차 빌드: `gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64`와 같은 SDL2 MinGW 패키지의 `x86_64-w64-mingw32`
+  ```sh
+  cmake -S pc -B pc/buildwin64 -G Ninja -DCMAKE_TOOLCHAIN_FILE=$PWD/pc/cmake/Toolchain-mingw64.cmake \
+        -DSDL2_DIR=<SDL2>/x86_64-w64-mingw32/lib/cmake/SDL2 -DPC_BUILD_TESTS=OFF -DPC_ALLOW_64BIT=ON
+  ninja -C pc/buildwin64
+  ```
+- Windows는 LLP64(`long`이 4바이트)라 리눅스·Android(LP64)와 다르지만, 타입 정의는 `__LP64__`일 때만 바꾸므로
+  `u32`/`s32`는 그대로 4바이트다. Windows에서만 나던 것: 부팅 징글(JAudio)의 표 사본은 포인터가 이미 주소인데,
+  `PTconvert`가 표 주소를 32비트로 자른 값과 비교해 그보다 작은 포인터에 기준을 또 더했다. 리눅스에서는 사본이 4GB 위에
+  있어 우연히 맞았고, Windows에서는 4GB 아래라 부팅 중에 죽었다(`Jac_InitHeap`). 64비트에서는 변환하지 않는다(afe-decomp `TARGET_PC`).
+- Wine(64비트)으로 확인: 원래 디스크 오프닝(8장), 한글패치 디스크의 새 게임(65장), 한 번에 일주일(99장), 새해 카운트다운
+  (17장)이 32비트 Windows판과 스크린샷·세이브까지 같다. `--audio-dump`의 소리는 리눅스판과 일부 구간(연못가의 계속 나는
+  소리, 폭죽)에서 파형이 조금 다르다(구간별 크기는 같음; Windows 32비트판도 마찬가지라 수학 라이브러리의 부동소수점 차이로 보임).
+
 아이콘: `pc/res/icon.png`(흰 배경을 뺀 512px 원본)에서 만든 `icon.ico`(7가지 크기, Windows 실행 파일 리소스),
 `icon64.rgba`(64×64 RGBA, 빌드 때 `bin2c.py`로 넣어 `SDL_SetWindowIcon`으로 창·작업 표시줄에 표시), Android
 `res/mipmap-*`(런처 아이콘과 Android 8+ 적응형 아이콘, 배경은 테두리의 초록 `#5AAB49`)를 쓴다.
