@@ -128,6 +128,16 @@ cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
   - `station`: `NOJOB`을 마을을 불러오기 전에(역무원은 생길 때 아르바이트 여부를 본다) 하고 역무원에게 "외출할 거야" →
     SD 확인 → 슬롯 B 메모리 카드에 플레이어, 슬롯 A에 마을 기록 → 기차 → 타이틀. 세이브가 바뀐다(`save/card_b/`).
   - `all`: `film`, `terminal`, `tailors`.
+- 여러 날(한글패치 디스크, `--save`로 만든 세이브):
+  `python3 pc/tools/make_days_script.py 시나리오 > /tmp/n.txt` 후 위와 같이 실행(스크린샷 `shots/n_시나리오_번호_단계.ppm`).
+  - `letter`(`--days 1`): `JOBDONE` → 편지지(`GIVE 2000`)로 밀크에게 "안녕" → 우체국에서 펠리에게 "편지를 보내고 싶어" →
+    "네, 확실히 받았습니다." → "또 다른 편지도?" "이제 됐어" → 하니와에서 저장(약 1분). 이 세이브를 따로 복사해 둔다.
+  - `reply`(`--days 2 --time 16:59`, `letter`의 세이브): 불러올 때 밀크의 답장이 만들어져 우체국에 맡겨지고(`mNpc_Remail`)
+    17시 배달 때 집배원이 우편함(2140,1420)에 넣는다. 우편함 앞에서 북서쪽을 보고 열어 두 번째 편지("밀크님 보냄")를 읽는다.
+    답장은 편지가 "좋다"·"나쁘다"로 판정될 때만 온다(한글로 몇 마디 쓴 편지는 판정이 안 되어 답장이 없다; korean_patch.md).
+  - `kk`(`--days 6 --time 20`, `letter`의 세이브): 토요일 밤 역 앞 K.K.(2220,940)에게 "들려 줘!" → "있어 있어!" → 편집기에
+    "K.K.보사노바" → "오케이! 그럼 들어 주세요. K.K.보사노바" → 연주(첫 연주는 스태프롤, 약 2분) → 답례 음반(약 4분).
+    선택지는 질문 쪽에서 A를 한 번 더 눌러야 나오고, 그 뒤에 스틱을 움직인다.
 - 건물 안 확인(한글패치 디스크, `--save`로 만든 세이브에서 시작, 다음 날로 돌린다):
   `python3 pc/tools/make_interior_script.py 건물 > /tmp/i.txt` 후
   `./DobutsuNoMoriEPlus --no-framelimit --script-fast --deterministic --days 1 --verbose --input-script /tmp/i.txt`

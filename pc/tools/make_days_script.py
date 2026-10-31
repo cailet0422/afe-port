@@ -11,6 +11,8 @@ player go, so a scenario can start on what the game makes of day two.
               post office, save at the haniwa (run with --days 1)
   reply       the next day at 16:59 (--days 2 --time 16:59 on the letter run's
               save): the postman's round, the mailbox, Milk's answer
+  kk          Saturday night (--days 6 --time 20 on the letter run's save):
+              ask K.K. by the station for a song (typed in Korean), his answer
 
 Every step leaves a screenshot n_<scenario>_<n>_<step>; with --verbose the
 POS at each shows where the player is.
@@ -151,7 +153,34 @@ def reply():
     shot("closed", 0)
 
 
-SCENARIOS = {"letter": letter, "reply": reply}
+def kk(keys="{HAN}K.K.{HAN}qhtkshqk"):
+    """Saturday night (--days 6 --time 20 on a save after the job): K.K. by
+    the station (D05D, 2220,940). Ask for a song in the request editor (the
+    keyboard), hear his answer (the request echoed back, aMKBC_clip_set_itemstr3)
+    and the song; the record he gives last"""
+    do("WARP 2220,990 4", 300)                 # south of him, facing north
+    shot("kk", 0)
+    presses(6, every=80, name="talk")           # his greeting, the question
+    shot("question", 60)
+    presses(3, every=80, name="ask")            # 고마워요. / 내 뮤직의 제목을 말해 주면 ...
+    do("A", 200)                                # 혹시, 듣고 싶은 곡 있나요?
+    do("A", 90)                                 # its choices: 딱히 없어 / 있어 있어!
+    shot("choices", 0)
+    do("SD 4", 40)                              # 있어 있어!
+    shot("chosen", 0)
+    do("A", 150)                                # the editor opens
+    shot("editor", 0)
+    do(f"TYPE {keys}", 30)                      # K.K.보사노바
+    shot("typed", 10)
+    do("TYPE {ENTER}", 180)
+    shot("asked", 0)
+    presses(10, every=90, name="answer", each=2)
+    for i in range(12):                         # the song (and the staff roll, the first time)
+        shot(f"song{i}", 600)
+    presses(16, every=90, name="after", each=2)
+
+
+SCENARIOS = {"letter": letter, "reply": reply, "kk": kk}
 scenario = sys.argv[1] if len(sys.argv) > 1 else ""
 if scenario not in SCENARIOS:
     sys.exit(__doc__)
