@@ -8,6 +8,16 @@
  *     <frame> POS                     print where the player and the villagers are
  *     <frame> SEEK <id>|<x>,<z> [n]   walk for up to n frames (default 600) to the
  *                                     villager with that hex id, or to a point
+ *     <frame> TALK [frames]           press A every 20 frames until a choice window
+ *                                     opens (or frames pass, default 600)
+ *     <frame> CHOOSE <n> [frames]     when a choice window takes input, pick its n-th
+ *                                     choice (from 0; 9 is the last) and press A until taken
+ *     <frame> WAITMENU [frames]       press A every 20 frames until a submenu opens
+ *     <frame> TALKEND [frames [quiet]] press A every 20 frames until the talk is over (no
+ *                                     message window for quiet frames, default 30)
+ *                                     TALK, CHOOSE, WAITMENU and TALKEND hold the script time while
+ *                                     they wait (up to frames of real time): the lines
+ *                                     after them happen that much later
  *     <frame> GIVE <item>             debug: put an item (hex id) in the first free pocket
  *     <frame> LEDIT <type> [<id>]     debug: open the name editor of that mLE_TYPE (2 is a
  *                                     catchphrase, of the villager with that hex id)

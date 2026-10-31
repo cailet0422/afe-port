@@ -11,6 +11,9 @@
 #include "m_submenu.h"
 #include "m_event.h"
 #include "m_quest.h"
+#include "m_house.h"
+#include "m_choice.h"
+#include "m_msg.h"
 #include "m_time.h"
 #include "m_actor.h"
 #include "m_player.h"
@@ -45,6 +48,10 @@ typedef enum {
     SCRIPT_PAD,
     SCRIPT_POS,
     SCRIPT_SEEK,
+    SCRIPT_CHOOSE,
+    SCRIPT_TALK,
+    SCRIPT_WAITMENU,
+    SCRIPT_TALKEND,
     SCRIPT_GIVE,
     SCRIPT_LEDIT,
     SCRIPT_RESETS,
@@ -74,11 +81,16 @@ typedef struct {
     u32 value[3]; /* GIVE item; LEDIT type and villager; RESETS count; CATCH villager; MENU
                      submenu and its two arguments; VOICELOG on */
     char name[128];
+    int done;    /* TALK, CHOOSE, WAITMENU: happened */
+    u32 started; /* TALK, CHOOSE, WAITMENU: the real frame it began waiting */
 } ScriptEvent;
 
 static ScriptEvent* s_events = NULL;
 static int s_count = 0;
-static u32 s_frame = 0;
+static u32 s_frame = 0; /* script time: real frames less those TALK, CHOOSE and WAITMENU held */
+static u32 s_real = 0;
+static u32 s_held = 0;
+static u32 s_last = 0xFFFFFFFF;
 static int s_fast = 0;
 
 void pc_input_script_set_fast(int fast) {
@@ -195,6 +207,20 @@ int pc_input_script_load(const char* path) {
             if (sscanf(arg, "%f,%f", &ev.seek_pos[0], &ev.seek_pos[1]) != 2) {
                 ev.seek_id = (u16)strtoul(arg, NULL, 16);
             }
+            ev.duration = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : SCRIPT_SEEK_FRAMES;
+        } else if (strcmp(word, "TALKEND") == 0) {
+            ev.kind = SCRIPT_TALKEND;
+            ev.duration = fields >= 3 ? (u32)strtoul(arg, NULL, 10) : SCRIPT_SEEK_FRAMES;
+            ev.value[0] = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : 30;
+        } else if (strcmp(word, "WAITMENU") == 0) {
+            ev.kind = SCRIPT_WAITMENU;
+            ev.duration = fields >= 3 ? (u32)strtoul(arg, NULL, 10) : SCRIPT_SEEK_FRAMES;
+        } else if (strcmp(word, "TALK") == 0) {
+            ev.kind = SCRIPT_TALK;
+            ev.duration = fields >= 3 ? (u32)strtoul(arg, NULL, 10) : SCRIPT_SEEK_FRAMES;
+        } else if (strcmp(word, "CHOOSE") == 0 && fields >= 3) {
+            ev.kind = SCRIPT_CHOOSE;
+            ev.value[0] = (u32)strtoul(arg, NULL, 10);
             ev.duration = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : SCRIPT_SEEK_FRAMES;
         } else if (strcmp(word, "GIVE") == 0 && fields >= 3) {
             ev.kind = SCRIPT_GIVE;
@@ -385,12 +411,124 @@ static void seek(const ScriptEvent* ev, s8* stick_x, s8* stick_y) {
     *stick_y = (s8)(-SCRIPT_STICK * dz / dist);
 }
 
+/* CHOOSE: once the choice window takes input, the n-th choice and A until
+ * the window takes it (the frame the window opens varies with the text
+ * before it, and a press right as it opens can be missed) */
+static int choose(ScriptEvent* ev, u16* buttons) {
+    mChoice_c* choice = mChoice_Get_base_window_p();
+    int normal = choice != NULL && choice->main_index == mChoice_MAIN_NORMAL;
+
+    if (!normal) {
+        return ev->value[2] != 0; /* answered once it was open and is not any more */
+    }
+    if (ev->value[2] == 0) {
+        printf("[INPUT] frame %u: choice %u of %d\n", (unsigned)s_frame, (unsigned)ev->value[0],
+               choice->data.choice_num);
+    }
+    ev->value[2] = 1;
+    /* past the last: the last (often 아무것도, nothing) */
+    choice->selected_choice_idx =
+        (int)ev->value[0] < choice->data.choice_num ? (int)ev->value[0] : choice->data.choice_num - 1;
+    if (ev->value[1]++ % 20 < 4) {
+        *buttons |= PAD_BUTTON_A;
+    }
+    return 0;
+}
+
+static int is_wait(const ScriptEvent* ev) {
+    return ev->kind == SCRIPT_TALK || ev->kind == SCRIPT_CHOOSE || ev->kind == SCRIPT_WAITMENU ||
+           ev->kind == SCRIPT_TALKEND;
+}
+
+/* The first TALK, CHOOSE or WAITMENU that is due and has not happened: it
+ * holds the script time (the events after it move later) for up to its
+ * frames of real time */
+static ScriptEvent* first_waiting(void) {
+    int i;
+
+    for (i = 0; i < s_count; i++) {
+        ScriptEvent* ev = &s_events[i];
+
+        if (is_wait(ev) && !ev->done && ev->frame <= s_frame) {
+            if (ev->started == 0) {
+                ev->started = s_real + 1;
+            }
+            if (s_real + 1 - ev->started < ev->duration) {
+                return ev;
+            }
+            if (!ev->done) {
+                ev->done = 1;
+                printf("[INPUT] frame %u: gave up waiting (line %d)\n", (unsigned)s_frame, i);
+            }
+        }
+    }
+    return NULL;
+}
+
+static int waiting(const ScriptEvent* ev) {
+    return ev == first_waiting();
+}
+
+static void wait_step(ScriptEvent* ev, u16* buttons) {
+    u32 t = s_real + 1 - ev->started;
+
+    if (ev->kind == SCRIPT_CHOOSE) {
+        ev->done = choose(ev, buttons);
+    } else if (ev->kind == SCRIPT_TALKEND) {
+        /* A every 20 frames until the message window has closed and stays
+         * closed for the quiet frames (a talk can go on in a new window, the
+         * player can think aloud after a scene change) */
+        if (mMsg_Check_main_hide(mMsg_Get_base_window_p())) {
+            if (++ev->value[1] >= ev->value[0]) {
+                ev->done = 1;
+                printf("[INPUT] frame %u: talk over\n", (unsigned)s_frame);
+            }
+        } else {
+            ev->value[1] = 0;
+            if (t % 20 < 4) {
+                *buttons |= PAD_BUTTON_A;
+            }
+        }
+    } else if (ev->kind == SCRIPT_WAITMENU) {
+        /* A every 20 frames until a submenu opens (the text before it) */
+        GAME_PLAY* play = (GAME_PLAY*)gamePT;
+
+        if (play != NULL && play->game.exec == play_main && play->submenu.open_flag) {
+            ev->done = 1;
+            printf("[INPUT] frame %u: menu open\n", (unsigned)s_frame);
+        } else if (t % 20 < 4) {
+            *buttons |= PAD_BUTTON_A;
+        }
+    } else {
+        /* A every 20 frames until a choice window opens */
+        mChoice_c* choice = mChoice_Get_base_window_p();
+        int open =
+            choice != NULL && (choice->main_index == mChoice_MAIN_APPEAR || choice->main_index == mChoice_MAIN_NORMAL);
+
+        if (!open) {
+            ev->value[2] = 1; /* the last choice window (a CHOOSE just before) has closed */
+        }
+        if (open && ev->value[2]) {
+            ev->done = 1;
+            printf("[INPUT] frame %u: talk to a choice\n", (unsigned)s_frame);
+        } else if (t % 20 < 4) {
+            *buttons |= PAD_BUTTON_A;
+        }
+    }
+}
+
 void pc_input_script_apply(u16* buttons, s8* stick_x, s8* stick_y) {
     int i;
 
     for (i = 0; i < s_count; i++) {
-        const ScriptEvent* ev = &s_events[i];
+        ScriptEvent* ev = &s_events[i];
 
+        if (is_wait(ev)) {
+            if (waiting(ev)) {
+                wait_step(ev, buttons);
+            }
+            continue;
+        }
         if (ev->kind == SCRIPT_SEEK && s_frame >= ev->frame && s_frame < ev->frame + ev->duration) {
             seek(ev, stick_x, stick_y);
         }
@@ -545,6 +683,15 @@ static void log_positions(u32 frame) {
         }
     }
     printf("[POS] frame %u scene %d\n", (unsigned)frame, (int)Save_Get(scene_no));
+    if (Common_Get(player_no) < PLAYER_NUM) {
+        /* the player's house and debt: a house is enlarged a day after its loan is paid */
+        const mHm_hs_c* house = &Save_Get(homes[mHS_get_arrange_idx(Common_Get(player_no))]);
+
+        printf("[POS] frame %u house size %d next %d renew %d basement %d island %d loan %u bells %u\n",
+               (unsigned)frame, house->size_info.size, house->size_info.next_size, house->size_info.renew,
+               house->size_info.basement_ordered, house->island.flags.unlocked, (unsigned)Now_Private->inventory.loan,
+               (unsigned)Now_Private->inventory.wallet);
+    }
     printf("[POS] frame %u camera %d center %.0f,%.0f,%.0f eye %.0f,%.0f,%.0f dir %d,%d dist %.0f\n", (unsigned)frame,
            play->camera.now_main_index, play->camera.lookat.center.x, play->camera.lookat.center.y,
            play->camera.lookat.center.z, play->camera.lookat.eye.x, play->camera.lookat.eye.y, play->camera.lookat.eye.z,
@@ -729,13 +876,25 @@ static void debug_command(const ScriptEvent* ev) {
     }
 }
 
-int pc_input_script_frame(u32 frame) {
+int pc_input_script_frame(u32 real_frame) {
     int keep_running = 1;
     int i;
+    u32 frame;
+    int again;
 
-    s_frame = frame;
+    s_real = real_frame;
+    s_frame = frame = real_frame - s_held;
+    again = frame == s_last; /* held: the events of this time already happened */
+    s_last = frame;
+    if (first_waiting() != NULL) {
+        s_held++; /* the next real frame is the same script time */
+    }
     for (i = 0; i < s_count; i++) {
         const ScriptEvent* ev = &s_events[i];
+
+        if (again) {
+            break;
+        }
 
         if (ev->kind == SCRIPT_TOUCH) {
             s64 id = 0x5C000 + i;
@@ -777,7 +936,7 @@ int pc_input_script_frame(u32 frame) {
          * of the scene behind them show black. */
         g_pc_skip_draw = 1;
         for (i = 0; i < s_count; i++) {
-            if (s_events[i].kind == SCRIPT_SHOT && s_events[i].frame == frame + 1) {
+            if (s_events[i].kind == SCRIPT_SHOT && s_events[i].frame == frame + 1 && first_waiting() == NULL) {
                 g_pc_skip_draw = 0;
                 break;
             }
