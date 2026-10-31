@@ -47,8 +47,11 @@ int pc_ko_encode_utf8(const char* text, u8* out, int max);
 /* Strings may hold 0x96 0xF6.. codes that stand for dictionary entries
  * (long item names). Returns the length of str with them expanded and sets
  * *out to the text: str itself, or one of PC_KO_EXPAND_SLOTS buffers that
- * stays valid until the slot is used again. */
-#define PC_KO_EXPAND_SLOTS 5
+ * stays valid until the slot is used again. The patch's slots: 0 drawing a
+ * line (mFont_SetLineStrings_AndSpace_new), 1 and 2 its width
+ * (mFont_GetStringWidth, ...2F), 3 mMsg_Set_free_str, 4 mMsg_Set_item_str;
+ * 5 is the PC's own (pc_ko_ledit_match). */
+#define PC_KO_EXPAND_SLOTS 6
 int pc_ko_expand(const u8* str, int len, int slot, const u8** out);
 
 /* A villager's catchphrase as text (the patch packs it), padded with spaces

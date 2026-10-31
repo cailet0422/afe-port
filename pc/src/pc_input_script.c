@@ -10,6 +10,14 @@
 #include "m_random_field_h.h"
 #include "m_submenu.h"
 #include "m_event.h"
+#include "m_quest.h"
+#include "m_npc.h"
+#include "m_soncho.h"
+#include "m_house.h"
+#include "m_choice.h"
+#include "m_msg.h"
+#include "m_time.h"
+#include "m_actor.h"
 #include "m_player.h"
 #include "m_scene.h"
 #include "m_collision_bg.h"
@@ -42,6 +50,10 @@ typedef enum {
     SCRIPT_PAD,
     SCRIPT_POS,
     SCRIPT_SEEK,
+    SCRIPT_CHOOSE,
+    SCRIPT_TALK,
+    SCRIPT_WAITMENU,
+    SCRIPT_TALKEND,
     SCRIPT_GIVE,
     SCRIPT_LEDIT,
     SCRIPT_RESETS,
@@ -50,6 +62,7 @@ typedef enum {
     SCRIPT_VOICELOG,
     SCRIPT_ITEM,
     SCRIPT_NOJOB,
+    SCRIPT_JOBDONE,
     SCRIPT_BELLS,
     SCRIPT_WARP,
     SCRIPT_WEATHER,
@@ -70,11 +83,16 @@ typedef struct {
     u32 value[3]; /* GIVE item; LEDIT type and villager; RESETS count; CATCH villager; MENU
                      submenu and its two arguments; VOICELOG on */
     char name[128];
+    int done;    /* TALK, CHOOSE, WAITMENU: happened */
+    u32 started; /* TALK, CHOOSE, WAITMENU: the real frame it began waiting */
 } ScriptEvent;
 
 static ScriptEvent* s_events = NULL;
 static int s_count = 0;
-static u32 s_frame = 0;
+static u32 s_frame = 0; /* script time: real frames less those TALK, CHOOSE and WAITMENU held */
+static u32 s_real = 0;
+static u32 s_held = 0;
+static u32 s_last = 0xFFFFFFFF;
 static int s_fast = 0;
 
 void pc_input_script_set_fast(int fast) {
@@ -192,6 +210,20 @@ int pc_input_script_load(const char* path) {
                 ev.seek_id = (u16)strtoul(arg, NULL, 16);
             }
             ev.duration = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : SCRIPT_SEEK_FRAMES;
+        } else if (strcmp(word, "TALKEND") == 0) {
+            ev.kind = SCRIPT_TALKEND;
+            ev.duration = fields >= 3 ? (u32)strtoul(arg, NULL, 10) : SCRIPT_SEEK_FRAMES;
+            ev.value[0] = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : 30;
+        } else if (strcmp(word, "WAITMENU") == 0) {
+            ev.kind = SCRIPT_WAITMENU;
+            ev.duration = fields >= 3 ? (u32)strtoul(arg, NULL, 10) : SCRIPT_SEEK_FRAMES;
+        } else if (strcmp(word, "TALK") == 0) {
+            ev.kind = SCRIPT_TALK;
+            ev.duration = fields >= 3 ? (u32)strtoul(arg, NULL, 10) : SCRIPT_SEEK_FRAMES;
+        } else if (strcmp(word, "CHOOSE") == 0 && fields >= 3) {
+            ev.kind = SCRIPT_CHOOSE;
+            ev.value[0] = (u32)strtoul(arg, NULL, 10);
+            ev.duration = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : SCRIPT_SEEK_FRAMES;
         } else if (strcmp(word, "GIVE") == 0 && fields >= 3) {
             ev.kind = SCRIPT_GIVE;
             ev.value[0] = (u32)strtoul(arg, NULL, 16);
@@ -225,6 +257,8 @@ int pc_input_script_load(const char* path) {
             ev.kind = SCRIPT_ITEM;
         } else if (strcmp(word, "NOJOB") == 0) {
             ev.kind = SCRIPT_NOJOB;
+        } else if (strcmp(word, "JOBDONE") == 0) {
+            ev.kind = SCRIPT_JOBDONE;
         } else if (strcmp(word, "WARP") == 0 && fields >= 3 &&
                    sscanf(arg, "%f,%f", &ev.seek_pos[0], &ev.seek_pos[1]) == 2) {
             ev.kind = SCRIPT_WARP;
@@ -379,12 +413,124 @@ static void seek(const ScriptEvent* ev, s8* stick_x, s8* stick_y) {
     *stick_y = (s8)(-SCRIPT_STICK * dz / dist);
 }
 
+/* CHOOSE: once the choice window takes input, the n-th choice and A until
+ * the window takes it (the frame the window opens varies with the text
+ * before it, and a press right as it opens can be missed) */
+static int choose(ScriptEvent* ev, u16* buttons) {
+    mChoice_c* choice = mChoice_Get_base_window_p();
+    int normal = choice != NULL && choice->main_index == mChoice_MAIN_NORMAL;
+
+    if (!normal) {
+        return ev->value[2] != 0; /* answered once it was open and is not any more */
+    }
+    if (ev->value[2] == 0) {
+        printf("[INPUT] frame %u: choice %u of %d\n", (unsigned)s_frame, (unsigned)ev->value[0],
+               choice->data.choice_num);
+    }
+    ev->value[2] = 1;
+    /* past the last: the last (often 아무것도, nothing) */
+    choice->selected_choice_idx =
+        (int)ev->value[0] < choice->data.choice_num ? (int)ev->value[0] : choice->data.choice_num - 1;
+    if (ev->value[1]++ % 20 < 4) {
+        *buttons |= PAD_BUTTON_A;
+    }
+    return 0;
+}
+
+static int is_wait(const ScriptEvent* ev) {
+    return ev->kind == SCRIPT_TALK || ev->kind == SCRIPT_CHOOSE || ev->kind == SCRIPT_WAITMENU ||
+           ev->kind == SCRIPT_TALKEND;
+}
+
+/* The first TALK, CHOOSE or WAITMENU that is due and has not happened: it
+ * holds the script time (the events after it move later) for up to its
+ * frames of real time */
+static ScriptEvent* first_waiting(void) {
+    int i;
+
+    for (i = 0; i < s_count; i++) {
+        ScriptEvent* ev = &s_events[i];
+
+        if (is_wait(ev) && !ev->done && ev->frame <= s_frame) {
+            if (ev->started == 0) {
+                ev->started = s_real + 1;
+            }
+            if (s_real + 1 - ev->started < ev->duration) {
+                return ev;
+            }
+            if (!ev->done) {
+                ev->done = 1;
+                printf("[INPUT] frame %u: gave up waiting (line %d, started %u, now %u)\n", (unsigned)s_frame, i, ev->started, s_real);
+            }
+        }
+    }
+    return NULL;
+}
+
+static int waiting(const ScriptEvent* ev) {
+    return ev == first_waiting();
+}
+
+static void wait_step(ScriptEvent* ev, u16* buttons) {
+    u32 t = s_real + 1 - ev->started;
+
+    if (ev->kind == SCRIPT_CHOOSE) {
+        ev->done = choose(ev, buttons);
+    } else if (ev->kind == SCRIPT_TALKEND) {
+        /* A every 20 frames until the message window has closed and stays
+         * closed for the quiet frames (a talk can go on in a new window, the
+         * player can think aloud after a scene change) */
+        if (mMsg_Check_main_hide(mMsg_Get_base_window_p())) {
+            if (++ev->value[1] >= ev->value[0]) {
+                ev->done = 1;
+                printf("[INPUT] frame %u: talk over\n", (unsigned)s_frame);
+            }
+        } else {
+            ev->value[1] = 0;
+            if (t % 20 < 4) {
+                *buttons |= PAD_BUTTON_A;
+            }
+        }
+    } else if (ev->kind == SCRIPT_WAITMENU) {
+        /* A every 20 frames until a submenu opens (the text before it) */
+        GAME_PLAY* play = (GAME_PLAY*)gamePT;
+
+        if (play != NULL && play->game.exec == play_main && play->submenu.open_flag) {
+            ev->done = 1;
+            printf("[INPUT] frame %u: menu open\n", (unsigned)s_frame);
+        } else if (t % 20 < 4) {
+            *buttons |= PAD_BUTTON_A;
+        }
+    } else {
+        /* A every 20 frames until a choice window opens */
+        mChoice_c* choice = mChoice_Get_base_window_p();
+        int open =
+            choice != NULL && (choice->main_index == mChoice_MAIN_APPEAR || choice->main_index == mChoice_MAIN_NORMAL);
+
+        if (!open) {
+            ev->value[2] = 1; /* the last choice window (a CHOOSE just before) has closed */
+        }
+        if (open && ev->value[2]) {
+            ev->done = 1;
+            printf("[INPUT] frame %u: talk to a choice\n", (unsigned)s_frame);
+        } else if (t % 20 < 4) {
+            *buttons |= PAD_BUTTON_A;
+        }
+    }
+}
+
 void pc_input_script_apply(u16* buttons, s8* stick_x, s8* stick_y) {
     int i;
 
     for (i = 0; i < s_count; i++) {
-        const ScriptEvent* ev = &s_events[i];
+        ScriptEvent* ev = &s_events[i];
 
+        if (is_wait(ev)) {
+            if (waiting(ev)) {
+                wait_step(ev, buttons);
+            }
+            continue;
+        }
         if (ev->kind == SCRIPT_SEEK && s_frame >= ev->frame && s_frame < ev->frame + ev->duration) {
             seek(ev, stick_x, stick_y);
         }
@@ -539,6 +685,30 @@ static void log_positions(u32 frame) {
         }
     }
     printf("[POS] frame %u scene %d\n", (unsigned)frame, (int)Save_Get(scene_no));
+    if (Common_Get(player_no) < PLAYER_NUM) {
+        /* the player's house and debt: a house is enlarged a day after its loan is paid */
+        const mHm_hs_c* house = &Save_Get(homes[mHS_get_arrange_idx(Common_Get(player_no))]);
+
+        printf("[POS] frame %u house size %d next %d renew %d basement %d island %d loan %u bells %u\n",
+               (unsigned)frame, house->size_info.size, house->size_info.next_size, house->size_info.renew,
+               house->size_info.basement_ordered, house->island.flags.unlocked, (unsigned)Now_Private->inventory.loan,
+               (unsigned)Now_Private->inventory.wallet);
+        printf("[POS] frame %u pockets", (unsigned)frame);
+        for (i = 0; i < mPr_POCKETS_SLOT_COUNT; i++) {
+            printf(" %04X", (unsigned)Now_Private->inventory.pockets[i]);
+        }
+        printf("\n");
+        if (mEv_CheckFirstJob()) {
+            /* the part-time job: kind - mQst_ERRAND_FIRSTJOB_CHANGE_CLOTH is Nook's job number */
+            mQst_errand_c* job = mQst_GetFirstJobData();
+
+            printf("[POS] frame %u first job %d progress %d to %04X item %04X friends %d of %d tortimer %u\n",
+                   (unsigned)frame, (int)job->base.quest_kind - mQst_ERRAND_FIRSTJOB_CHANGE_CLOTH,
+                   (int)job->base.progress, (unsigned)job->recipient.npc_id, (unsigned)job->item,
+                   mNpc_GetFriendAnimalNum(&Now_Private->player_ID), mNpc_GetAnimalNum(),
+                   (unsigned)mSC_check_ArbeitPlayer());
+        }
+    }
     printf("[POS] frame %u camera %d center %.0f,%.0f,%.0f eye %.0f,%.0f,%.0f dir %d,%d dist %.0f\n", (unsigned)frame,
            play->camera.now_main_index, play->camera.lookat.center.x, play->camera.lookat.center.y,
            play->camera.lookat.center.z, play->camera.lookat.eye.x, play->camera.lookat.eye.y, play->camera.lookat.eye.z,
@@ -578,6 +748,23 @@ static void log_positions(u32 frame) {
             }
         }
 
+        /* boards in the player's block (the message board for Nook's notice job) */
+        {
+            static const struct {
+                mActor_name_t item;
+                const char* name;
+            } boards[] = { { MESSAGE_BOARD0, "message board" }, { MESSAGE_BOARD1, "message board" },
+                           { MAP_BOARD0, "map board" },         { MAP_BOARD1, "map board" } };
+            int ux, uz, k;
+
+            for (k = 0; k < (int)(sizeof(boards) / sizeof(boards[0])); k++) {
+                if (mFI_SearchFGInBlock(&ux, &uz, boards[k].item, play->block_table.block_x,
+                                        play->block_table.block_z)) {
+                    printf("[POS] frame %u %s at %d,%d\n", (unsigned)frame, boards[k].name,
+                           play->block_table.block_x * 640 + ux * 40 + 20, play->block_table.block_z * 640 + uz * 40 + 20);
+                }
+            }
+        }
         for (actor = play->actor_info.list[ACTOR_PART_ITEM].actor; actor != NULL; actor = actor->next_actor) {
             printf("[POS] frame %u structure %04X x %.0f z %.0f\n", (unsigned)frame, (u16)actor->id,
                    actor->world.position.x, actor->world.position.z);
@@ -646,6 +833,24 @@ static void debug_command(const ScriptEvent* ev) {
         mEv_EventOFF(mEv_SAVED_HRAWAIT_PLR0 + Common_Get(player_no));
         mEv_EventOFF(mEv_SAVED_HRATALK_PLR0 + Common_Get(player_no));
         printf("[INPUT] frame %u: part-time job over\n", (unsigned)s_frame);
+    } else if (ev->kind == SCRIPT_JOBDONE) {
+        /* as aID_first_job does once Nook has let the player go
+         * (ac_intro_demo_move.c_inc): the first job's errand cleared, the
+         * job's event off and the HRA one on, the clock running again */
+        ACTOR* intro_demo = Actor_info_name_search(&play->actor_info, mAc_PROFILE_INTRO_DEMO, ACTOR_PART_CONTROL);
+
+        if (mEv_CheckFirstJob()) {
+            mQst_ClearErrand(mQst_GetFirstJobData(), 1);
+            mEv_UnSetFirstJob();
+            mTM_off_renew_time(1);
+            Common_Set(complete_payment_type, mPlayer_COMPLETE_PAYMENT_TYPE_ARBEIT);
+            play->event.day = 0;
+            if (intro_demo != NULL) {
+                Actor_delete(intro_demo);
+            }
+        }
+        printf("[INPUT] frame %u: part-time job finished (job %d, HRA wait %d)\n", (unsigned)s_frame,
+               mEv_CheckFirstJob(), mEv_CheckEvent(mEv_SAVED_HRAWAIT_PLR0 + Common_Get(player_no)));
     } else if (ev->kind == SCRIPT_WARP) {
         /* the scene again with the player at x,z, as when leaving a building
          * (a fade out and in): a route starts by the door it needs instead
@@ -705,13 +910,25 @@ static void debug_command(const ScriptEvent* ev) {
     }
 }
 
-int pc_input_script_frame(u32 frame) {
+int pc_input_script_frame(u32 real_frame) {
     int keep_running = 1;
     int i;
+    u32 frame;
+    int again;
 
-    s_frame = frame;
+    s_real = real_frame;
+    s_frame = frame = real_frame - s_held;
+    again = frame == s_last; /* held: the events of this time already happened */
+    s_last = frame;
+    if (first_waiting() != NULL) {
+        s_held++; /* the next real frame is the same script time */
+    }
     for (i = 0; i < s_count; i++) {
         const ScriptEvent* ev = &s_events[i];
+
+        if (again) {
+            break;
+        }
 
         if (ev->kind == SCRIPT_TOUCH) {
             s64 id = 0x5C000 + i;
@@ -753,7 +970,7 @@ int pc_input_script_frame(u32 frame) {
          * of the scene behind them show black. */
         g_pc_skip_draw = 1;
         for (i = 0; i < s_count; i++) {
-            if (s_events[i].kind == SCRIPT_SHOT && s_events[i].frame == frame + 1) {
+            if (s_events[i].kind == SCRIPT_SHOT && s_events[i].frame == frame + 1 && first_waiting() == NULL) {
                 g_pc_skip_draw = 0;
                 break;
             }
