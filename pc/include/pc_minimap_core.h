@@ -43,18 +43,13 @@ void pc_minimap_rgb5a3(uint16_t v, uint8_t rgba[4]);
 /* Where the minimap goes in a w x h window, in pixels: the top left corner
  * and the size of one acre (the minimap is 5 x 6 acres). It sits in the
  * bottom left corner; with the on-screen pad (touch_pad) it is smaller and
- * keeps clear of the pad's D-pad and of the stick's resting place.
- *
- * avoid (may be NULL) is x0, y0, x1, y1 of something it must not cover (the
- * game's clock, pc_minimap.c): then it gets narrower to fit left of it if
- * it stays big enough, else it moves up above it (not with the pad, whose
- * D-pad is there; then it fits left of it as it can). */
+ * keeps clear of the pad's D-pad and of the stick's resting place. */
 typedef struct {
     float x, y;
     float acre;
 } PcMinimapRect;
 
-void pc_minimap_layout(int w, int h, int touch_pad, const float* avoid, PcMinimapRect* r);
+void pc_minimap_layout(int w, int h, int touch_pad, PcMinimapRect* r);
 float pc_minimap_width(const PcMinimapRect* r);
 float pc_minimap_height(const PcMinimapRect* r);
 

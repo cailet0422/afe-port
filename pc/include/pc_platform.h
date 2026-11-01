@@ -153,6 +153,9 @@ void pc_os_advance_clock(long long seconds);
 /* --- Graphics (pc_gx.c): a point of the window (0-1) in the 640x480 screen
  * the game's 2D drawing uses, after widescreen correction --- */
 void pc_gx_window_to_ui(float wx, float wy, float* x, float* y);
+/* How far a window wider than 4:3 reaches past the game's 4:3 2D picture on
+ * each side, in that picture's 320-wide pixels (0 if it does not) */
+float pc_gx_ui_extra_half_width(void);
 
 #ifdef __cplusplus
 }
