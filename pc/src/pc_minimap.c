@@ -19,6 +19,7 @@
 #include "m_player.h"
 #include "m_player_lib.h"
 #include "m_scene_table.h"
+#include "m_lib.h"
 
 #include <dolphin/pad.h>
 #include <math.h>
@@ -65,6 +66,9 @@ static u8 s_tile_pal[PC_MINIMAP_ACRES];
 static u32 s_tiles_hash;          /* of the pictures in the atlas; 0 = none yet */
 static int s_tiles_dirty;
 static float s_fade;              /* 0 hidden to 1 shown */
+static int s_clock_left;          /* the game's clock is (or goes) on the left, where the minimap is */
+static int s_clock_timer;
+static float s_clock_blend;       /* 0 in the corner to 1 above the clock, gliding */
 
 static GAME_PLAY* play_of(GAME* game) {
     if (game == NULL || game->exec != play_main) {
@@ -140,11 +144,31 @@ static u32 tiles_hash(void) {
     return h | 1;
 }
 
+/* The game's clock moves to the bottom left once the player has been in
+ * the bottom right of the screen for 10 frames, and back the same way
+ * (banti_chk_disp_left, m_banti.c) */
+static void follow_clock(GAME_PLAY* play, PLAYER_ACTOR* player) {
+    xyz_t pos = player->actor_class.world.position;
+    xyz_t screen;
+    int bottom_right;
+
+    Game_play_Projection_Trans(play, &pos, &screen);
+    bottom_right = screen.x >= 180.0f && screen.y >= 150.0f;
+    if (bottom_right != s_clock_left) {
+        if (++s_clock_timer > 10) {
+            s_clock_left = bottom_right;
+            s_clock_timer = 0;
+        }
+    } else {
+        s_clock_timer = 0;
+    }
+}
+
 static void read_town(GAME_PLAY* play, PLAYER_ACTOR* player) {
     int i;
     u32 h;
 
-    (void)play;
+    follow_clock(play, player);
     s_player.x = player->actor_class.world.position.x;
     s_player.z = player->actor_class.world.position.z;
     s_player_angle = player->actor_class.shape_info.rotation.y;
@@ -215,24 +239,28 @@ int pc_minimap_map_open(void) {
     return s_map_open;
 }
 
-/* Where the game shows its clock (m_banti.c) when the player stands still,
- * in its 320 x 240 screen: the minimap keeps clear of it. (On the left
- * instead when the player is in the bottom right, out of the minimap's way.) */
-#define CLOCK_UI_X0 188.0f
+/* Where the game shows its clock (m_banti.c) on the left, in its 320 x 240
+ * screen: it moves there from the bottom right while the player is in the
+ * bottom right of the screen (follow_clock). The minimap then makes room. */
+#define CLOCK_UI_X0 0.0f
 #define CLOCK_UI_Y0 164.0f
-#define CLOCK_UI_X1 320.0f
+#define CLOCK_UI_X1 132.0f
 #define CLOCK_UI_Y1 232.0f
 
 static void layout(PcMinimapRect* r) {
     float avoid[4];
     float left, right, top, unused;
+    PcMinimapRect clear;
 
+    pc_minimap_layout(g_pc_window_w, g_pc_window_h, g_pc_settings.touch_controls, NULL, r);
+    if (s_clock_blend <= 0.0f) {
+        return; /* the corner; the clock is on the right */
+    }
     /* the game's screen in window pixels: narrower than the window when
      * a wide window shows it at 4:3 (pc_gx.c) */
     pc_gx_window_to_ui(0.0f, 0.0f, &left, &top);
     pc_gx_window_to_ui(1.0f, 1.0f, &right, &unused);
     if (right - left < 1.0f) {
-        pc_minimap_layout(g_pc_window_w, g_pc_window_h, g_pc_settings.touch_controls, NULL, r);
         return;
     }
     /* (pc_gx_window_to_ui counts the 640 x 480 framebuffer) */
@@ -241,22 +269,27 @@ static void layout(PcMinimapRect* r) {
     avoid[1] = CLOCK_UI_Y0 / 240.0f * g_pc_window_h;
     avoid[3] = CLOCK_UI_Y1 / 240.0f * g_pc_window_h;
     (void)top;
-    pc_minimap_layout(g_pc_window_w, g_pc_window_h, g_pc_settings.touch_controls, avoid, r);
+    pc_minimap_layout(g_pc_window_w, g_pc_window_h, g_pc_settings.touch_controls, avoid, &clear);
+    /* glides there while the clock comes over (a wide window has room for
+     * both: then the two places are the same) */
+    r->x += (clear.x - r->x) * s_clock_blend;
+    r->y = floorf(r->y + (clear.y - r->y) * s_clock_blend);
+    r->acre += (clear.acre - r->acre) * s_clock_blend;
 }
 
-int pc_minimap_touch(float x, float y) {
+int pc_minimap_at(float x, float y) {
     PcMinimapRect r;
 
-    if (g_pc_paused) {
+    if (g_pc_paused || !s_visible || s_fade <= 0.5f) {
         return 0;
     }
     layout(&r);
-    if (s_visible && s_fade > 0.5f && pc_minimap_hit(&r, x * g_pc_window_w, y * g_pc_window_h, r.acre * 0.25f)) {
-        s_toggle_request = 1;
-        return 1;
-    }
-    if (s_map_open && !g_pc_settings.touch_controls) {
-        s_toggle_request = 1; /* no pad on screen: any tap or click closes it */
+    return pc_minimap_hit(&r, x * g_pc_window_w, y * g_pc_window_h, r.acre * 0.25f);
+}
+
+int pc_minimap_touch(float x, float y) {
+    if (pc_minimap_at(x, y) || (s_map_open && !g_pc_paused)) {
+        s_toggle_request = 1; /* the minimap opens the map; with it open, any tap closes it */
         return 1;
     }
     return 0;
@@ -514,6 +547,9 @@ void pc_minimap_draw(void) {
 
     if (s_visible && !g_pc_paused) {
         s_fade = s_fade + FADE_STEP > 1.0f ? 1.0f : s_fade + FADE_STEP;
+        s_clock_blend += ((s_clock_left ? 1.0f : 0.0f) - s_clock_blend) * 0.2f;
+        if (s_clock_blend < 0.01f) s_clock_blend = 0.0f;
+        if (s_clock_blend > 0.99f) s_clock_blend = 1.0f;
     } else {
         s_fade = 0.0f; /* gone at once: a menu or a message is coming */
     }

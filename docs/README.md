@@ -234,17 +234,18 @@ Change them under pause menu → Settings → **Controls** → **Buttons** (`pc_
 test `pc/tests/test_minimap.c`).
 
 - **Minimap**: outside in the town (`SCENE_FG`, the FG field, not the island or the sea), with no submenu, message
-  window, demo (talking, events), fade or wipe, the 5 × 6 acres are drawn in the bottom right corner of the window,
+  window, demo (talking, events), fade or wipe, the 5 × 6 acres are drawn in the bottom left corner of the window,
   with the player (a point the way they face) and the villagers' houses (from the save's home positions). The acre
   pictures are the game's own map's (`kan_tizu_*_TA_tex_txt`, 32 × 32 CI4, two RGB5A3 palettes) chosen the way
   `m_map_ovl.c` does (`mMP_set_map_texture_pal`, bridges included). Those tables are static in `m_map_ovl.c`, so
   `pc/tools/gen_minimap_tables.py` copies them into `pc/src/pc_minimap_tables.inc` (CI runs it with `--check`).
 - It reads the game after `game_main` (`pc_minimap_game_frame`, called from `pc_pause_menu_draw`, which `graph.c`
   already calls there) and draws with OpenGL over the finished frame like the touch pad (`pc_vi.c`), so no decomp
-  change was needed. With `touch_controls = 1` it is smaller and sits in the corner the pad's buttons leave free (the
-  test checks it against the pad's layout). It keeps clear of the game's clock (`m_banti.c`, bottom right of the 4:3
-  picture while the player stands still): in a wide window it stays in the corner beside it, in a 4:3 window it sits
-  just above it. `minimap = 0` in `[Gameplay]` turns it off (Settings → Gameplay →
+  change was needed. With `touch_controls = 1` it is smaller and sits below the pad's D-pad and left of where the stick rests (the
+  test checks it against the pad's layout). The game's clock (`m_banti.c`, shown while the player stands still)
+  moves from the bottom right to the bottom left once the player has been in the bottom right of the screen for 10
+  frames (`banti_chk_disp_left`); the minimap follows the same rule (`follow_clock`) and then glides up above the
+  clock, or stays put where a wide window leaves room beside it. `minimap = 0` in `[Gameplay]` turns it off (Settings → Gameplay →
   Minimap).
 - **Map key**: the Map control (default `M`) opens the game's map (`mSM_OVL_MAP` with `data0 = 1`, the player's own map
   that the X button opens) with the conditions of `mSM_check_open_MAP` except `map_flag`, so it works before the

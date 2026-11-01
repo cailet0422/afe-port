@@ -99,8 +99,8 @@ void pc_minimap_decode_tile(const uint8_t* ci4, int pal, uint8_t* dst, int strid
 }
 
 /* Sizes follow the window's shorter side, like the on-screen pad's
- * (pc_touch.c). With the pad, the corner below its X button and right of
- * its A button is free: the minimap fits there (pc/tests/test_minimap.c
+ * (pc_touch.c). With the pad, the corner below its D-pad and left of where
+ * the stick rests is free: the minimap fits there (pc/tests/test_minimap.c
  * checks it against the pad's layout). */
 #define MIN_ACRE 8.0f
 
@@ -109,9 +109,9 @@ static int overlaps(const PcMinimapRect* r, const float* a) {
            r->y + PC_MINIMAP_ACRES_Z * r->acre > a[1];
 }
 
-static void place(int w, int h, float margin, float acre, PcMinimapRect* r) {
+static void place(int h, float margin, float acre, PcMinimapRect* r) {
     r->acre = acre;
-    r->x = floorf((float)w - margin - PC_MINIMAP_ACRES_X * acre);
+    r->x = floorf(margin);
     r->y = floorf((float)h - margin - PC_MINIMAP_ACRES_Z * acre);
 }
 
@@ -124,22 +124,22 @@ void pc_minimap_layout(int w, int h, int touch_pad, const float* avoid, PcMinima
     if (acre < MIN_ACRE) {
         acre = MIN_ACRE;
     }
-    place(w, h, margin, acre, r);
+    place(h, margin, acre, r);
     if (avoid == NULL || !overlaps(r, avoid)) {
         return;
     }
 
-    /* narrower, in the corner right of it (a wide window has room there) */
-    fit = floorf(((float)w - margin - avoid[2] - margin * 0.5f) / PC_MINIMAP_ACRES_X);
+    /* narrower, in the corner left of it (a wide window has room there) */
+    fit = floorf((avoid[0] - margin * 1.5f) / PC_MINIMAP_ACRES_X);
     if (fit >= acre * 0.75f || (touch_pad && fit >= MIN_ACRE)) {
-        place(w, h, margin, fit, r);
+        place(h, margin, fit, r);
         return;
     }
     if (touch_pad) {
-        return; /* nowhere else to go: the pad's buttons are above */
+        return; /* nowhere else to go: the pad's D-pad is above */
     }
 
-    /* above it, at the right edge */
+    /* above it, at the left edge */
     above = floorf(avoid[1] - margin * 0.5f - PC_MINIMAP_ACRES_Z * acre);
     if (above >= margin) {
         r->y = above;

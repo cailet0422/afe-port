@@ -11,8 +11,8 @@
  * disc a touch on the editor's own keyboard presses that key first
  * (pc_ko_editor.c). Touching the screen outside the controls while the text
  * editor uses the system input method shows the system's keyboard again.
- * A tap on the minimap opens the town map, and a tap outside the controls
- * closes it again (pc_minimap.c). */
+ * A quick tap on the minimap (in the stick's corner) opens the town map, and
+ * a tap outside the controls closes it again (pc_minimap.c). */
 #ifndef PC_TOUCH_H
 #define PC_TOUCH_H
 

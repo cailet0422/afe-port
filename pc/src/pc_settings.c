@@ -116,7 +116,7 @@ void pc_settings_save(void) {
     fprintf(f, "# NES emulator aspect ratio: 0 = stretch to fullscreen, 1 = 4:3 pillarbox\n");
     fprintf(f, "nes_aspect = %d\n", g_pc_settings.nes_aspect);
     fprintf(f, "\n");
-    fprintf(f, "# Map of the town in the bottom right corner outside: 0 = off, 1 = on\n");
+    fprintf(f, "# Map of the town in the bottom left corner outside: 0 = off, 1 = on\n");
     fprintf(f, "minimap = %d\n", g_pc_settings.minimap);
     fprintf(f, "\n");
     fprintf(f, "[Audio]\n");

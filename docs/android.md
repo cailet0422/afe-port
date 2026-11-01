@@ -135,8 +135,10 @@ and opens it again — because the native library's static variables are not rei
 Settings → Controls → Buttons remaps the Bluetooth gamepad's buttons (and physical keyboard keys)
 (see "Rebinding controls" in [README.md](README.md)). While paused, the gamepad's D-pad, A and B move through the menu.
 
-Outside in the town the minimap sits in the bottom right corner, below the X button and right of the A button. Tapping
-it opens the town map; a tap outside the on-screen buttons closes it again (the stick still moves the map's cursor).
+Outside in the town the minimap sits in the bottom left corner, below the D-pad and left of where the stick rests. That
+corner is also where the stick starts, so a quick tap on the minimap (short, without moving) opens the town map, while
+a thumb that lands on it and moves steers as usual. A tap outside the on-screen buttons closes the map again (the stick
+still moves the map's cursor).
 A gamepad can get a Map button in Settings → Controls → Buttons.
 
 ### Updates

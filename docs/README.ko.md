@@ -210,15 +210,16 @@ ninja -C pc/build32strip
 테스트 `pc/tests/test_minimap.c`).
 
 - **미니맵**: 마을 야외(`SCENE_FG`, FG 필드, 섬과 바다는 제외)에서 서브메뉴·메시지 창·데모(대화, 이벤트)·
-  페이드·와이프가 없을 때, 창 오른쪽 아래에 5 × 6 구획을 그리고 플레이어(보는 방향 표시)와 주민 집(세이브의
+  페이드·와이프가 없을 때, 창 왼쪽 아래에 5 × 6 구획을 그리고 플레이어(보는 방향 표시)와 주민 집(세이브의
   집 위치)을 표시한다. 구획 그림은 게임 지도의 것(`kan_tizu_*_TA_tex_txt`, 32 × 32 CI4, RGB5A3 팔레트 2개)을
   `m_map_ovl.c`와 같은 방법(`mMP_set_map_texture_pal`, 다리 포함)으로 고른다. 그 표들은 `m_map_ovl.c` 안의
   static이라 `pc/tools/gen_minimap_tables.py`가 `pc/src/pc_minimap_tables.inc`로 옮긴다(CI가 `--check`로 확인).
 - `game_main` 다음에 게임 상태를 읽고(`pc_minimap_game_frame`, `graph.c`가 이미 그 자리에서 부르는
   `pc_pause_menu_draw`에서 호출), 터치 패드처럼 완성된 화면 위에 OpenGL로 그린다(`pc_vi.c`). 그래서 디컴프는
-  바꾸지 않았다. `touch_controls = 1`이면 더 작게, 패드 버튼이 비워 둔 구석에 놓인다(테스트가 패드 배치와
-  겹치지 않는지 확인). 게임의 시계(`m_banti.c`, 가만히 서 있으면 4:3 화면 오른쪽 아래에 나옴)도 가리지 않는다:
-  넓은 창에서는 그 옆 구석에, 4:3 창에서는 시계 바로 위에 놓인다. `[Gameplay]`의 `minimap = 0`으로 끈다(Settings → Gameplay → Minimap).
+  바꾸지 않았다. `touch_controls = 1`이면 더 작게, 패드의 십자키 아래이자 스틱이 쉬는 자리 왼쪽에 놓인다(테스트가 패드
+  배치와 겹치지 않는지 확인). 게임의 시계(`m_banti.c`, 가만히 서 있으면 나옴)는 플레이어가 화면 오른쪽 아래에
+  10프레임 있으면 왼쪽 아래로 옮겨 가는데(`banti_chk_disp_left`), 미니맵도 같은 규칙(`follow_clock`)으로 그때
+  시계 위로 미끄러져 올라간다(넓은 창에서는 옆에 자리가 있어 그대로). `[Gameplay]`의 `minimap = 0`으로 끈다(Settings → Gameplay → Minimap).
 - **지도 키**: Map(기본 `M`)은 게임의 지도(`mSM_OVL_MAP`, `data0 = 1`: X 버튼이 여는 플레이어의 지도)를
   `mSM_check_open_MAP`의 조건에서 `map_flag`만 빼고 연다. 그래서 파출소에서 지도를 받기 전에도, 실내에서도
   열린다(섬의 별장과 바다 위는 X처럼 안 됨). 한 번 더 누르면 B를 눌러 닫는다. 미니맵을 터치하면 열리고

@@ -49,7 +49,7 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
 - Korean fan patch support: install the patch zip from inside the game, switch between Korean and
   Japanese at any time, and type Hangul with a real keyboard (2-set layout) or an on-screen keyboard.
 - Android: on-screen touch gamepad, physical gamepads, and a crash report shown on the next launch.
-- Minimap: outside in town, a small map of the town sits in the bottom right corner (you, facing the
+- Minimap: outside in town, a small map of the town sits in the bottom left corner (you, facing the
   way you walk, and the villagers' houses). **M** opens the game's full map at any time, even before
   you have the map from the police station; on Android, tap the minimap. Turn it off under
   **Settings** → **Gameplay** → **Minimap**.

@@ -14,6 +14,8 @@
 #define STICK_DEADZONE 0.12f
 #define HIT_SCALE 1.2f     /* buttons react a little outside what is drawn */
 #define MAX_VERTICES 6144
+#define TAP_MS 300         /* a finger up this soon, */
+#define TAP_SLOP 0.03f     /* having moved less than this (of the shorter side), is a tap */
 
 enum {
     CTRL_A,
@@ -64,6 +66,9 @@ typedef struct {
     s64 id;
     float x, y; /* pixels */
     int ctrl;   /* CTRL_STICK, or the button under the finger (CTRL_NONE if none) */
+    float x0, y0;    /* where it landed */
+    Uint32 down_ms;
+    int minimap_tap; /* landed on the minimap and has not moved off: a tap opens the map */
 } Finger;
 
 static Finger s_fingers[MAX_FINGERS];
@@ -176,10 +181,8 @@ void pc_touch_finger_down(s64 id, float x, float y) {
     if (pc_ko_osk_touch(1, x, y)) {
         return; /* a key of the editor's on-screen keyboard */
     }
-    if (pc_minimap_touch(x, y)) {
-        return; /* the minimap: opens the map */
-    }
     if (!enabled()) {
+        pc_minimap_touch(x, y); /* no pad: the minimap opens the map at once */
         return;
     }
     s_hidden = 0;
@@ -197,6 +200,12 @@ void pc_touch_finger_down(s64 id, float x, float y) {
     f->x = x * g_pc_window_w;
     f->y = y * g_pc_window_h;
     f->ctrl = hit_control(f->x, f->y);
+    f->x0 = f->x;
+    f->y0 = f->y;
+    f->down_ms = SDL_GetTicks();
+    /* the minimap is in the stick's corner: a quick tap on it opens the map,
+     * a thumb that lands there and moves steers */
+    f->minimap_tap = f->ctrl == CTRL_NONE && pc_minimap_at(x, y);
 
     if (f->ctrl != CTRL_NONE) {
         if (g_pc_paused) {
@@ -225,6 +234,13 @@ void pc_touch_finger_move(s64 id, float x, float y) {
     }
     f->x = x * g_pc_window_w;
     f->y = y * g_pc_window_h;
+    if (f->minimap_tap) {
+        float u = (float)(g_pc_window_w < g_pc_window_h ? g_pc_window_w : g_pc_window_h);
+
+        if (fabsf(f->x - f->x0) > TAP_SLOP * u || fabsf(f->y - f->y0) > TAP_SLOP * u) {
+            f->minimap_tap = 0;
+        }
+    }
     if (f->ctrl != CTRL_STICK) {
         /* Sliding between buttons presses the one under the finger */
         int ctrl;
@@ -244,6 +260,9 @@ void pc_touch_finger_up(s64 id) {
     pc_ko_osk_touch(0, 0.0f, 0.0f);
 
     if (f != NULL) {
+        if (f->minimap_tap && SDL_GetTicks() - f->down_ms <= TAP_MS && !g_pc_paused) {
+            pc_minimap_request_toggle();
+        }
         f->active = 0;
     }
 }

@@ -157,27 +157,28 @@ static void test_decode(void) {
     CHECK(memcmp(rgba, c, 4) == 0);
 }
 
-/* The on-screen pad's A, B, X and Y as pc_touch.c lays them out: centre and
- * radius from the window's bottom right corner in units of the shorter side,
- * and the 1.2 of the pad's hit test */
+/* The on-screen pad's left side as pc_touch.c lays it out: the stick's
+ * resting circle (drawn there until a thumb lands) and the D-pad, with the
+ * 1.2 of the pad's hit test for the buttons. In units of the shorter side,
+ * x from the left, y from the bottom for the stick and from the top for the
+ * D-pad. */
+static int overlaps_circle(const PcMinimapRect* r, float cx, float cy, float rad) {
+    float nx = cx < r->x ? r->x : cx > r->x + pc_minimap_width(r) ? r->x + pc_minimap_width(r) : cx;
+    float ny = cy < r->y ? r->y : cy > r->y + pc_minimap_height(r) ? r->y + pc_minimap_height(r) : cy;
+
+    return (nx - cx) * (nx - cx) + (ny - cy) * (ny - cy) < rad * rad;
+}
+
 static int overlaps_pad(const PcMinimapRect* r, int w, int h) {
-    static const float buttons[4][3] = {
-        { 0.30f, 0.30f, 0.105f }, /* A */
-        { 0.50f, 0.20f, 0.07f },  /* B */
-        { 0.12f, 0.37f, 0.07f },  /* X */
-        { 0.36f, 0.49f, 0.07f },  /* Y */
-    };
+    static const float dpad[4][2] = { { 0.17f, 0.32f }, { 0.17f, 0.48f }, { 0.09f, 0.40f }, { 0.25f, 0.40f } };
     float u = (float)(w < h ? w : h);
     int i;
 
+    if (overlaps_circle(r, 0.32f * u, h - 0.30f * u, 0.16f * u)) {
+        return 1;
+    }
     for (i = 0; i < 4; i++) {
-        float cx = w - buttons[i][0] * u;
-        float cy = h - buttons[i][1] * u;
-        float rad = buttons[i][2] * u * 1.2f;
-        float nx = cx < r->x ? r->x : cx > r->x + pc_minimap_width(r) ? r->x + pc_minimap_width(r) : cx;
-        float ny = cy < r->y ? r->y : cy > r->y + pc_minimap_height(r) ? r->y + pc_minimap_height(r) : cy;
-
-        if ((nx - cx) * (nx - cx) + (ny - cy) * (ny - cy) < rad * rad) {
+        if (overlaps_circle(r, dpad[i][0] * u, dpad[i][1] * u, 0.045f * u * 1.2f)) {
             return 1;
         }
     }
@@ -195,11 +196,11 @@ static void test_layout(void) {
 
         pc_minimap_layout(w, h, 0, NULL, &pc);
         pc_minimap_layout(w, h, 1, NULL, &touch);
-        /* inside the window, in its bottom right quarter */
-        CHECK(pc.x > w / 2 && pc.y > h / 2);
-        CHECK(pc.x + pc_minimap_width(&pc) < w && pc.y + pc_minimap_height(&pc) < h);
-        CHECK(touch.x > w / 2 && touch.y > h / 2);
-        CHECK(touch.x + pc_minimap_width(&touch) < w && touch.y + pc_minimap_height(&touch) < h);
+        /* inside the window, in its bottom left quarter */
+        CHECK(pc.x > 0 && pc.x + pc_minimap_width(&pc) < w / 2 && pc.y > h / 2);
+        CHECK(pc.y + pc_minimap_height(&pc) < h);
+        CHECK(touch.x > 0 && touch.x + pc_minimap_width(&touch) < w / 2 && touch.y > h / 2);
+        CHECK(touch.y + pc_minimap_height(&touch) < h);
         /* whole pixels, 5 x 6 acres */
         CHECK(pc.acre == floorf(pc.acre) && pc.x == floorf(pc.x));
         CHECK(pc_minimap_width(&pc) == 5 * pc.acre && pc_minimap_height(&pc) == 6 * pc.acre);
@@ -218,14 +219,14 @@ static void test_layout(void) {
     }
 }
 
-/* The game's clock in a window of w x h that shows the game at 4:3 in the
- * middle (pc_minimap.c's layout()) */
+/* The game's clock on the left in a window of w x h that shows the game at
+ * 4:3 in the middle (pc_minimap.c's layout()) */
 static void clock_rect(int w, int h, float out[4]) {
     float game_w = h * 4.0f / 3.0f < w ? h * 4.0f / 3.0f : (float)w;
     float left = (w - game_w) * 0.5f;
 
-    out[0] = left + 188.0f / 320.0f * game_w;
-    out[2] = left + game_w;
+    out[0] = left;
+    out[2] = left + 132.0f / 320.0f * game_w;
     out[1] = 164.0f / 240.0f * h;
     out[3] = 232.0f / 240.0f * h;
 }
@@ -248,9 +249,9 @@ static void test_clock(void) {
         pc_minimap_layout(w, h, 0, NULL, &free_r);
         pc_minimap_layout(w, h, 0, clock, &pc);
         pc_minimap_layout(w, h, 1, clock, &touch);
-        /* never on the clock without the pad, and still on the right side */
+        /* never on the clock without the pad, and still on the left side */
         CHECK(!overlaps_rect(&pc, clock));
-        CHECK(pc.x + pc_minimap_width(&pc) <= w && pc.y >= 0 && pc.x > w / 2);
+        CHECK(pc.x >= 0 && pc.y >= 0 && pc.x + pc_minimap_width(&pc) < w / 2);
         CHECK(pc.acre >= free_r.acre * 0.75f);
         /* with the pad: not on the clock where the window leaves room, never on the pad */
         CHECK(!overlaps_pad(&touch, w, h));
@@ -258,7 +259,7 @@ static void test_clock(void) {
             CHECK(!overlaps_rect(&touch, clock));
         }
     }
-    /* wide: still the bottom right corner */
+    /* wide: still the bottom left corner, full size */
     {
         float clock[4];
         PcMinimapRect free_r, r;
@@ -266,16 +267,16 @@ static void test_clock(void) {
         clock_rect(1920, 1080, clock);
         pc_minimap_layout(1920, 1080, 0, NULL, &free_r);
         pc_minimap_layout(1920, 1080, 0, clock, &r);
-        CHECK(r.y == free_r.y && r.x + pc_minimap_width(&r) == free_r.x + pc_minimap_width(&free_r));
+        CHECK(r.y == free_r.y && r.x == free_r.x && r.acre == free_r.acre);
     }
-    /* 4:3: above the clock, at the right */
+    /* 4:3: above the clock, at the left */
     {
         float clock[4];
         PcMinimapRect r;
 
         clock_rect(640, 480, clock);
         pc_minimap_layout(640, 480, 0, clock, &r);
-        CHECK(r.y + pc_minimap_height(&r) <= clock[1] && r.x > 500);
+        CHECK(r.y + pc_minimap_height(&r) <= clock[1] && r.x < 40);
     }
 }
 
