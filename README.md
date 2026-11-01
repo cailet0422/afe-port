@@ -17,16 +17,16 @@
 ## Download
 
 <!-- When a new release is published, update the version in these links (here and in README.ko.md). -->
-Latest release: **[v1.0.1](https://github.com/cailet0422/afe-port/releases/tag/v1.0.1)**
+Latest release: **[v1.0.2](https://github.com/cailet0422/afe-port/releases/tag/v1.0.2)**
 
 | Platform | Download | Requirements |
 |---|---|---|
-| Windows 64-bit | [DobutsuNoMoriEPlus-v1.0.1-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.1/DobutsuNoMoriEPlus-v1.0.1-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
-| Windows 32-bit | [DobutsuNoMoriEPlus-v1.0.1-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.1/DobutsuNoMoriEPlus-v1.0.1-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.0.1-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.1/DobutsuNoMoriEPlus-v1.0.1-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.0.1-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.0.1/DobutsuNoMoriEPlus-v1.0.1-Android.apk) | Android 5.0+, ARM 32/64-bit |
+| Windows 64-bit | [DobutsuNoMoriEPlus-v1.0.2-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.2/DobutsuNoMoriEPlus-v1.0.2-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
+| Windows 32-bit | [DobutsuNoMoriEPlus-v1.0.2-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.2/DobutsuNoMoriEPlus-v1.0.2-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.0.2-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.2/DobutsuNoMoriEPlus-v1.0.2-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.0.2-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.0.2/DobutsuNoMoriEPlus-v1.0.2-Android.apk) | Android 5.0+, ARM 32/64-bit |
 
-Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.0.1/SHA256SUMS.txt) ·
+Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.0.2/SHA256SUMS.txt) ·
 Older versions and release notes: [all releases](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -132,7 +132,9 @@ The patched image is written to `korean/`; your original image stays untouched. 
 
 Change them under pause menu → **Settings** → **Controls** → **Buttons**; gamepads can be rebound there
 too. On Korean text-entry screens you can type Hangul directly (toggle with the 한/영 key, Right Alt or
-Shift+Space).
+Shift+Space). While typing, **Shift+Enter** (or Ctrl+Enter) finishes the text, as Start does. Enter starts a new
+line; where there is no room for one it goes to the next line, in a letter on to the closing, and in the closing
+it finishes too.
 
 ## Known limitations
 

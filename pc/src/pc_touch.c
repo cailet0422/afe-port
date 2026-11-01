@@ -218,7 +218,7 @@ void pc_touch_finger_down(s64 id, float x, float y) {
         f->ctrl = CTRL_STICK;
         s_stick_x = SDL_clamp(f->x, r, g_pc_window_w - r);
         s_stick_y = SDL_clamp(f->y, r, g_pc_window_h - r);
-    } else if (g_pc_editor_active && pc_typing_system_ime()) {
+    } else if (pc_typing_editor_taking_input() && pc_typing_system_ime()) {
         SDL_StartTextInput(); /* brings back a keyboard the user put away */
     } else if (!g_pc_paused && pc_minimap_map_open()) {
         f->active = 0; /* a tap outside the controls closes the map */

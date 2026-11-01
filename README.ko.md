@@ -17,16 +17,16 @@
 ## 다운로드
 
 <!-- 새 릴리즈를 내면 아래 링크의 버전을 바꾼다(README.md도 함께). -->
-최신 릴리즈: **[v1.0.1](https://github.com/cailet0422/afe-port/releases/tag/v1.0.1)**
+최신 릴리즈: **[v1.0.2](https://github.com/cailet0422/afe-port/releases/tag/v1.0.2)**
 
 | 플랫폼 | 다운로드 | 필요 사항 |
 |---|---|---|
-| Windows 64비트 | [DobutsuNoMoriEPlus-v1.0.1-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.1/DobutsuNoMoriEPlus-v1.0.1-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` 포함) |
-| Windows 32비트 | [DobutsuNoMoriEPlus-v1.0.1-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.1/DobutsuNoMoriEPlus-v1.0.1-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.0.1-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.1/DobutsuNoMoriEPlus-v1.0.1-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.0.1-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.0.1/DobutsuNoMoriEPlus-v1.0.1-Android.apk) | Android 5.0 이상, ARM 32·64비트 |
+| Windows 64비트 | [DobutsuNoMoriEPlus-v1.0.2-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.2/DobutsuNoMoriEPlus-v1.0.2-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` 포함) |
+| Windows 32비트 | [DobutsuNoMoriEPlus-v1.0.2-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.2/DobutsuNoMoriEPlus-v1.0.2-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.0.2-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.2/DobutsuNoMoriEPlus-v1.0.2-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.0.2-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.0.2/DobutsuNoMoriEPlus-v1.0.2-Android.apk) | Android 5.0 이상, ARM 32·64비트 |
 
-체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.0.1/SHA256SUMS.txt) ·
+체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.0.2/SHA256SUMS.txt) ·
 이전 버전과 릴리즈 노트: [전체 릴리즈](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -126,7 +126,8 @@ v0.1.6 이하는 스스로 업데이트하지 못하니 v1.0.0은 한 번 직접
 
 일시정지 메뉴 → **Settings** → **Controls** → **Buttons**에서 바꿀 수 있고, 게임패드 버튼도 여기서
 정합니다. 한글 입력 화면에서는 실제 키보드로 두벌식 입력을 할 수 있습니다(한/영 키, 오른쪽 Alt 또는
-Shift+Space로 전환).
+Shift+Space로 전환). 입력 중에는 **Shift+Enter**(또는 Ctrl+Enter)가 Start처럼 글을 끝냅니다. Enter는
+줄바꿈이고, 더 바꿀 줄이 없으면 다음 줄로, 편지에서는 맺음말로 넘어가며 맺음말에서는 끝내기입니다.
 
 ## 알려진 제한
 

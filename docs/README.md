@@ -370,7 +370,14 @@ drops you into the Reset Center).
 - On the Korean-patched disc, keyboard input turns on as soon as the editor opens (the English town name starts in
   English mode). `Tab` turns it off and on (when it is off, the keyboard acts as the gamepad). 한/영: `한/영` key,
   right Alt, `Shift+Space`. `Enter` inserts a line break when multi-line and confirms when single-line (in the letter
-  header and footer, moves to the next field); `Ctrl+Enter`/`Shift+Enter` finishes.
+  header it moves to the next field, in the footer it finishes); where a line break does not fit it moves to the line
+  below (from a letter's last line to its footer) and, with no line below, finishes. `Ctrl+Enter`/`Shift+Enter`
+  finishes.
+- Keys type only while the editor takes input (`pc_typing_takes_keys`): it asks for operations, or it has opened and
+  not asked yet (sliding in). The editor stays loaded until the whole menu closes, also while a letter's "finished?"
+  question or the address book is over it; there the keyboard is the gamepad again. Keys still held when typing stops
+  (the Enter and Shift of Shift+Enter) press nothing until they are let go (`pc_pad.c`). With the system input
+  method the on-screen keyboard hides meanwhile (`pc_typing_frame`).
 - The patch puts its own Hangul input UI in place of the kana wheel and replaced the wheel's textures for that UI; this
   UI is not reproduced. In Korean mode, wheel input is turned off and an **on-screen keyboard** (`pc/src/pc_ko_editor.c`,
   layout and cursor in `pc/src/ko/ko_osk.c`, test `pc/tests/test_ko_osk.c`) is drawn in place of the wheel.

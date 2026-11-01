@@ -6,8 +6,9 @@ Starts from the save that make_newgame_script.py --korean --save leaves
 
   letter         write a letter to Milk: body by keyboard (TYPE), the on-screen
                  keyboard by stick and A and by TOUCH, the D-pad up to the
-                 header and down to the closing, BS and the cursor; confirm it,
-                 open it again from the pocket, then save at the haniwa
+                 header and down to the closing, BS and the cursor; Enter in
+                 the closing finishes it; confirm it, open it again from the
+                 pocket (START finishes it there), then save at the haniwa
   letter-check   after a letter run: open the letter from the pocket again
   ephrase        give Milk a new catchphrase (the name editor through the LEDIT
                  debug command), hear it when talking to her, save
@@ -138,7 +139,7 @@ if scenario == "letter":
     do("LEFT 6", 20)
     do("LEFT 6", 20)
     shot("footer_left")
-    do("START", 80)
+    do("TYPE {ENTER}", 80)                       # Enter in the closing finishes, as START does
     shot("confirm", 0)
     do("A", 100)
     do("A", 100)

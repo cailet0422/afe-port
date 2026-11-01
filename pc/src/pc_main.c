@@ -338,6 +338,8 @@ static void pc_platform_mouse_click(const SDL_Event* event) {
 int pc_platform_poll_events(void) {
     SDL_Event event;
 
+    pc_typing_frame();
+
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
             case SDL_QUIT:
