@@ -12,6 +12,8 @@
 #include "pc_rom_dir.h"
 #include "pc_typing.h"
 #include "pc_touch.h"
+#include "pc_minimap.h"
+#include "pc_update.h"
 #ifdef _WIN32
 #include <direct.h>
 #define getcwd _getcwd
@@ -314,6 +316,25 @@ void pc_platform_swap_buffers(void) {
     SDL_GL_SwapWindow(g_pc_window);
 }
 
+/* A left click on the minimap opens the town map (taps come as fingers,
+ * pc_touch.c). Not when the left button is a game control. */
+static void pc_platform_mouse_click(const SDL_Event* event) {
+    int w = 0, h = 0;
+
+    if (event->button.button != SDL_BUTTON_LEFT || event->button.which == SDL_TOUCH_MOUSEID) {
+        return;
+    }
+    for (int i = 0; i < PC_BIND_COUNT; i++) {
+        if (g_pc_keybindings.key[i] == PC_INPUT_MOUSE1) {
+            return;
+        }
+    }
+    SDL_GetWindowSize(g_pc_window, &w, &h);
+    if (w > 0 && h > 0) {
+        pc_minimap_touch((float)event->button.x / w, (float)event->button.y / h);
+    }
+}
+
 int pc_platform_poll_events(void) {
     SDL_Event event;
 
@@ -365,6 +386,9 @@ int pc_platform_poll_events(void) {
                 if (event.type == SDL_CONTROLLERBUTTONDOWN) {
                     pc_touch_handle_event(&event); /* a pad in use hides the touch pad */
                 }
+                if (event.type == SDL_MOUSEBUTTONDOWN && !g_pc_paused) {
+                    pc_platform_mouse_click(&event);
+                }
                 if (g_pc_paused) {
                     /* menu navigation, and the bindings page's capture */
                     pc_pause_menu_handle_event(&event);
@@ -387,15 +411,19 @@ static void pc_restart_process(void) {
     }
     fflush(stdout);
     fflush(stderr);
+    /* after an update the new program (the running one was renamed) */
+    const char* updated = pc_update_restart_path();
 #ifdef _WIN32
     wchar_t exe[MAX_PATH];
     wchar_t* cmdline = _wcsdup(GetCommandLineW()); /* CreateProcessW may write to it */
     STARTUPINFOW si;
     PROCESS_INFORMATION pi;
+    int have_exe = updated != NULL ? MultiByteToWideChar(CP_UTF8, 0, updated, -1, exe, MAX_PATH) > 0
+                                   : GetModuleFileNameW(NULL, exe, MAX_PATH) > 0;
 
     memset(&si, 0, sizeof(si));
     si.cb = sizeof(si);
-    if (cmdline != NULL && GetModuleFileNameW(NULL, exe, MAX_PATH) > 0 &&
+    if (cmdline != NULL && have_exe &&
         CreateProcessW(exe, cmdline, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
         CloseHandle(pi.hThread);
         CloseHandle(pi.hProcess);
@@ -404,7 +432,11 @@ static void pc_restart_process(void) {
     (void)argv;
 #elif defined(__ANDROID__)
     (void)argv; /* started by pc_request_restart */
+    (void)updated;
 #else
+    if (updated != NULL) {
+        execv(updated, argv);
+    }
     execv("/proc/self/exe", argv);
     execvp(argv[0], argv);
     fprintf(stderr, "[PC] restart failed\n");
@@ -534,6 +566,7 @@ int main(int argc, char* argv[]) {
     pc_settings_load();
     pc_keybindings_load();
     pc_platform_init();
+    pc_update_init(); /* looks for a new version on a thread meanwhile */
     while (!pc_disc_init()) {
         char cwd[512];
 

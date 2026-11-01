@@ -2,6 +2,7 @@
 #include "pc_input_script.h"
 #include "pc_touch.h"
 #include "pc_typing.h"
+#include "pc_minimap.h"
 
 #include "game.h"
 #include "m_common_data.h"
@@ -70,6 +71,7 @@ typedef enum {
     SCRIPT_FG,
     SCRIPT_CLOCK,
     SCRIPT_BGM,
+    SCRIPT_MAP,
 } ScriptKind;
 
 typedef struct {
@@ -100,6 +102,10 @@ static int s_fast = 0;
 
 void pc_input_script_set_fast(int fast) {
     s_fast = fast;
+}
+
+int pc_input_script_active(void) {
+    return s_count > 0;
 }
 
 static int parse_inputs(char* text, ScriptEvent* ev) {
@@ -286,6 +292,8 @@ int pc_input_script_load(const char* path) {
         } else if (strcmp(word, "BGM") == 0 && fields >= 3) {
             ev.kind = SCRIPT_BGM;
             ev.value[0] = (u32)strtoul(arg, NULL, 16);
+        } else if (strcmp(word, "MAP") == 0) {
+            ev.kind = SCRIPT_MAP;
         } else if (strcmp(word, "TYPE") == 0 && fields >= 3) {
             ev.kind = SCRIPT_TYPE;
             snprintf(ev.name, sizeof(ev.name), "%s", arg);
@@ -1035,6 +1043,8 @@ int pc_input_script_frame(u32 real_frame) {
             push_key_or_pad(ev);
         } else if (ev->kind == SCRIPT_POS) {
             log_positions(frame);
+        } else if (ev->kind == SCRIPT_MAP) {
+            pc_minimap_request_toggle();
         } else if (ev->kind >= SCRIPT_GIVE && ev->kind <= SCRIPT_BGM) {
             debug_command(ev);
         } else if (ev->kind == SCRIPT_QUIT) {

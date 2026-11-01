@@ -25,6 +25,8 @@ PCSettings g_pc_settings = {
     .text_input = 0,
     .touch_controls = 0,
 #endif
+    .minimap = 1,
+    .auto_update = 1,
 };
 
 static const char* SETTINGS_FILE = "settings.ini";
@@ -74,6 +76,12 @@ static void apply_setting(const char* key, const char* value) {
         if (val == 0 || val == 1) g_pc_settings.text_input = val;
     } else if (strcmp(key, "touch_controls") == 0) {
         if (val == 0 || val == 1) g_pc_settings.touch_controls = val;
+    } else if (strcmp(key, "minimap") == 0) {
+        if (val == 0 || val == 1) g_pc_settings.minimap = val;
+    } else if (strcmp(key, "auto_update") == 0) {
+        if (val == 0 || val == 1) g_pc_settings.auto_update = val;
+    } else if (strcmp(key, "update_skip") == 0) {
+        snprintf(g_pc_settings.update_skip, sizeof(g_pc_settings.update_skip), "%s", value);
     }
 }
 
@@ -108,6 +116,9 @@ void pc_settings_save(void) {
     fprintf(f, "# NES emulator aspect ratio: 0 = stretch to fullscreen, 1 = 4:3 pillarbox\n");
     fprintf(f, "nes_aspect = %d\n", g_pc_settings.nes_aspect);
     fprintf(f, "\n");
+    fprintf(f, "# Map of the town in the bottom left corner outside: 0 = off, 1 = on\n");
+    fprintf(f, "minimap = %d\n", g_pc_settings.minimap);
+    fprintf(f, "\n");
     fprintf(f, "[Audio]\n");
     fprintf(f, "# Master output volume as a percentage (0-100)\n");
     fprintf(f, "master_volume = %d\n", g_pc_settings.master_volume);
@@ -130,6 +141,12 @@ void pc_settings_save(void) {
     fprintf(f, "korean = %d\n", g_pc_settings.korean);
     fprintf(f, "# Where that disc is (written by the game)\n");
     fprintf(f, "ko_image = %s\n", g_pc_settings.ko_image);
+    fprintf(f, "\n");
+    fprintf(f, "[Update]\n");
+    fprintf(f, "# Look for a new version on GitHub when the game starts (release builds): 0 = no, 1 = yes\n");
+    fprintf(f, "auto_update = %d\n", g_pc_settings.auto_update);
+    fprintf(f, "# A version not to ask about again (\"Skip this version\")\n");
+    fprintf(f, "update_skip = %s\n", g_pc_settings.update_skip);
     fclose(f);
     printf("[Settings] Saved %s\n", SETTINGS_FILE);
 }

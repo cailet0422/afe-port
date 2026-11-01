@@ -29,6 +29,8 @@ static const PCInputCode s_default_keys[PC_BIND_COUNT] = {
     [PC_BIND_DPAD_DOWN]  = SDL_SCANCODE_K,
     [PC_BIND_DPAD_LEFT]  = SDL_SCANCODE_J,
     [PC_BIND_DPAD_RIGHT] = SDL_SCANCODE_L,
+
+    [PC_BIND_MAP] = SDL_SCANCODE_M,
 };
 
 /* Positions as on an Xbox pad (SDL's GameController layout) */
@@ -56,6 +58,8 @@ static const PCPadInput s_default_pad[PC_BIND_COUNT][PC_PAD_BINDS] = {
     [PC_BIND_DPAD_DOWN]  = { SDL_CONTROLLER_BUTTON_DPAD_DOWN, PC_PAD_NONE },
     [PC_BIND_DPAD_LEFT]  = { SDL_CONTROLLER_BUTTON_DPAD_LEFT, PC_PAD_NONE },
     [PC_BIND_DPAD_RIGHT] = { SDL_CONTROLLER_BUTTON_DPAD_RIGHT, PC_PAD_NONE },
+
+    [PC_BIND_MAP] = { PC_PAD_NONE, PC_PAD_NONE },
 };
 
 PCKeybindings g_pc_keybindings;
@@ -69,6 +73,7 @@ static const char* const s_ini_keys[PC_BIND_COUNT] = {
     "Stick_Up", "Stick_Down", "Stick_Left", "Stick_Right",
     "CStick_Up", "CStick_Down", "CStick_Left", "CStick_Right",
     "DPad_Up", "DPad_Down", "DPad_Left", "DPad_Right",
+    "Map",
 };
 
 static const char* const s_menu_names[PC_BIND_COUNT] = {
@@ -76,6 +81,7 @@ static const char* const s_menu_names[PC_BIND_COUNT] = {
     "Stick Up", "Stick Down", "Stick Left", "Stick Right",
     "C-Stick Up", "C-Stick Down", "C-Stick Left", "C-Stick Right",
     "D-Pad Up", "D-Pad Down", "D-Pad Left", "D-Pad Right",
+    "Map",
 };
 
 /* mouse button name table */
@@ -246,6 +252,34 @@ static void apply_padbind(const char* key, char* value) {
     memcpy(g_pc_keybindings.pad[action], inputs, sizeof(inputs));
 }
 
+/* A control added after a keybindings.ini was written starts with its
+   default, which that file may already give to another control (M to A):
+   then the new one starts unbound instead of pressing both */
+static void unbind_taken_defaults(void) {
+    static const int added[] = { PC_BIND_MAP };
+
+    for (int a = 0; a < (int)(sizeof(added) / sizeof(added[0])); a++) {
+        int action = added[a];
+
+        for (int i = 0; i < PC_BIND_COUNT; i++) {
+            if (i == action) continue;
+            if (g_pc_keybindings.key[action] >= 0 && g_pc_keybindings.key[i] == g_pc_keybindings.key[action]) {
+                printf("[Keybindings] %s: %s is taken, left unbound\n", s_ini_keys[action],
+                       input_code_name(g_pc_keybindings.key[action]));
+                g_pc_keybindings.key[action] = PC_INPUT_NONE;
+            }
+            for (int j = 0; j < PC_PAD_BINDS; j++) {
+                for (int k = 0; k < PC_PAD_BINDS; k++) {
+                    if (g_pc_keybindings.pad[action][j] != PC_PAD_NONE &&
+                        g_pc_keybindings.pad[i][k] == g_pc_keybindings.pad[action][j]) {
+                        g_pc_keybindings.pad[action][j] = PC_PAD_NONE;
+                    }
+                }
+            }
+        }
+    }
+}
+
 void pc_keybindings_reset(void) {
     memcpy(g_pc_keybindings.key, s_default_keys, sizeof(s_default_keys));
     memcpy(g_pc_keybindings.pad, s_default_pad, sizeof(s_default_pad));
@@ -278,6 +312,7 @@ void pc_keybindings_save(void) {
         if (i == PC_BIND_R)            fprintf(f, "\n# Main Stick\n");
         if (i == PC_BIND_STICK_RIGHT)  fprintf(f, "\n# C-Stick (Camera)\n");
         if (i == PC_BIND_CSTICK_RIGHT) fprintf(f, "\n# D-Pad\n");
+        if (i == PC_BIND_DPAD_RIGHT)   fprintf(f, "\n# Opens and closes the town map at any time\n");
     }
 
     fprintf(f, "\n");
@@ -342,6 +377,7 @@ void pc_keybindings_load(void) {
         }
     }
     fclose(f);
+    unbind_taken_defaults();
     printf("[Keybindings] Loaded %s\n", KEYBINDINGS_FILE);
 }
 

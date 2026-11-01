@@ -5,6 +5,7 @@
 #include "pc_input_script.h"
 #include "pc_touch.h"
 #include "pc_ko.h"
+#include "pc_minimap.h"
 #include <dolphin/pad.h>
 
 /* analog stick constants */
@@ -77,6 +78,7 @@ u32 PADRead(PADStatus* status) {
     u32 mouse = SDL_GetMouseState(NULL, NULL);
     u16 buttons = 0;
     u32 held = 0; /* 1 << PC_BIND_* */
+    u32 map_held = 0;
     s8 stickX = 0, stickY = 0;
     s8 cstickX = 0, cstickY = 0;
 
@@ -124,6 +126,7 @@ u32 PADRead(PADStatus* status) {
             }
         }
 
+        map_held |= held & (1u << PC_BIND_MAP);
         apply_held(held, &buttons, &stickX, &stickY, &cstickX, &cstickY);
         held = 0;
 
@@ -159,10 +162,12 @@ u32 PADRead(PADStatus* status) {
         status[0].triggerRight = rt;
     }
 
+    map_held |= held & (1u << PC_BIND_MAP);
     apply_held(held, &buttons, &stickX, &stickY, &cstickX, &cstickY);
 
     pc_touch_read(&buttons, &stickX, &stickY);
     pc_input_script_apply(&buttons, &stickX, &stickY);
+    pc_minimap_pad(map_held != 0, &buttons);
     pc_ko_osk_pad(&buttons, &stickX, &stickY);
 
     status[0].button = buttons;

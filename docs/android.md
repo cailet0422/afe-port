@@ -135,6 +135,23 @@ and opens it again — because the native library's static variables are not rei
 Settings → Controls → Buttons remaps the Bluetooth gamepad's buttons (and physical keyboard keys)
 (see "Rebinding controls" in [README.md](README.md)). While paused, the gamepad's D-pad, A and B move through the menu.
 
+Outside in the town the minimap sits in the bottom left corner, below the D-pad and left of where the stick rests. That
+corner is also where the stick starts, so a quick tap on the minimap (short, without moving) opens the town map, while
+a thumb that lands on it and moves steers as usual. A tap outside the on-screen buttons closes the map again (the stick
+still moves the map's cursor).
+A gamepad can get a Map button in Settings → Controls → Buttons.
+
+### Updates
+
+A build signed with the release key looks for a newer release when the game starts (`Updater.java`, in the
+background). If there is one, a dialog offers **업데이트** (update), **나중에** (later) and **이 버전 건너뛰기** (skip
+this version). The APK is downloaded to the app's cache with a progress bar, checked against the release's
+`SHA256SUMS.txt`, and opened in the system installer (`UpdateProvider` gives it a `content://` URI on Android 7+).
+Android may first ask to allow installing apps from this app. The new version installs over the old one with the
+same key, so saves, settings and the Korean disc stay. The game closes while it installs, so save first. Settings →
+Gameplay → **Updates < Off >** (`auto_update = 0`) turns it off. Debug builds and builds signed with another key
+never look, because the releases could not install over them anyway.
+
 ## Current status
 
 - App icon: `res/mipmap-*/ic_launcher.png` (48–192px) and an adaptive icon (`mipmap-anydpi-v26`; the foreground is the

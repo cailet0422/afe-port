@@ -17,16 +17,16 @@
 ## Download
 
 <!-- When a new release is published, update the version in these links (here and in README.ko.md). -->
-Latest release: **[v0.1.6](https://github.com/cailet0422/afe-port/releases/tag/v0.1.6)** (preview)
+Latest release: **[v1.0.0](https://github.com/cailet0422/afe-port/releases/tag/v1.0.0)**
 
 | Platform | Download | Requirements |
 |---|---|---|
-| Windows 64-bit | [DobutsuNoMoriEPlus-v0.1.6-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v0.1.6/DobutsuNoMoriEPlus-v0.1.6-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
-| Windows 32-bit | [DobutsuNoMoriEPlus-v0.1.6-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v0.1.6/DobutsuNoMoriEPlus-v0.1.6-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v0.1.6-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v0.1.6/DobutsuNoMoriEPlus-v0.1.6-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v0.1.6-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v0.1.6/DobutsuNoMoriEPlus-v0.1.6-Android.apk) | Android 5.0+, ARM 32/64-bit |
+| Windows 64-bit | [DobutsuNoMoriEPlus-v1.0.0-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.0/DobutsuNoMoriEPlus-v1.0.0-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
+| Windows 32-bit | [DobutsuNoMoriEPlus-v1.0.0-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.0/DobutsuNoMoriEPlus-v1.0.0-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.0.0-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.0/DobutsuNoMoriEPlus-v1.0.0-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.0.0-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.0.0/DobutsuNoMoriEPlus-v1.0.0-Android.apk) | Android 5.0+, ARM 32/64-bit |
 
-Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v0.1.6/SHA256SUMS.txt) ·
+Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.0.0/SHA256SUMS.txt) ·
 Older versions and release notes: [all releases](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -36,9 +36,8 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
 > your image at start-up.
 
 > [!NOTE]
-> Releases are **previews**. They are tested widely on Linux with scripted play-throughs, the
-> Windows builds under Wine and the Android build on an emulator, but not yet on many real Windows
-> PCs or Android phones. Please report problems in [Issues](https://github.com/cailet0422/afe-port/issues).
+> Releases are tested widely on Linux with scripted play-throughs, the Windows builds under Wine
+> and the Android build on an emulator, but not yet on many real Windows PCs or Android phones. Please report problems in [Issues](https://github.com/cailet0422/afe-port/issues).
 
 ## Features
 
@@ -49,6 +48,13 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
 - Korean fan patch support: install the patch zip from inside the game, switch between Korean and
   Japanese at any time, and type Hangul with a real keyboard (2-set layout) or an on-screen keyboard.
 - Android: on-screen touch gamepad, physical gamepads, and a crash report shown on the next launch.
+- Minimap: outside in town, a small map of the town sits in the bottom left corner (you, facing the
+  way you walk, and the villagers' houses). **M** opens the game's full map at any time, even before
+  you have the map from the police station; on Android, tap the minimap. Turn it off under
+  **Settings** → **Gameplay** → **Minimap**.
+- Updates: from v1.0.0 on, the game looks for a new release when it starts and offers to install it
+  (saves, settings, the disc and the Korean patch stay). Turn it off under **Settings** → **Gameplay**
+  → **Updates**.
 - NES (Famicom) furniture games, saved high scores and the boot jingle all work.
 - GameCube memory card saves (GCI) can be imported and exported with the `afe_gci` tool (build from
   source).
@@ -77,6 +83,24 @@ old one and keep your saves, which live in `Android/data/org.afedecomp.dobutsuno
 If the app ever closes unexpectedly, the next launch shows what happened before the game starts —
 tap **복사** (Copy) and paste it into an issue.
 
+### Updating
+
+From v1.0.0 on, the downloads above update themselves. When the game starts it checks the
+[releases](https://github.com/cailet0422/afe-port/releases); if there is a newer one, the pause menu opens
+with **Update now**, **Later** or **Skip this version**.
+
+- Windows / Linux: the new zip is downloaded and checked against the release's `SHA256SUMS.txt`, its
+  files replace the old ones in the game folder, and **Restart now** starts the new version. Your
+  `rom/`, `save/`, `korean/` and settings are not touched. The game folder must be writable (not
+  `Program Files`). Linux needs `curl` or `wget`.
+- Android: the new APK is downloaded and checked, then the system installer opens (allow installing
+  from this app if Android asks). It installs over the old version and keeps your saves and the Korean
+  patch.
+
+Updates come only from this repository's releases, and a build made from source never updates itself.
+**Settings** → **Gameplay** → **Updates** turns the check off (`auto_update = 0` in `settings.ini`).
+Version v0.1.6 and earlier can't update themselves: download v1.0.0 once by hand.
+
 ### Playing in Korean
 
 The Korean translation is a separate fan patch, not part of this project.
@@ -103,6 +127,7 @@ The patched image is written to `korean/`; your original image stays untouched. 
 | X / Y / Z | X / Y / Z |
 | L / R | Q / E |
 | Start | Enter |
+| Town map (open / close) | M |
 | Pause menu | Esc |
 
 Change them under pause menu → **Settings** → **Controls** → **Buttons**; gamepads can be rebound there

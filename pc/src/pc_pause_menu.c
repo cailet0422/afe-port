@@ -2,6 +2,8 @@
 #include "pc_pause_menu.h"
 #include "pc_settings_menu.h"
 #include "pc_text_draw.h"
+#include "pc_minimap.h"
+#include "pc_update.h"
 
 #include "m_font.h"
 #include "m_rcp.h"
@@ -30,12 +32,36 @@ typedef enum {
     PAGE_CONFIRM_QUIT = 2,
 } PauseMenuPage;
 
-#define MAIN_ITEM_COUNT     3
 #define CONFIRM_ITEM_COUNT  2
 
+/* Rows of the main page; Update only when there is one to show */
+enum {
+    MAIN_RESUME,
+    MAIN_SETTINGS,
+    MAIN_UPDATE,
+    MAIN_QUIT,
+};
+
 static PauseMenuPage cur_page = PAGE_MAIN;
-static int main_sel = 0;    /* 0=Resume, 1=Settings, 2=Quit Game */
+static int main_sel = 0;    /* index into main_items() */
 static int confirm_sel = 0; /* 0=No (default), 1=Yes */
+static int s_update_resume = 0; /* the update page opened by itself: closing it resumes the game */
+
+static int show_update_row(void) {
+    PCUpdateState st = pc_update_state();
+
+    return st == PC_UPDATE_AVAILABLE || st == PC_UPDATE_DOWNLOADING || st == PC_UPDATE_INSTALLED;
+}
+
+static int main_items(int items[4]) {
+    int n = 0;
+
+    items[n++] = MAIN_RESUME;
+    items[n++] = MAIN_SETTINGS;
+    if (show_update_row()) items[n++] = MAIN_UPDATE;
+    items[n++] = MAIN_QUIT;
+    return n;
+}
 
 extern int pc_matrix_ready(void); /* sys_matrix.c */
 
@@ -56,19 +82,46 @@ void pc_pause_menu_toggle(void) {
 /* Input */
 
 static void main_activate(void) {
-    switch (main_sel) {
-        case 0: /* Resume */
+    int items[4];
+    int n = main_items(items);
+
+    if (main_sel >= n) main_sel = n - 1;
+    switch (items[main_sel]) {
+        case MAIN_RESUME:
             pc_pause_menu_toggle();
             break;
-        case 1: /* Settings */
+        case MAIN_SETTINGS:
             cur_page = PAGE_SETTINGS;
             pc_settings_menu_enter();
             break;
-        case 2: /* Quit Game -> confirm page (default to No) */
+        case MAIN_UPDATE:
+            cur_page = PAGE_SETTINGS;
+            pc_settings_menu_enter_update();
+            break;
+        case MAIN_QUIT: /* -> confirm page (default to No) */
             cur_page = PAGE_CONFIRM_QUIT;
             confirm_sel = 0;
             break;
     }
+}
+
+/* The settings menu closed: back to the main page, or to the game if the
+ * update page had opened by itself */
+static void settings_closed(void) {
+    cur_page = PAGE_MAIN;
+    if (s_update_resume) {
+        s_update_resume = 0;
+        pc_pause_menu_toggle();
+    }
+}
+
+void pc_pause_menu_open_update(void) {
+    if (g_pc_paused) return;
+    pc_pause_menu_toggle();
+    if (!g_pc_paused) return;
+    cur_page = PAGE_SETTINGS;
+    pc_settings_menu_enter_update();
+    s_update_resume = 1;
 }
 
 static void confirm_activate(void) {
@@ -121,17 +174,18 @@ int pc_pause_menu_handle_event(const SDL_Event* e) {
             case SDLK_RETURN:
             case SDLK_KP_ENTER:
             case SDLK_SPACE:
-                if (!pc_settings_menu_confirm()) cur_page = PAGE_MAIN;
+                if (!pc_settings_menu_confirm()) settings_closed();
                 return 1;
             case SDLK_ESCAPE:
-                if (!pc_settings_menu_cancel()) cur_page = PAGE_MAIN;
+                if (!pc_settings_menu_cancel()) settings_closed();
                 return 1;
             default: return 1;
         }
     }
 
     /* Pages owned here (Main, Quit-confirm). */
-    int item_count = (cur_page == PAGE_MAIN) ? MAIN_ITEM_COUNT : CONFIRM_ITEM_COUNT;
+    int main_ids[4];
+    int item_count = (cur_page == PAGE_MAIN) ? main_items(main_ids) : CONFIRM_ITEM_COUNT;
     int* sel       = (cur_page == PAGE_MAIN) ? &main_sel : &confirm_sel;
 
     switch (k) {
@@ -208,19 +262,34 @@ static void row_colors(int selected, int* r, int* g, int* b, int* a) {
 }
 
 static void draw_main_page(struct game_s* game) {
-    static const char* items[MAIN_ITEM_COUNT] = { "Resume", "Settings", "Quit Game" };
+    int items[4];
+    int n = main_items(items);
+    char update[48];
+    char version[32];
 
+    if (main_sel >= n) main_sel = n - 1;
+    if (pc_update_state() == PC_UPDATE_INSTALLED) {
+        snprintf(update, sizeof(update), "Restart for %s", pc_update_new_version());
+    } else {
+        snprintf(update, sizeof(update), "Update to %s", pc_update_new_version());
+    }
     draw_centered_text(game, "- Paused -", 80.0f, 255, 255, 255, 255, 1.0f);
 
     f32 y = 110.0f;
     f32 line_h = 18.0f;
-    for (int i = 0; i < MAIN_ITEM_COUNT; i++) {
+    for (int i = 0; i < n; i++) {
+        static const char* names[] = { "Resume", "Settings", NULL, "Quit Game" };
         int r, g, b, a;
         int selected = (i == main_sel);
         row_colors(selected, &r, &g, &b, &a);
-        draw_centered_text(game, items[i], y + i * line_h, r, g, b, a,
+        if (items[i] == MAIN_UPDATE && !selected) {
+            r = 120; g = 220; b = 140; /* news */
+        }
+        draw_centered_text(game, items[i] == MAIN_UPDATE ? update : names[items[i]], y + i * line_h, r, g, b, a,
                            selected ? PC_MENU_SCALE_SELECTED : 1.0f);
     }
+    snprintf(version, sizeof(version), "v%s", pc_update_version());
+    draw_centered_text(game, version, 220.0f, 130, 130, 130, 180, 1.0f);
 }
 
 static void draw_confirm_page(struct game_s* game) {
@@ -246,6 +315,9 @@ static void draw_confirm_page(struct game_s* game) {
 }
 
 void pc_pause_menu_draw(struct game_s* game) {
+    /* the hook after game_main for the minimap as well (it draws later, in pc_vi.c) */
+    pc_minimap_game_frame(game);
+
     if (!g_pc_paused || game == NULL || game->graph == NULL) return;
 
     /* Load the font ortho projection + identity modelview for the overlay.
@@ -259,7 +331,7 @@ void pc_pause_menu_draw(struct game_s* game) {
         /* Settings module owns its own dim backdrop. Will fix/improve later. */
         pc_settings_menu_draw(game, /*with_dim_backdrop=*/1);
         /* The user may have closed it from inside (Back). */
-        if (!pc_settings_menu_active()) cur_page = PAGE_MAIN;
+        if (!pc_settings_menu_active()) settings_closed();
     } else {
         draw_dim_rect(game->graph, 180);
         if (cur_page == PAGE_MAIN)              draw_main_page(game);

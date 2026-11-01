@@ -56,6 +56,8 @@
  *                                     e.g. Escape, Return, Down, Left_Shift): menus
  *     <frame> PAD <name>              a gamepad button or trigger event (SDL names: a,
  *                                     dpdown, leftshoulder, lefttrigger ...)
+ *     <frame> MAP                     open the town map, or close it, as the Map control
+ *                                     (M) does (pc_minimap.c)
  *
  * <frame> counts VI retraces (60 per second) from boot. <inputs> joins any of
  * A B X Y START Z L R UP DOWN LEFT RIGHT (D-pad) and SU SD SL SR (main stick)
@@ -77,6 +79,9 @@ void pc_input_script_apply(u16* buttons, s8* stick_x, s8* stick_y);
 
 /* Draws only the frames that a SHOT command captures (g_pc_skip_draw). */
 void pc_input_script_set_fast(int fast);
+
+/* A script was loaded (the updater leaves scripted runs alone) */
+int pc_input_script_active(void);
 
 /* Runs SHOT/QUIT commands due this frame; call before presenting it.
  * Returns 0 when the script asked to quit. */
