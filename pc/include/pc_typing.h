@@ -33,7 +33,7 @@ extern "C" {
 #define PC_TYPING_CMD_RIGHT         258
 #define PC_TYPING_CMD_UP            259
 #define PC_TYPING_CMD_DOWN          260
-#define PC_TYPING_CMD_ENTER         261 /* new line, or finish a one-line field */
+#define PC_TYPING_CMD_ENTER         261 /* new line; finishes a one-line field or a letter's closing */
 #define PC_TYPING_CMD_END           262 /* finish editing (Ctrl/Shift+Enter) */
 #define PC_TYPING_CMD_PREEDIT_CLEAR 263 /* remove the text being composed */
 /* PC_TYPING_PAIR | glyph: insert a Korean patch two-byte character. */
@@ -56,6 +56,21 @@ int pc_typing_pop(int* op);
 /* The editor has been asking for operations (it is taking input, not
  * sliding in or waiting for another menu) */
 int pc_typing_editor_listening(void);
+
+/* The editor takes input: it is asking for operations, or it opened and has
+ * not asked yet (it is sliding in). An editor that has taken input and
+ * stopped is finished or waits under another menu (a letter's "finished?"
+ * question, the address book); it stays open until the whole menu closes,
+ * but the keyboard is the controller again. */
+int pc_typing_editor_taking_input(void);
+
+/* Keyboard typing is on and the editor takes input: keys type instead of
+ * pressing the buttons they are bound to (pc_pad.c) */
+int pc_typing_takes_keys(void);
+
+/* Every frame: with the system input method, hides the on-screen keyboard
+ * while the editor waits and shows it again when it takes input */
+void pc_typing_frame(void);
 
 /* The editor could not insert the text being composed (the field is full),
  * so the input method drops it. */

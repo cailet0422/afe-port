@@ -31,13 +31,24 @@ static void push(int op) {
 
 extern u32 pc_frame_counter;
 static u32 s_polled_frame = (u32)-8;
+static int s_polled = 0;    /* the editor has asked for operations since it opened */
+static int s_ime_shown = 0; /* system input method: text input is started */
 
 int pc_typing_editor_listening(void) {
     return pc_frame_counter - s_polled_frame <= 2;
 }
 
+int pc_typing_editor_taking_input(void) {
+    return g_pc_editor_active && (!s_polled || pc_typing_editor_listening());
+}
+
+int pc_typing_takes_keys(void) {
+    return g_pc_typing_mode && pc_typing_editor_taking_input();
+}
+
 int pc_typing_pop(int* op) {
     s_polled_frame = pc_frame_counter; /* the editor asks every frame it takes input */
+    s_polled = 1;
     if (s_count == 0) {
         return 0;
     }
@@ -213,7 +224,7 @@ static void builtin_key(int key) {
 }
 
 int pc_typing_key(int key) {
-    if (!g_pc_typing_mode || !g_pc_editor_active) {
+    if (!pc_typing_takes_keys()) {
         return 0;
     }
     if (pc_typing_system_ime() && key < PC_TYPING_CMD_BACKSPACE) {
@@ -234,6 +245,7 @@ int pc_typing_osk_key(int key) {
 
 void pc_typing_editor_open(int latin) {
     queue_clear();
+    s_polled = 0;
     ko_ime_init(&s_ime);
     s_preedit = -1;
     s_has_preedit = 0;
@@ -247,6 +259,7 @@ void pc_typing_editor_open(int latin) {
     if (pc_typing_system_ime()) {
         g_pc_typing_mode = 1;
         SDL_StartTextInput(); /* shows the on-screen keyboard on phones */
+        s_ime_shown = 1;
     } else if (g_pc_typing_mode) {
         SDL_StopTextInput(); /* keep the OS input method out of the way */
     }
@@ -259,6 +272,26 @@ void pc_typing_editor_close(void) {
     drop_composition();
     if (pc_typing_system_ime()) {
         SDL_StopTextInput();
+    }
+    s_ime_shown = 0;
+}
+
+void pc_typing_frame(void) {
+    int taking;
+
+    if (!g_pc_editor_active || !pc_typing_system_ime()) {
+        return;
+    }
+    /* The on-screen keyboard goes away while another menu is over the editor
+     * (a letter's "finished?" question) and comes back with it */
+    taking = pc_typing_editor_taking_input();
+    if (taking != s_ime_shown) {
+        s_ime_shown = taking;
+        if (taking) {
+            SDL_StartTextInput();
+        } else {
+            SDL_StopTextInput();
+        }
     }
 }
 
@@ -286,7 +319,7 @@ static void each_unit(const char* text, int preedit) {
 }
 
 void pc_typing_system_editing(const char* text) {
-    if (!g_pc_typing_mode || !g_pc_editor_active || !pc_typing_system_ime()) {
+    if (!pc_typing_takes_keys() || !pc_typing_system_ime()) {
         return;
     }
     clear_preedit();
@@ -294,7 +327,7 @@ void pc_typing_system_editing(const char* text) {
 }
 
 void pc_typing_system_text(const char* text) {
-    if (!g_pc_typing_mode || !g_pc_editor_active || !pc_typing_system_ime()) {
+    if (!pc_typing_takes_keys() || !pc_typing_system_ime()) {
         return;
     }
     clear_preedit();
@@ -341,8 +374,8 @@ void pc_typing_handle_event(const SDL_Event* event) {
     Uint16 mod;
     int c;
 
-    if (!g_pc_editor_active) {
-        return;
+    if (!pc_typing_editor_taking_input()) {
+        return; /* keys are the controller's, also over an editor that waits */
     }
     if (event->type == SDL_TEXTEDITING) {
         pc_typing_system_editing(event->edit.text);

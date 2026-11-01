@@ -132,7 +132,9 @@ The patched image is written to `korean/`; your original image stays untouched. 
 
 Change them under pause menu → **Settings** → **Controls** → **Buttons**; gamepads can be rebound there
 too. On Korean text-entry screens you can type Hangul directly (toggle with the 한/영 key, Right Alt or
-Shift+Space).
+Shift+Space). While typing, **Shift+Enter** (or Ctrl+Enter) finishes the text, as Start does. Enter starts a new
+line; where there is no room for one it goes to the next line, in a letter on to the closing, and in the closing
+it finishes too.
 
 ## Known limitations
 

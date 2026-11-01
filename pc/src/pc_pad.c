@@ -16,6 +16,11 @@
 
 static SDL_GameController* g_controller = NULL;
 
+/* Keys (1 << PC_BIND_*) that were down while they typed: they press nothing
+ * until they are let go, so the Enter that finishes a text, or the Shift of
+ * Shift+Enter, does not also press Start or B in the menu that comes next */
+static u32 s_typed_held = 0;
+
 BOOL PADInit(void) {
     for (int i = 0; i < SDL_NumJoysticks(); i++) {
         if (SDL_IsGameController(i)) {
@@ -82,23 +87,30 @@ u32 PADRead(PADStatus* status) {
     s8 stickX = 0, stickY = 0;
     s8 cstickX = 0, cstickY = 0;
 
-    /* Suppress keyboard-to-button mapping when typing into the in-game text editor */
-    if (!(g_pc_typing_mode && g_pc_editor_active)) {
-        /* helper: check if a PCInputCode is currently pressed */
-        #define INPUT_PRESSED(code) \
-            ((code) < 0 ? 0 \
-             : ((code) & PC_INPUT_MOUSE_BIT) \
-                ? (mouse & SDL_BUTTON((code) & 0xFF)) \
-                : keys[(SDL_Scancode)(code)])
+    /* helper: check if a PCInputCode is currently pressed */
+    #define INPUT_PRESSED(code) \
+        ((code) < 0 ? 0 \
+         : ((code) & PC_INPUT_MOUSE_BIT) \
+            ? (mouse & SDL_BUTTON((code) & 0xFF)) \
+            : keys[(SDL_Scancode)(code)])
 
-        /* from keybindings.ini / Settings > Controls */
-        for (int i = 0; i < PC_BIND_COUNT; i++) {
-            if (INPUT_PRESSED(g_pc_keybindings.key[i])) {
-                held |= 1u << i;
-            }
+    /* from keybindings.ini / Settings > Controls */
+    for (int i = 0; i < PC_BIND_COUNT; i++) {
+        if (INPUT_PRESSED(g_pc_keybindings.key[i])) {
+            held |= 1u << i;
         }
+    }
 
-        #undef INPUT_PRESSED
+    #undef INPUT_PRESSED
+
+    /* Keys type into the in-game text editor while it takes input; once it
+     * finishes or waits under another menu they are the controller again */
+    if (pc_typing_takes_keys()) {
+        s_typed_held = held;
+        held = 0;
+    } else {
+        s_typed_held &= held;
+        held &= ~s_typed_held;
     }
 
     /* hotplug */
