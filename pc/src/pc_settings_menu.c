@@ -1256,7 +1256,7 @@ static void draw_update_page(struct game_s* game) {
         }
         case PC_UPDATE_INSTALLED:
             draw_centered(game, pc_update_message(), 98.0f, 120, 230, 140, 255, 1.0f);
-            draw_centered(game, "The new version starts with the next start", 116.0f, 230, 230, 230, 255, 1.0f);
+            draw_centered(game, "It runs from the next start of the game", 116.0f, 230, 230, 230, 255, 1.0f);
             draw_buttons(game, installed, 2, s_update_sel, 160.0f);
             draw_centered(game, "Progress since the last save is lost", 190.0f, 170, 170, 170, 200, 1.0f);
             break;
