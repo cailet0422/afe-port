@@ -240,13 +240,15 @@ test `pc/tests/test_minimap.c`).
   `m_map_ovl.c` does (`mMP_set_map_texture_pal`, bridges included). Those tables are static in `m_map_ovl.c`, so
   `pc/tools/gen_minimap_tables.py` copies them into `pc/src/pc_minimap_tables.inc` (CI runs it with `--check`).
 - It reads the game after `game_main` (`pc_minimap_game_frame`, called from `pc_pause_menu_draw`, which `graph.c`
-  already calls there) and draws with OpenGL over the finished frame like the touch pad (`pc_vi.c`), so no decomp
-  change was needed. With `touch_controls = 1` it is smaller and sits below the pad's D-pad and left of where the stick rests (the
-  test checks it against the pad's layout). The game's clock (`m_banti.c`, shown while the player stands still)
-  moves from the bottom right to the bottom left once the player has been in the bottom right of the screen for 10
-  frames (`banti_chk_disp_left`); the minimap follows the same rule (`follow_clock`) and then glides up above the
-  clock, or stays put where a wide window leaves room beside it. `minimap = 0` in `[Gameplay]` turns it off (Settings → Gameplay →
+  already calls there) and draws with OpenGL over the finished frame like the touch pad (`pc_vi.c`). With
+  `touch_controls = 1` it is smaller and sits below the pad's D-pad and left of where the stick rests (the test checks
+  it against the pad's layout). It never moves. `minimap = 0` in `[Gameplay]` turns it off (Settings → Gameplay →
   Minimap).
+- **The game's clock** (`m_banti.c`, shown while the player stands still) used to move from the bottom right to the
+  bottom left once the player had been in the bottom right of the screen for 10 frames (`banti_chk_disp_left`). With
+  the minimap on (`pc_minimap_on`) it now stays hidden there instead and comes back on the right (afe-decomp,
+  `TARGET_PC`). In a window wider than 4:3 the game's 2D picture is the 4:3 middle of it, so the clock sat well inside
+  the window; it now keeps its 4:3 distance from the window's edge (`pc_gx_ui_extra_half_width`, `pc_gx.c`).
 - **Map key**: the Map control (default `M`) opens the game's map (`mSM_OVL_MAP` with `data0 = 1`, the player's own map
   that the X button opens) with the conditions of `mSM_check_open_MAP` except `map_flag`, so it works before the
   player has the map from the police box, and also indoors (not in the island's cottage or at sea, like X). Pressing

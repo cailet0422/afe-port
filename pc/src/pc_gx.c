@@ -48,6 +48,15 @@ void pc_gx_window_to_ui(float wx, float wy, float* x, float* y) {
     *y = wy * (float)PC_GC_HEIGHT;
 }
 
+/* How far a window wider than 4:3 reaches past the game's 2D picture on each
+ * side, in the picture's 320-wide pixels: GXSetProjection keeps orthographic
+ * drawing in the 4:3 middle, so the game's clock (m_banti.c) moves out by this
+ * much to sit in the window's corner */
+float pc_gx_ui_extra_half_width(void) {
+    pc_gx_update_aspect();
+    return g_aspect_active ? 160.0f * (1.0f / g_aspect_factor - 1.0f) : 0.0f;
+}
+
 /* EFB capture: keep full-res GL textures from GXCopyTex instead of downsampling to 640x480 */
 #define MAX_EFB_CAPTURES 4
 static struct {
@@ -96,6 +105,10 @@ void pc_gx_efb_capture_cleanup(void) {
 void pc_gx_window_to_ui(float wx, float wy, float* x, float* y) {
     *x = wx * (float)PC_GC_WIDTH;
     *y = wy * (float)PC_GC_HEIGHT;
+}
+
+float pc_gx_ui_extra_half_width(void) {
+    return 0.0f; /* stretched to the window */
 }
 #endif
 

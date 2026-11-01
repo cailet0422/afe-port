@@ -2,7 +2,6 @@
 #include "pc_minimap_core.h"
 
 #include <math.h>
-#include <stddef.h>
 
 #define PC_MINIMAP_TABLE_DATA
 #include "pc_minimap_tables.inc"
@@ -104,46 +103,17 @@ void pc_minimap_decode_tile(const uint8_t* ci4, int pal, uint8_t* dst, int strid
  * checks it against the pad's layout). */
 #define MIN_ACRE 8.0f
 
-static int overlaps(const PcMinimapRect* r, const float* a) {
-    return r->x < a[2] && r->x + PC_MINIMAP_ACRES_X * r->acre > a[0] && r->y < a[3] &&
-           r->y + PC_MINIMAP_ACRES_Z * r->acre > a[1];
-}
-
-static void place(int h, float margin, float acre, PcMinimapRect* r) {
-    r->acre = acre;
-    r->x = floorf(margin);
-    r->y = floorf((float)h - margin - PC_MINIMAP_ACRES_Z * acre);
-}
-
-void pc_minimap_layout(int w, int h, int touch_pad, const float* avoid, PcMinimapRect* r) {
+void pc_minimap_layout(int w, int h, int touch_pad, PcMinimapRect* r) {
     float u = (float)(w < h ? w : h);
     float acre = floorf((touch_pad ? 0.030f : 0.036f) * u);
     float margin = (touch_pad ? 0.02f : 0.025f) * u;
-    float fit, above;
 
     if (acre < MIN_ACRE) {
         acre = MIN_ACRE;
     }
-    place(h, margin, acre, r);
-    if (avoid == NULL || !overlaps(r, avoid)) {
-        return;
-    }
-
-    /* narrower, in the corner left of it (a wide window has room there) */
-    fit = floorf((avoid[0] - margin * 1.5f) / PC_MINIMAP_ACRES_X);
-    if (fit >= acre * 0.75f || (touch_pad && fit >= MIN_ACRE)) {
-        place(h, margin, fit, r);
-        return;
-    }
-    if (touch_pad) {
-        return; /* nowhere else to go: the pad's D-pad is above */
-    }
-
-    /* above it, at the left edge */
-    above = floorf(avoid[1] - margin * 0.5f - PC_MINIMAP_ACRES_Z * acre);
-    if (above >= margin) {
-        r->y = above;
-    }
+    r->acre = acre;
+    r->x = floorf(margin);
+    r->y = floorf((float)h - margin - PC_MINIMAP_ACRES_Z * acre);
 }
 
 float pc_minimap_width(const PcMinimapRect* r) {

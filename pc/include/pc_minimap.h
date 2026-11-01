@@ -4,9 +4,8 @@
  * Outside in the town (not in buildings, on the island or the train, not
  * while talking or in a menu) the town's acres are drawn in the bottom left
  * corner with the pictures of the game's map, with the player (pointing the
- * way they face) and the villagers' houses on it. It keeps clear of the
- * game's clock. settings.ini minimap = 0 (pause menu > Settings > Gameplay >
- * Minimap) turns it off.
+ * way they face) and the villagers' houses on it. settings.ini minimap = 0
+ * (pause menu > Settings > Gameplay > Minimap) turns it off.
  *
  * The Map control (keybindings.ini Map, M by default; Settings > Controls)
  * opens the game's map at any time the game would let the X button open it,
@@ -52,6 +51,10 @@ int pc_minimap_at(float x, float y);
 
 /* The game's map is open and takes input */
 int pc_minimap_map_open(void);
+
+/* The minimap is turned on: the game's clock then stays out of the bottom
+ * left corner (m_banti.c, TARGET_PC) */
+int pc_minimap_on(void);
 
 #ifdef __cplusplus
 }
