@@ -18,7 +18,7 @@ def assetDir = file("${buildDir}/generated/afe_assets")
 def releaseKeyProps = file(project.findProperty('releaseKeyProps') ?: "${rootDir}/release-key/keystore.properties")
 def releaseKey = new Properties()
 // The port's version, shared with the PC build (pc/VERSION). versionCode grows
-// with it: 0.1.7 is 107 (the releases up to 0.1.6 had 1 to 6)
+// with it: 1.0.0 is 10000 (the releases up to 0.1.6 had 1 to 6)
 def portVersion = file("${rootDir}/../VERSION").text.trim()
 def portVersionCode = portVersion.tokenize('.').collect { it as int }.with { it[0] * 10000 + it[1] * 100 + it[2] }
 if (releaseKeyProps.exists()) {

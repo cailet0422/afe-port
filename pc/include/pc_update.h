@@ -30,7 +30,7 @@ typedef enum {
     PC_UPDATE_FAILED,      /* pc_update_message() */
 } PCUpdateState;
 
-/* This build's version ("0.1.7", pc/VERSION) */
+/* This build's version ("1.0.0", pc/VERSION) */
 const char* pc_update_version(void);
 
 /* Whether this build can update itself (a release build of a platform the

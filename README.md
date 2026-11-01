@@ -53,7 +53,7 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
   way you walk, and the villagers' houses). **M** opens the game's full map at any time, even before
   you have the map from the police station; on Android, tap the minimap. Turn it off under
   **Settings** → **Gameplay** → **Minimap**.
-- Updates: from v0.1.7 on, the game looks for a new release when it starts and offers to install it
+- Updates: from v1.0.0 on, the game looks for a new release when it starts and offers to install it
   (saves, settings, the disc and the Korean patch stay). Turn it off under **Settings** → **Gameplay**
   → **Updates**.
 - NES (Famicom) furniture games, saved high scores and the boot jingle all work.
@@ -86,7 +86,7 @@ tap **복사** (Copy) and paste it into an issue.
 
 ### Updating
 
-From v0.1.7 on, the downloads above update themselves. When the game starts it checks the
+From v1.0.0 on, the downloads above update themselves. When the game starts it checks the
 [releases](https://github.com/cailet0422/afe-port/releases); if there is a newer one, the pause menu opens
 with **Update now**, **Later** or **Skip this version**.
 
@@ -100,7 +100,7 @@ with **Update now**, **Later** or **Skip this version**.
 
 Updates come only from this repository's releases, and a build made from source never updates itself.
 **Settings** → **Gameplay** → **Updates** turns the check off (`auto_update = 0` in `settings.ini`).
-Version v0.1.6 and earlier can't update themselves: download v0.1.7 once by hand.
+Version v0.1.6 and earlier can't update themselves: download v1.0.0 once by hand.
 
 ### Playing in Korean
 

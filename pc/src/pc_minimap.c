@@ -32,8 +32,10 @@
 #define WHITE_SIZE 8
 #define MAX_VERTICES 1024
 #define FADE_STEP 0.125f /* the minimap fades in and out over 8 frames */
-#define CLOSE_FRAMES 1   /* frames of B that close the map */
+#define CLOSE_FRAMES 3   /* frames B is held to close the map */
 #define ANGLE_TO_RAD (3.14159265f / 32768.0f)
+
+extern u32 pc_frame_counter; /* pc_vi.c */
 
 #define DECLARE_TEXTURE(name) extern u8 name[];
 PC_MINIMAP_TEXTURES(DECLARE_TEXTURE)
@@ -52,7 +54,7 @@ typedef struct {
 static int s_visible;             /* the minimap should be on screen */
 static int s_map_open;            /* the game's map takes input */
 static int s_toggle_request;      /* M, a tap or the script asked to open or close the map */
-static int s_close_frames;        /* PADRead adds B this many more times */
+static u32 s_close_until;         /* PADRead adds B until this frame */
 static int s_map_held;            /* the Map control was held at the last PADRead */
 static Spot s_player;
 static s16 s_player_angle;
@@ -180,7 +182,7 @@ void pc_minimap_game_frame(GAME* game) {
 
     if (toggle && play != NULL && !g_pc_paused) {
         if (s_map_open) {
-            s_close_frames = CLOSE_FRAMES; /* B, as the player would close it */
+            s_close_until = pc_frame_counter + CLOSE_FRAMES; /* B, as the player would close it */
         } else {
             open_map(play);
         }
@@ -199,8 +201,8 @@ void pc_minimap_pad(int map_held, u16* buttons) {
         s_toggle_request = 1;
     }
     s_map_held = map_held;
-    if (s_close_frames > 0) {
-        s_close_frames--;
+    /* by frames, not reads: the pad is read twice a frame (JUTGamePad, padmgr) */
+    if ((s32)(s_close_until - pc_frame_counter) > 0) {
         *buttons |= PAD_BUTTON_B;
     }
 }
@@ -213,8 +215,33 @@ int pc_minimap_map_open(void) {
     return s_map_open;
 }
 
+/* Where the game shows its clock (m_banti.c) when the player stands still,
+ * in its 320 x 240 screen: the minimap keeps clear of it. (On the left
+ * instead when the player is in the bottom right, out of the minimap's way.) */
+#define CLOCK_UI_X0 188.0f
+#define CLOCK_UI_Y0 164.0f
+#define CLOCK_UI_X1 320.0f
+#define CLOCK_UI_Y1 232.0f
+
 static void layout(PcMinimapRect* r) {
-    pc_minimap_layout(g_pc_window_w, g_pc_window_h, g_pc_settings.touch_controls, r);
+    float avoid[4];
+    float left, right, top, unused;
+
+    /* the game's screen in window pixels: narrower than the window when
+     * a wide window shows it at 4:3 (pc_gx.c) */
+    pc_gx_window_to_ui(0.0f, 0.0f, &left, &top);
+    pc_gx_window_to_ui(1.0f, 1.0f, &right, &unused);
+    if (right - left < 1.0f) {
+        pc_minimap_layout(g_pc_window_w, g_pc_window_h, g_pc_settings.touch_controls, NULL, r);
+        return;
+    }
+    /* (pc_gx_window_to_ui counts the 640 x 480 framebuffer) */
+    avoid[0] = (CLOCK_UI_X0 * (PC_GC_WIDTH / 320.0f) - left) / (right - left) * g_pc_window_w;
+    avoid[2] = (CLOCK_UI_X1 * (PC_GC_WIDTH / 320.0f) - left) / (right - left) * g_pc_window_w;
+    avoid[1] = CLOCK_UI_Y0 / 240.0f * g_pc_window_h;
+    avoid[3] = CLOCK_UI_Y1 / 240.0f * g_pc_window_h;
+    (void)top;
+    pc_minimap_layout(g_pc_window_w, g_pc_window_h, g_pc_settings.touch_controls, avoid, r);
 }
 
 int pc_minimap_touch(float x, float y) {

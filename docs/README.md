@@ -242,7 +242,9 @@ test `pc/tests/test_minimap.c`).
 - It reads the game after `game_main` (`pc_minimap_game_frame`, called from `pc_pause_menu_draw`, which `graph.c`
   already calls there) and draws with OpenGL over the finished frame like the touch pad (`pc_vi.c`), so no decomp
   change was needed. With `touch_controls = 1` it is smaller and sits in the corner the pad's buttons leave free (the
-  test checks it against the pad's layout). `minimap = 0` in `[Gameplay]` turns it off (Settings → Gameplay →
+  test checks it against the pad's layout). It keeps clear of the game's clock (`m_banti.c`, bottom right of the 4:3
+  picture while the player stands still): in a wide window it stays in the corner beside it, in a 4:3 window it sits
+  just above it. `minimap = 0` in `[Gameplay]` turns it off (Settings → Gameplay →
   Minimap).
 - **Map key**: the Map control (default `M`) opens the game's map (`mSM_OVL_MAP` with `data0 = 1`, the player's own map
   that the X button opens) with the conditions of `mSM_check_open_MAP` except `map_flag`, so it works before the
