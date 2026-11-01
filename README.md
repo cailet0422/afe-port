@@ -142,7 +142,7 @@ in the developer docs below.
 
 ### Documentation
 
-The detailed documentation is currently written in Korean.
+Each document is also available in Korean (`*.ko.md`).
 
 | Document | Contents |
 |---|---|
@@ -158,7 +158,7 @@ The detailed documentation is currently written in Korean.
 |---|---|
 | `pc/` | Platform layer: SDL2, OpenGL / GLES renderer, audio, disc reading, settings and pause menus, Korean patch installer, Korean input method. Also the Android project (`pc/android`), generators and test tools (`pc/tools`), unit tests (`pc/tests`) |
 | `decomp/` | The [afe-decomp](https://github.com/cailet0422/afe-decomp) submodule: the game code and its `#ifdef TARGET_PC` hooks |
-| `docs/` | Developer documentation (Korean) |
+| `docs/` | Developer documentation (English, with Korean versions in `*.ko.md`) |
 
 ## Contributing
 

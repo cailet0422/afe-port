@@ -1,217 +1,287 @@
-# 한글패치(역전맞고, v0.9.2·v0.9.3) 호환 메모
+**English** · [한국어](korean_patch.ko.md)
 
-PC 포트는 자체 번역을 만드는 대신, 사용자가 직접 적용한 한글패치 디스크 이미지를 읽어 한국어로
-동작하는 것을 목표로 한다. 패치의 데이터·번역문·코드는 저장소에 넣지 않는다. 이 문서는 PC 포트가
-그 데이터를 해석하는 데 필요한 형식만 정리한다.
+# Korean patch (역전맞고, v0.9.2/v0.9.3) compatibility notes
 
-## 패치가 바꾸는 것
+Instead of making its own translation, the PC port aims to run in Korean by reading a Korean-patched disc
+image that the user patched themselves. The patch's data, translated text and code are not included in the
+repository. This document only records the formats the PC port needs to interpret that data.
 
-- 디스크: `main.dol`은 그대로. `foresta/forestd/foresti/foresto.rel`, `forest_msg.arc`(msg.bin),
-  `forest_1st_script.arc`(편지·선택지·문자열), `forest_2nd.arc`(주민 이름), GBA 연동 아카이브, `boot.bin`.
-- `forestd/foresti/foresto.rel`: 크기와 배치는 그대로이고 데이터만 제자리에서 바뀐다
-  (`FONT_tex_font1`, 아이템·가구 이름표, 타이틀 로고, 각종 UI 글자 텍스처 등).
-- `foresta.rel`: 기존 섹션은 크기가 같고, 실행 섹션 2개(7번 약 72KB, 8번 약 7KB)가 추가된다.
-  기존 함수 88개의 첫 명령 등을 새 코드로의 분기로 바꾸고, 문자열 표 포인터 일부를 새 섹션의
-  한글 문자열로 돌린다. `.data`의 문자열·카탈로그 정렬표·폭 표 등도 제자리에서 바뀐다.
+## What the patch changes
 
-## 문자 인코딩
+- Disc: `main.dol` stays as is. The patch changes `foresta/forestd/foresti/foresto.rel`, `forest_msg.arc`
+  (msg.bin), `forest_1st_script.arc` (letters, choices, strings), `forest_2nd.arc` (villager names), the
+  GBA-link archives and `boot.bin`.
+- `forestd/foresti/foresto.rel`: size and layout stay the same; only the data changes in place
+  (`FONT_tex_font1`, item and furniture name plates, the title logo, various UI text textures, etc.).
+- `foresta.rel`: the existing sections keep their sizes, and two executable sections are added (section 7,
+  about 72KB; section 8, about 7KB). In 88 existing functions the first instruction (among other places) is
+  replaced with a branch to the new code, and some string-table pointers are redirected to Korean strings in
+  the new sections. Strings, catalog sort tables, width tables etc. in `.data` also change in place.
 
-- 1바이트 문자는 원래 문자표 그대로. 줄바꿈 `0xCD`, 제어 코드 `0x80 len ...`도 그대로.
-- 한글 한 글자는 2바이트:
-  - 선두 바이트: `0x00–0x1F`, `0x86–0x8F`, `0x91–0x96` (48개, 순서대로 색인 0–47)
-  - 둘째 바이트: `0xCE–0xFF` (50개)
-  - 글리프 번호 `g = 선두색인 × 50 + (둘째 − 0xCE)`, 유효 범위 0–2389
-- `g < 2350`이면 KS X 1001 완성형 한글 2,350자를 유니코드 순서로 늘어놓은 것의 `g`번째 글자.
-  (KS X 1001의 2,350자는 유니코드 순서와 같은 순서, EUC-KR `0xB0A1–0xC8FE`.) 2350–2368은 초성
-  19자(ㄱ ㄲ ㄴ ㄷ ㄸ ㄹ ㅁ ㅂ ㅃ ㅅ ㅆ ㅇ ㅈ ㅉ ㅊ ㅋ ㅌ ㅍ ㅎ), 2369–2389는 중성 21자(ㅏ … ㅣ).
-- 1바이트 문자: 패치된 글꼴은 영문·숫자를 ASCII 위치에 둔다. 기호는 대부분 ASCII와 같지만
-  `~`=0x2A, `+`=0x3D, `\`=0x60, `;`=0x7B, `*`=0x7C, `=`=0x7D, `/`=0x7E(`ko_charset_ascii`).
-  한국어 모드에서 영문은 고정폭(12)이다.
-- `0x96, 0xF6 이상, xx`의 3바이트는 사전 코드다. 번호 `e = b1×255 + b2 − (b2≥0x80 ? 1 : 0) − 0xF6×255`
-  (0–1194), 섹션 7의 `0xD340 + 16 + 2e`에 있는 u16 오프셋 `o`에 대해 항목은 `0xD340 + o`이고 길이
-  바이트가 `+1010`, 내용이 `+1011`부터다. 주로 필드(10바이트)에 들어가지 않는 긴 아이템 이름이다
-  (예: 0번 "오렌지편지지").
-- 1바이트 `0x97–0xC6` 일부는 자주 쓰는 한글 음절(예: `ac c0 a8` = "마을로"). 섹션 7 `0xA0DE`의 u16 표가
-  각 1바이트 문자의 음절 번호+1을 준다(받침 판정용).
+## Character encoding
 
-## 글리프
+- 1-byte characters keep the original character table. The newline `0xCD` and control codes `0x80 len ...` are
+  unchanged as well.
+- One Hangul character is 2 bytes:
+  - Lead byte: `0x00–0x1F`, `0x86–0x8F`, `0x91–0x96` (48 values, indexed 0–47 in this order)
+  - Second byte: `0xCE–0xFF` (50 values)
+  - Glyph number `g = lead_index × 50 + (second − 0xCE)`, valid range 0–2389
+- If `g < 2350`, it is the `g`-th character of the 2,350 KS X 1001 precomposed Hangul syllables laid out in
+  Unicode order. (The 2,350 KS X 1001 syllables are in the same order as in Unicode, EUC-KR `0xB0A1–0xC8FE`.)
+  2350–2368 are the 19 initial consonants (ㄱ ㄲ ㄴ ㄷ ㄸ ㄹ ㅁ ㅂ ㅃ ㅅ ㅆ ㅇ ㅈ ㅉ ㅊ ㅋ ㅌ ㅍ ㅎ), 2369–2389 the 21 medial
+  vowels (ㅏ … ㅣ).
+- 1-byte characters: the patched font puts Latin letters and digits at their ASCII positions. Most symbols are
+  the same as in ASCII, but `~`=0x2A, `+`=0x3D, `\`=0x60, `;`=0x7B, `*`=0x7C, `=`=0x7D, `/`=0x7E
+  (`ko_charset_ascii`). In Korean mode Latin text is fixed-width (12).
+- The 3-byte sequence `0x96, ≥0xF6, xx` is a dictionary code. Its number is
+  `e = b1×255 + b2 − (b2≥0x80 ? 1 : 0) − 0xF6×255` (0–1194); given the u16 offset `o` at `0xD340 + 16 + 2e` in
+  section 7, the entry is at `0xD340 + o`, with the length byte at `+1010` and the contents from `+1011`.
+  These are mostly long item names that do not fit in the field (10 bytes) (e.g. entry 0, "오렌지편지지" (orange
+  stationery)).
+- Some of the 1-byte values `0x97–0xC6` are frequently used Hangul syllables (e.g. `ac c0 a8` = "마을로" ("to the
+  town")). The u16 table at section 7 `0xA0DE` gives the syllable number + 1 for each 1-byte character (for
+  the final-consonant check).
 
-- `msg.bin`(forest_msg.arc) 안, 메시지 리소스 시작에서 `0x332780` 바이트 뒤부터 글리프 2,390개가
-  192바이트씩 이어진다. 게임 코드에서는 `Msg_rom_start + 0x332780 + g × 192`.
-- 한 글리프는 2bpp, 8×8 타일 12개(가로 3 × 세로 4) = 24×32픽셀. 한 바이트에 픽셀 4개
-  (상위 비트부터), 값 0–3을 I4 강도 0, 5, 10, 15로 펼친다.
-- 원래 게임의 글꼴 은행 텍스처는 384×512 I4(24×32 칸이 16×16개)이며, 패치는 쓰지 않는 두 번째
-  은행(`FONT_tex_font2`)을 255칸 캐시로 써서 한글을 그 칸에 올린 뒤 은행 2의 글자로 그린다.
+## Glyphs
 
-## 글자 폭
+- In `msg.bin` (forest_msg.arc), starting `0x332780` bytes after the start of the message resource, 2,390
+  glyphs of 192 bytes each follow one another. In game code: `Msg_rom_start + 0x332780 + g × 192`.
+- A glyph is 2bpp, 12 8×8 tiles (3 across × 4 down) = 24×32 pixels. 4 pixels per byte (high bits first); the
+  values 0–3 are expanded to I4 intensities 0, 5, 10, 15.
+- The original game's font bank texture is 384×512 I4 (16×16 cells of 24×32). The patch uses the unused second
+  bank (`FONT_tex_font2`) as a 255-cell cache: it loads Hangul into those cells and then draws them as bank-2
+  characters.
 
-- 원래 e+ 글꼴은 고정폭(`mFont_Get_FontOffset`의 표가 전부 0). 패치는 이 표에 공백·쉼표·마침표
-  `6`, `0xCE–0xFF` `12`를 넣고, `cut` 여부와 관계없이 이 표를 적용한다.
+## Character width
 
-## 패치가 손대는 기능(코드)
+- The original e+ font is fixed-width (the table in `mFont_Get_FontOffset` is all 0). The patch puts `6` for
+  space, comma and period and `12` for `0xCE–0xFF` into this table, and applies the table regardless of `cut`.
 
-- 글자 크기·폭·그리기: `mFont_CodeSize_get`, `mFontW_CodeSize_get`, `mFont_GetStringWidth(2F)`,
+## Functions the patch touches (code)
+
+- Character size, width, drawing: `mFont_CodeSize_get`, `mFontW_CodeSize_get`, `mFont_GetStringWidth(2F)`,
   `mFont_SetLineStrings_AndSpace_new`, `mFontChar_gppDraw`, `mFontCharW_gppDraw`, `mFont_GetCodeWidth(F)B`
-- 메시지 조립 (PC 구현: `pc_ko_expand`, `pc_ko_fix_josa`)
-  - `mMsg_Set_free_str`/`mMsg_Set_item_str`/`mHandbill_Set_free_str`: 사전 코드를 최대 66바이트로 펼친 뒤
-    원래 함수로 넘긴다. 마지막 코드 뒤가 공백뿐이면 거기서 끝낸다.
-  - `mMsg_CopyString`: 복사한 문자열의 마지막 소리로 받침을 정하고(한글 음절, 1바이트 한글, 숫자는
-    영·일·이…·십·백·천·만, 영문 등은 모름 → 그대로), 바로 뒤(태그 건너뜀)의 조사 은/는·을/를·이/가·
-    과/와·아/야를 섹션 7 `0xA0CA` 표의 형태로 바꾼다. 조사 뒤에 한글 음절이 이어지면 낱말로 보고 두며,
-    아/야는 받침이 있을 때 뒤에 쉼표(또는 0xC7)가 있어야 바꾼다.
-  - 이름 색·말소리: 아래 "UI 문자열·이름 색·말소리". 선택지 훅은 패치 자체의 화면 비율 메뉴용(해당 없음).
-- 말버릇 (PC 구현: `pc_ko_word_ending`): `mNpc_GetWordEnding(_forTag)`의 결과를 16바이트로 풀어 준다.
-  `0xFE` + 6바이트면 12비트 값 4개(2400 미만 = 글리프, 2400–2655 = 1바이트 문자 `v−2400`), 사전 코드면
-  사전 항목, 아니면 그대로. `mMsg_CopyTail(Truth)`의 길이도 4→16. 이 7바이트는 `Animal_c`의 `catchphrase`(4바이트,
-  0x595)와 그 뒤 여백 3바이트(0x599–0x59B)에 들어가므로 저장 파일에도 그대로 남는다.
-- 줄 검사: 게시판·일기·알림판 `*_strLineCheck` — 한 칸 폭을 글자별로(한글 둘째 바이트 0, 공백·쉼표·
-  마침표 6, 줄바꿈 0, 그 밖 12) 센다. PC 구현 `pc_ko_line_char_width`.
-- 입력기: `mED_*`(이름·편지 입력), `mLE_*`
-  - 편집 버퍼에서 한글은 2칸(u8 버퍼면 2바이트, u16 버퍼면 바이트 하나씩 2칸). 패치의
-    `mED_output_code`는 정적 변수의 플래그가 서 있으면 선두·둘째 바이트를 한 번에 넣고 커서를 2 옮긴다.
-  - `mED_get_col_line_width`/`mED_set_idxcol_inLineWidth`/`mED_get_single_line_width`는 글자 단위로
-    세고, 폭은 공백·쉼표·마침표 6, 그 밖 12(선두 바이트 판정은 섹션 7의 256바이트 표).
-  - `mED_set_dl`은 섹션 8의 코드로 바뀌어 자체 입력 UI를 그린다(원래의 `lat_sousa_*` 텍스처를 재사용하므로
-    원래 코드로 그리면 깨진다).
-  - 편지 맺음말(`mBD_set_writing_footer`)은 훅이 없어 칸당 12픽셀로 오른쪽 정렬하는데 커서(`mBD_set_cursol`)는
-    글자 폭으로 자리를 잡으므로, 한글이 있으면 둘이 어긋난다. PC는 한국어 모드에서 글자 폭으로 정렬한다.
-  - 이름 입력 편집기(`m_ledit_ovl.c`, PC 구현: `pc_ko_ledit_buf`/`pc_ko_ledit_match`/`ko_charset_pack_ending`,
-    afe-decomp의 `TARGET_PC`): 말버릇(EPHRASE)·도루묵씨에게 하는 대답(RESET)·K.K. 신청곡(REQUEST)은 섹션 7
-    `0xBD68`의 새 버퍼(+0 8바이트, +0x18 18바이트, +0x30 18바이트)에 입력한다. 길이는 `.data`의 `mLE_win_data`
-    (항목당 52바이트, `edit_max`는 +0x20)에서 4→8, 10→18, 10→18로 바뀌었다(PC는 디스크의 값을 읽는다).
-    - `mLE_ledit_ovl_init+0xdc`: `mem_clear(str, max, ' ')`를 `s7+0x59c`로 — 종류(`data0`)가 2·3·4면 새 버퍼로
-      바꿔서 지우고 그 버퍼를 편집기에 넘긴다.
-    - `mLE_move_Wait+0xdc`(말버릇, `s7+0x1424`): `mem_copy(data2, 편집 버퍼, 4)` 대신, 8바이트의 끝 공백을 뺀
-      길이가 4 이하면 4바이트 그대로 + 0 세 바이트, 아니면 앞에서부터 한글 2바이트(선두 바이트 표 `s7+0x6b7c`,
-      둘째 바이트 0xCE 이상)는 글리프 번호, 그 밖의 바이트는 2400 + 코드로 12비트 값 4개(남는 값 0xFFF)를 만들어
-      `0xFE` + 6바이트로 `data2`(주민의 `catchphrase`)에 쓴다.
-    - `mLE_move_Wait+0x7c`(신청곡, `s7+0x12cc`): 곡 이름과의 `mem_cmp(이름, 입력, 10)` 대신, 이름(10바이트)을
-      사전 코드면 펼쳐(최대 24바이트, `s7+0xee4`) 양쪽의 공백을 모두 건너뛰며 비교한다. 띄어 쓰든 안 쓰든 같다.
-    - `aMJN3_check_word`(`s7+0x15ac`): 도루묵씨의 문구(`mString` 10바이트)를 같은 방법으로 대답 버퍼와 비교해
-      맞으면 GOOD, 아니면 버퍼 앞 10바이트를 `actor->reply`에 옮기고 원래의 금지어 검사(`aMJN3_check_ng_word`).
-    - `mED_all_space_check`는 그대로라 말버릇에서는 `data2`(압축된 값)와 입력 버퍼를 비교한다(패치와 같음).
-- 고정 길이 상수와 옮긴 문자열: 원본과 패치의 `.text`를 비교하면 훅 말고 직접 바뀐 명령은 32곳이고,
-  대부분 문자열 복사 길이(2→4, 5→6 등)다. 그 문자열 자체는 패치가 섹션 7에 새로 두고 주소 재배치를
-  그쪽으로 돌렸다(`reldis.py retarget 패치.rel 원본.rel`로 130곳: `.text` 참조와 `.data` 표의 포인터).
-  - PC 구현: `pc_ko_patched_str`(섹션 7 오프셋으로 문자열), `pc_ko_data_ptr`/`pc_ko_data_u32`(디스크의
-    `.data`에 있는 포인터·길이; 포인터가 `.data`를 가리키면 디스크 사본을 준다 — 제자리에서 길어진
-    문자열이 PC 객체 크기를 넘기 때문).
-  - 대응함: 생일 편지·편지지 맺음말("드림"), 알림판 마을 접미사("마을", 패치는 4바이트를 쓰고 2로 세지만
-    PC는 4로 센다), 낚시 기록 마을("쿠니치"), 분실물 이름, 하니와 메시지 표("それ" 접두어 없음), 지도 라벨
-    (한 줄), 배치 불가 효과 문자열("위엔 못 둬!"/"이미 있어!").
-  - 그 밖의 것(입력 화면 제목, 알림판 날짜, 경고·사진 메뉴 문구, 인사 말소리 등)도 대응함: 아래 절.
-- 그 밖: 화면 비율(시야·직교 행렬·카메라), RTC 연도 상한 2032→2100, 구역 경계 달리기, 부팅 주민의
-  한자 메뉴 → 화면 비율 메뉴
+- Message assembly (PC implementation: `pc_ko_expand`, `pc_ko_fix_josa`)
+  - `mMsg_Set_free_str`/`mMsg_Set_item_str`/`mHandbill_Set_free_str`: expand dictionary codes to at most 66
+    bytes, then pass the result to the original function. If only spaces follow the last code, the string ends
+    there.
+  - `mMsg_CopyString`: decides the final consonant from the last sound of the copied string (Hangul syllables,
+    1-byte Hangul, and digits read as 영·일·이…·십·백·천·만 (Sino-Korean numerals: zero, one, two … ten, hundred,
+    thousand, ten thousand); Latin letters etc. are unknown → left as is), and rewrites the particle right
+    after it (skipping tags), 은/는 (topic), 을/를 (object), 이/가 (subject), 과/와 ("and") or 아/야 (vocative), into
+    the form from the table at section 7 `0xA0CA`. If a Hangul syllable follows the particle, it is taken to
+    be a word and left alone; for 아/야, when there is a final consonant, the particle is changed only if a
+    comma (or 0xC7) follows it.
+  - Name color and animalese: see "UI strings, name color, animalese" below. The choice hook is for the
+    patch's own aspect-ratio menu (not applicable).
+- Catchphrase (PC implementation: `pc_ko_word_ending`): expands the result of `mNpc_GetWordEnding(_forTag)` to
+  16 bytes. If it is `0xFE` + 6 bytes, it holds four 12-bit values (below 2400 = glyph, 2400–2655 = 1-byte
+  character `v−2400`); if it is a dictionary code, the dictionary entry; otherwise it is used as is. The
+  length in `mMsg_CopyTail(Truth)` also goes 4→16. These 7 bytes go into `catchphrase` of `Animal_c` (4 bytes,
+  0x595) and the 3 padding bytes after it (0x599–0x59B), so they are also kept as is in the save file.
+- Line check: message board, diary and bulletin board `*_strLineCheck` count the width of each slot per
+  character (Hangul second byte 0, space/comma/period 6, newline 0, everything else 12). PC implementation:
+  `pc_ko_line_char_width`.
+- Input method: `mED_*` (name and letter entry), `mLE_*`
+  - In the edit buffer a Hangul character takes 2 slots (2 bytes in a u8 buffer; in a u16 buffer, one byte in
+    each of 2 slots). When a flag in a static variable is set, the patch's `mED_output_code` inserts the lead
+    and second byte at once and moves the cursor by 2.
+  - `mED_get_col_line_width`/`mED_set_idxcol_inLineWidth`/`mED_get_single_line_width` count by character, with
+    width 6 for space, comma and period and 12 for everything else (the lead-byte check uses the 256-byte
+    table in section 7).
+  - `mED_set_dl` is replaced by code in section 8 that draws the patch's own input UI (it reuses the original
+    `lat_sousa_*` textures, so drawing with the original code comes out garbled).
+  - The letter footer (`mBD_set_writing_footer`) has no hook and is right-aligned at 12 pixels per slot, while
+    the cursor (`mBD_set_cursol`) is positioned by character width, so the two drift apart when there is
+    Hangul. In Korean mode the PC port aligns it by character width.
+  - Name-entry editor (`m_ledit_ovl.c`, PC implementation:
+    `pc_ko_ledit_buf`/`pc_ko_ledit_match`/`ko_charset_pack_ending`, `TARGET_PC` in afe-decomp): the
+    catchphrase (EPHRASE), the reply to Mr. Resetti (RESET) and the K.K. Slider song request (REQUEST) are
+    entered into new buffers at section 7 `0xBD68` (+0 8 bytes, +0x18 18 bytes, +0x30 18 bytes). Their lengths
+    in `mLE_win_data` in `.data` (52 bytes per entry, `edit_max` at +0x20) were changed 4→8, 10→18, 10→18 (the
+    PC port reads the values from the disc).
+    - `mLE_ledit_ovl_init+0xdc`: the `mem_clear(str, max, ' ')` call is redirected to `s7+0x59c` — if the type
+      (`data0`) is 2, 3 or 4, it switches to the new buffer, clears it and passes that buffer to the editor.
+    - `mLE_move_Wait+0xdc` (catchphrase, `s7+0x1424`): instead of `mem_copy(data2, edit_buffer, 4)`, if the 8
+      bytes minus trailing spaces are 4 bytes or shorter, it takes the 4 bytes as is + three 0 bytes;
+      otherwise, from the front, it turns 2-byte Hangul (lead-byte table `s7+0x6b7c`, second byte 0xCE or
+      above) into glyph numbers and other bytes into 2400 + code, makes four 12-bit values (unused values
+      0xFFF), and writes them as `0xFE` + 6 bytes to `data2` (the villager's `catchphrase`).
+    - `mLE_move_Wait+0x7c` (song request, `s7+0x12cc`): instead of `mem_cmp(name, input, 10)` against the song
+      name, it expands the name (10 bytes) if it is a dictionary code (at most 24 bytes, `s7+0xee4`) and
+      compares the two while skipping all spaces on both sides. It matches whether or not the words are
+      separated by spaces.
+    - `aMJN3_check_word` (`s7+0x15ac`): compares Mr. Resetti's phrase (`mString`, 10 bytes) with the reply
+      buffer the same way; on a match the result is GOOD, otherwise it copies the first 10 bytes of the buffer
+      to `actor->reply` and runs the original banned-word check (`aMJN3_check_ng_word`).
+    - `mED_all_space_check` is unchanged, so for the catchphrase it compares `data2` (the packed value) with
+      the input buffer (same as the patch).
+- Fixed-length constants and moved strings: comparing the original and patched `.text`, 32 instructions apart
+  from the hooks are changed directly, mostly string copy lengths (2→4, 5→6, etc.). The patch places those
+  strings themselves anew in section 7 and redirects their relocations there (130 places by
+  `reldis.py retarget patched.rel original.rel`: `.text` references and pointers in `.data` tables).
+  - PC implementation: `pc_ko_patched_str` (a string by section 7 offset), `pc_ko_data_ptr`/`pc_ko_data_u32`
+    (pointers and lengths in the disc's `.data`; if a pointer points into `.data`, they return the disc copy,
+    because strings lengthened in place exceed the size of the PC object).
+  - Handled: the birthday letter and stationery footer ("드림" ("from")), the bulletin board town suffix ("마을"
+    (town); the patch writes 4 bytes but counts 2, the PC port counts 4), the fishing record town ("쿠니치"),
+    lost item names, the gyroid message table (no "それ" prefix), map labels (one line), the can't-place effect
+    strings ("위엔 못 둬!"/"이미 있어!" ("can't put it on top!"/"already there!")).
+  - The rest (input screen titles, bulletin board date, warning and photo menu text, greeting animalese, etc.)
+    is handled too: see the section below.
+- Other: aspect ratio (field of view, orthographic matrix, camera), RTC year limit 2032→2100, area-boundary
+  running, the boot villager's kanji menu → aspect-ratio menu
 
-## UI 문자열·이름 색·말소리 (분석과 PC 구현)
+## UI strings, name color, animalese (analysis and PC implementation)
 
-원본과 패치의 `.text`를 명령 단위로 비교한 것(훅 말고 바뀐 상수)과 `reldis.py hooks|dis|retarget`으로 본 것.
-오프셋은 v0.9.2, "s7"/"s8"은 패치가 더한 섹션 7·8이다. PC 구현은 afe-decomp의 `TARGET_PC`와 `pc_ko.c`.
+Based on an instruction-by-instruction comparison of the original and patched `.text` (constants changed apart
+from hooks) and on inspection with `reldis.py hooks|dis|retarget`. Offsets are for v0.9.2; "s7"/"s8" are
+sections 7 and 8 added by the patch. The PC implementation is `TARGET_PC` in afe-decomp and `pc_ko.c`.
 
-- 말소리 `mMsg_sound_CodeVoice+0x2c` → `s7+0x6324`: 원래는 `mMsg_sound_voice_get2(data[idx])`(1바이트마다 표
-  `voice_array`의 가나 말소리)인데, 패치는 `&data[idx]`를 넘겨 다음을 고른다(PC: `pc/src/ko/ko_voice.c`).
-  - 한글 2바이트(선두 표 `s7+0x6B7C`, 둘째 0xCE 이상)면 글리프 `g`의 음절 번호(유니코드−0xAC00)를
-    `s7+0xA2DE`의 u16 표에서 얻고(1바이트 한글은 `s7+0xA0DE`의 값−1), 초성·중성·종성으로 나눈다.
-    초성의 행(`s7+0xB53A`, 19개)과 중성의 열(`s7+0xB54D`, 21개, 낮은 4비트)로 `s7+0xA08E`의 가나 말소리 표
-    (행마다 5개: 아·이·우·에·오)를 고른다. 초성이 ㅇ이면: 은·음·응은 ん(0x2D), 중성 표의 0x10(ㅑ·ㅕ·ㅛ·ㅠ)은 열에
-    따라 や·ゆ·よ(0x24–0x26), 0x20(ㅘ)은 わ(0x2C).
-  - 낱자 자음(글리프 2350–2368)은 그 행의 '우', 낱자 모음(2369–2389)은 아 행의 그 열.
-  - 선두 바이트 바로 뒤의 둘째 바이트는 -1(소리 없음). 그 밖의 1바이트는 원래 표.
-  - 같은 함수에서 둘째 바이트를 따로 소리 내지 않으므로 한 음절에 소리 하나. `VOICELOG`로 확인(아래).
-- 인사 말소리 `voice$3952`(주민이 손 흔들며 내는 소리): 표의 두 항목(멍한 남자·고상한 여자)을 s7의
-  "어이"·"어머"(4바이트)로 돌리고 길이 3→4. 나머지는 `.data`에서 제자리로 바뀜. 이 표는 1바이트마다
-  `mMsg_sound_voice_get`을 부르므로(훅 없음) 한글 바이트도 원래 표로 소리 난다(패치와 같음). PC는 디스크의 포인터·길이.
-- 이름 색 `mMsg_Set_PlayerNameColor+0x34`, `mMsg_Set_PfColor+0x2c` → `s8+0x1824`: 색 제어 코드의 글자 수를
-  `mMsg_Get_Length_String`(바이트) 대신 `mFont_CodeSize_get`으로 한 글자씩 센 수로(한글 한 음절 = 1). 바이트로 세면
-  이름 뒤의 글자까지 색이 칠해진다.
-- 선택지 `mMsg_Main_Cursol_SetSelectString_ControlCursol+0x114`, `mMsgTag_Choice_Option+0x74` → `s8+0xC70`:
-  선택지 번호 0x7700–0x7705면 s8의 "4:3 (기본)", "16:9" … "32:9"를 쓰고 나머지는 원래 `mChoice_Load_ChoseStringFromRom`.
-  패치 자체의 화면 비율 메뉴(부팅 주민)용이라 PC에는 해당 없음(화면 비율은 PC 설정 메뉴).
-- 하니와 알람 메시지(`mHB_set_character+0x5c` → `s7+0x19F4`, `+0x138` → `s7+0x1AE8`): 줄 나누기를 글자 수(16) 대신
-  폭으로(한글 둘째 바이트 0, 공백·쉼표·마침표 6, 그 밖 12, 192를 넘으면 다음 줄; 다 쓴 줄의 폭이 180보다 크면 꽉 참),
-  끝 표시를 `x + 글자 수 × 12` 대신 `x + 폭`에(`.rodata`의 12.0을 1.0으로 바꿈). 줄이 꽉 찼는지 보던 `len == 16`은 끔.
-- 입력 화면 제목(문자열을 s7로 옮기고 길이 상수만 바꿈):
-  - 시간 입력 `mTI_set_character+0xbc` → `s7+0xD2FC`: 제목 `chr_table`(9바이트) 대신 "시간을 맞춰보자"(15바이트).
-  - 비밀번호 `mPM_set_character`: "마을" 2→4, "이름" 3→4. 알람 `mAL_set_character`: "시간" 3→4, "분 뒤에" 4→7, "분에" 3→4.
-  - 디버그 플레이어 선택 `player_select_draw_title`: "플레이어 선택" 10→13.
-- 알림판 날짜 `mNT_set_day_strings_dl`: `day_str`(10바이트)를 `.data`에서 12바이트 공백으로 늘리고 연·월·일을 0·6·10에
-  (원래 0·5·8). 배경 텍스처의 "/" 사이에 숫자가 온다.
-- 가격 `mTG_price_draw+0xb4`: 줄 글자 수 8→12. 그 줄("돈(벨):")은 8바이트 안이고 패치가 뒤 4바이트를 공백으로 채워 보이는 것은
-  같다 — PC는 그대로.
-- K.K. 신청곡 대답 `aMKBC_clip_set_itemstr3`: 저장 영역의 `request_str`(10바이트) 대신 신청곡 편집기의 18바이트 버퍼
-  (`s7+0xBD98`)로 `mMsg_Set_item_str`. PC는 `pc_ko_ledit_buf(mLE_TYPE_REQUEST)`. 실제 화면으로 확인했다(`make_days_script.py kk`,
-  아르바이트를 마친 세이브의 토요일 20시): "있어 있어!" → "부탁해요" 편집기에 "K.K.보사노바" → "오케이! 그럼 들어 주세요.
-  K.K.보사노바" → 연주(처음이면 스태프롤) → "답례로 K.K.보사노바의 뮤직을 줄게요.".
-- 경고(`wr_*_line`, 소지품 메뉴) 24종·사진 메뉴(`fl_strb_*`, `fl_selb_*`): 줄 표의 문자열 포인터를 s7로 돌리고 길이를 바꿈
-  (예: "편지를 더 못 가져!" 12→18). 줄 표는 포인터가 있어 데이터 오버레이에서 빠지므로, PC는 메뉴를 열 때 디스크
-  `.data`의 표(`wr_win_data`, `fl_strb_str_data`, `fl_selb_str_data`)에서 각 줄의 포인터와 길이를 읽어 PC 표를 고친다
-  (`pc_ko_data_target`, `pc_ko_redirect_strings`). 사진 메뉴의 SD 실패 문구는 실제 화면으로 확인했다
-  (`make_device_script.py film`): "사진을, SD카드에 저장?" → 네 → "SD카드에 기록중 / 잠시만요" → "SD카드 없음." →
-  "SD카드가 들어 있는지, SD카드 어댑터 / 슬롯B에 연결하세요. / 준비되면 A버튼 누르세요" → "다시 이 사진을 SD카드에
-  저장?", 닫으면 "사진을 저장할 수 없었어요.". 우체국 카드e 단말("게임보이 어드밴스가 제대로 연결되지 않았습니다."),
-  고순이의 어드밴스 얘기("게임보이 어드밴스가 제대로 연결이 안 된 것 같아예.")도 한국어로 끝까지 나온다.
-- RTC 연도 상한: 패치는 `sChk_*`, `mTM_rtcTime_limit_check`, `lbRTC_GetNukegaraTime`, `lbRk_*`, `mTI_*`의 2030–2032를
-  2099–2100으로, 음력 표(`l_lbRk_ConvertTable`, `l_lbRk_leapdays`)를 s7의 2100년까지 늘린 표로 바꾼다. PC는 이미
-  `TARGET_PC`에서 모든 모드에 2100까지 늘려 두었다(`GAME_YEAR_MAX`, `mTM_MAX_YEAR`, `mTI_MAX_YEAR`, 자체 음력 표).
-  경계(2099–2100년)에서 1년쯤 차이가 있다.
+- Animalese `mMsg_sound_CodeVoice+0x2c` → `s7+0x6324`: originally `mMsg_sound_voice_get2(data[idx])` (per
+  byte, the kana voice sound from the table `voice_array`); the patch passes `&data[idx]` and picks as follows
+  (PC: `pc/src/ko/ko_voice.c`).
+  - For 2-byte Hangul (lead table `s7+0x6B7C`, second byte 0xCE or above), it gets the syllable number
+    (Unicode−0xAC00) of glyph `g` from the u16 table at `s7+0xA2DE` (for 1-byte Hangul, the value at
+    `s7+0xA0DE` − 1) and splits it into initial, medial and final. The row from the initial (`s7+0xB53A`, 19
+    entries) and the column from the medial (`s7+0xB54D`, 21 entries, low 4 bits) select from the kana voice
+    table at `s7+0xA08E` (5 per row: a, i, u, e, o / 아·이·우·에·오). If the initial is ㅇ: 은·음·응 give ん (0x2D),
+    medials marked 0x10 in the medial table (ㅑ·ㅕ·ㅛ·ㅠ) give や·ゆ·よ (0x24–0x26) depending on the column, and 0x20
+    (ㅘ) gives わ (0x2C).
+  - A standalone consonant (glyphs 2350–2368) gives the 'u' (우) of its row; a standalone vowel (2369–2389)
+    gives its column in the a (아) row.
+  - A second byte right after a lead byte gives -1 (no sound). Other 1-byte characters use the original table.
+  - Since the same function does not voice the second byte separately, there is one sound per syllable.
+    Checked with `VOICELOG` (below).
+- Greeting animalese `voice$3952` (the sound a villager makes while waving): two entries of the table (lazy
+  male, snooty female) are redirected to "어이"/"어머" ("hey"/"oh my", 4 bytes) in s7 and their length goes 3→4.
+  The rest change in place in `.data`. This table calls `mMsg_sound_voice_get` per byte (no hook), so Hangul
+  bytes are also voiced through the original table (same as the patch). The PC port uses the pointers and
+  lengths from the disc.
+- Name color `mMsg_Set_PlayerNameColor+0x34`, `mMsg_Set_PfColor+0x2c` → `s8+0x1824`: the character count of
+  the color control code becomes the number of characters counted one at a time with `mFont_CodeSize_get` (one
+  Hangul syllable = 1) instead of `mMsg_Get_Length_String` (bytes). Counting bytes colors the characters after
+  the name as well.
+- Choices `mMsg_Main_Cursol_SetSelectString_ControlCursol+0x114`, `mMsgTag_Choice_Option+0x74` → `s8+0xC70`:
+  for choice numbers 0x7700–0x7705 it uses "4:3 (기본)" ("4:3 (default)"), "16:9" … "32:9" from s8, and for the
+  rest the original `mChoice_Load_ChoseStringFromRom`. This is for the patch's own aspect-ratio menu (boot
+  villager), so it does not apply to PC (on PC the aspect ratio is in the settings menu).
+- Gyroid alarm message (`mHB_set_character+0x5c` → `s7+0x19F4`, `+0x138` → `s7+0x1AE8`): breaks lines by width
+  instead of character count (16) (Hangul second byte 0, space/comma/period 6, everything else 12; past 192
+  goes to the next line; a finished line wider than 180 counts as full), and puts the end marker at
+  `x + width` instead of `x + char_count × 12` (12.0 in `.rodata` changed to 1.0). The `len == 16` check that
+  tested whether a line was full is turned off.
+- Input screen titles (strings moved to s7, only the length constants changed):
+  - Time entry `mTI_set_character+0xbc` → `s7+0xD2FC`: the title "시간을 맞춰보자" ("let's set the time", 15 bytes)
+    instead of `chr_table` (9 bytes).
+  - Password `mPM_set_character`: "마을" (town) 2→4, "이름" (name) 3→4. Alarm `mAL_set_character`: "시간" (time)
+    3→4, "분 뒤에" (minutes from now) 4→7, "분에" (at minute) 3→4.
+  - Debug player select `player_select_draw_title`: "플레이어 선택" (player select) 10→13.
+- Bulletin board date `mNT_set_day_strings_dl`: `day_str` (10 bytes) is extended in `.data` to 12 bytes of
+  spaces, with year, month and day at 0, 6, 10 (originally 0, 5, 8). The digits land between the "/" marks of
+  the background texture.
+- Price `mTG_price_draw+0xb4`: characters per line 8→12. That line ("돈(벨):" ("money (Bells):")) fits within 8
+  bytes, and the patch pads the last 4 bytes with spaces, so it looks the same; the PC port leaves it as is.
+- K.K. Slider song request reply `aMKBC_clip_set_itemstr3`: `mMsg_Set_item_str` with the song request editor's
+  18-byte buffer (`s7+0xBD98`) instead of `request_str` (10 bytes) in the save area. PC:
+  `pc_ko_ledit_buf(mLE_TYPE_REQUEST)`. Verified on the actual screen (`make_days_script.py kk`, Saturday 20:00
+  on a save that has finished Nook's part-time job): "있어 있어!" ("I've got one!") → "K.K.보사노바" (K.K. Bossa)
+  typed into the "부탁해요" ("please") editor → "오케이! 그럼 들어 주세요. K.K.보사노바" ("OK! Then please listen. K.K. Bossa")
+  → the performance (staff roll the first time) → "답례로 K.K.보사노바의 뮤직을 줄게요." ("In return I'll give you the music
+  of K.K. Bossa.").
+- 24 warnings (`wr_*_line`, pockets menu) and the photo menu (`fl_strb_*`, `fl_selb_*`): the string pointers
+  in the line tables are redirected to s7 and the lengths changed (e.g. "편지를 더 못 가져!" ("can't carry any more
+  letters!") 12→18). The line tables contain pointers and are therefore left out of the data overlay, so when
+  a menu opens the PC port reads each line's pointer and length from the tables in the disc's `.data`
+  (`wr_win_data`, `fl_strb_str_data`, `fl_selb_str_data`) and fixes up the PC tables (`pc_ko_data_target`,
+  `pc_ko_redirect_strings`). The photo menu's SD failure messages were verified on the actual screen
+  (`make_device_script.py film`): "사진을, SD카드에 저장?" ("save the photo to the SD card?") → 네 (yes) → "SD카드에 기록중 /
+  잠시만요" → "SD카드 없음." ("no SD card.") → "SD카드가 들어 있는지, SD카드 어댑터 / 슬롯B에 연결하세요. / 준비되면 A버튼 누르세요" → "다시 이 사진을
+  SD카드에 저장?", and after closing, "사진을 저장할 수 없었어요." ("the photo could not be saved."). The post office e-Card
+  terminal ("게임보이 어드밴스가 제대로 연결되지 않았습니다.") and Mabel's (고순이) talk about the Advance ("게임보이 어드밴스가 제대로 연결이 안 된 것
+  같아예.") also come out in Korean all the way through.
+- RTC year limit: the patch changes 2030–2032 in `sChk_*`, `mTM_rtcTime_limit_check`, `lbRTC_GetNukegaraTime`,
+  `lbRk_*` and `mTI_*` to 2099–2100, and replaces the lunar calendar tables (`l_lbRk_ConvertTable`,
+  `l_lbRk_leapdays`) with tables in s7 extended to the year 2100. The PC port already extends this to 2100 in
+  all modes under `TARGET_PC` (`GAME_YEAR_MAX`, `mTM_MAX_YEAR`, `mTI_MAX_YEAR`, its own lunar table). At the
+  boundary (years 2099–2100) the two differ by about a year.
 
 ## v0.9.3 (2026-10-31)
 
-패치 기록의 변경은 두 가지다: 카드e리더+로 e카드를 읽을 때 GBA 화면의 일본어(토용의 말풍선 13종과 로고)를 한글로,
-구역 경계 카메라를 켠 채 달리기·대시로 경계를 넘을 때 자세가 잠깐 바뀌던 것을 고침. v0.9.2와 v0.9.3 디스크를
-파일 단위로 비교하면(`main.dol`·`boot.bin`·`bi2.bin` 같음) 바뀐 것은 두 파일뿐이다:
+The patch changelog lists two changes: the Japanese on the GBA screen when reading e-Cards with the Card
+e-Reader+ (13 gyroid speech balloons and the logo) is now in Hangul, and a fix for the pose briefly changing
+when crossing an area boundary by running or dashing with the area-boundary camera on. Comparing the v0.9.2
+and v0.9.3 discs file by file (`main.dol`, `boot.bin`, `bi2.bin` identical), only two files changed:
 
-- `foresta.rel`: 섹션 8(패치의 코드)이 0x1C00 → 0x2234바이트, `.text`(섹션 1)의 12바이트(새 코드로 가는 훅).
-  섹션 7(조사·말소리·선두 바이트·사전 표 등 PC가 오프셋으로 읽는 곳)과 `.data`는 바이트까지 같다.
-- `forest_2nd.arc`의 `eappli.bin`(9440 → 10912바이트): GBA로 보내 실행하는 e카드 읽기 프로그램.
+- `foresta.rel`: section 8 (the patch's code) grows 0x1C00 → 0x2234 bytes, and 12 bytes of `.text` (section 1)
+  change (hooks into the new code). Section 7 (the particle, animalese, lead-byte, dictionary tables etc. that
+  the PC port reads by offset) and `.data` are identical down to the byte.
+- `eappli.bin` in `forest_2nd.arc` (9440 → 10912 bytes): the e-Card reading program that is sent to the GBA
+  and run there.
 
-PC 포트는 디스크의 코드를 실행하지 않고(섹션 8은 읽지 않음) GBA가 없으므로("장치 없음") 두 변경 모두 PC에서는
-보이지 않는다. 구역 경계 달리기는 PC에 따로 구현되어 있지 않다(PC의 카메라는 원래 게임 그대로). 확인:
-`pc/tools/apply_ko_patch.py`와 게임 안 설치기(Settings → Disc → Korean patch, `patch/`의 zip) 모두 v0.9.3 zip을
-적용해 manifest의 SHA-256(`69dbd858…`)과 같은 ISO를 만들고, 새 게임 오프닝(65장)·한 번에 일주일(99장)·SD/GBA/카드e
-(51장)·새해 카운트다운(17장)·실제 마을 GCI 불러오기(13장)가 v0.9.2 디스크와 스크린샷·세이브까지 같다.
+The PC port does not run the disc's code (section 8 is not read) and has no GBA ("no device"), so neither
+change is visible on PC. Area-boundary running is not implemented separately on PC (the PC camera is the same
+as in the original game). Verified: `pc/tools/apply_ko_patch.py` and the in-game installer (Settings → Disc →
+Korean patch, the zip in `patch/`) both apply the v0.9.3 zip and produce an ISO matching the SHA-256 in the
+manifest (`69dbd858…`), and the new-game opening (65 screenshots), a week at once (99 screenshots),
+SD/GBA/e-Card (51 screenshots), New Year countdown (17 screenshots) and loading a real town GCI (13
+screenshots) are the same as on the v0.9.2 disc, down to the screenshots and saves.
 
-## 배포 형식과 게임 안 적용
+## Distribution format and in-game patching
 
-- 배포 zip(`Doubutsu-no-Mori-e-plus-Korean-v0.9.2/`): `*.xdelta`(약 8MB), `manifest.json`, 적용 도구
-  (`vcdiff.py`·`apply_gc_xdelta.py`·브라우저용 `패치적용.html`), 설명 문서. 패치 도구는 MIT.
-- `.xdelta`는 xdelta3가 만든 VCDIFF(RFC 3284): 헤더 `D6 C3 C4 00`, 보조 압축·사용자 코드 표 없음,
-  창(window) 58개, 창마다 xdelta3 확장인 Adler-32(창 표시 `0x04`)가 있다. 원본 창은 4MB 이하이고 원본 위치는
-  디스크 전체(1,459,978,240바이트) 범위, 결과는 36,995,072바이트의 잘린 ISO.
-- `manifest.json`: `patch_sha256`, `target_bytes`, `target_sha256`, `target_filename`, `source_*`(원본
-  CRC-32/MD5/SHA-1/SHA-256, 원본은 일본판 Rev 1 GAEJ01).
-- PC 포트의 설치기(`pc/src/pc_ko_patch.c`, 순수 코드는 `pc/src/ko/ko_patch.c` + `pc/tests/test_ko_patch.c`):
-  zip이면 안의 `.xdelta`와 `manifest.json`을 풀고(inflate 자체 구현), 설정 메뉴가 쓰는 디스크와 따로 연
-  원래 이미지(CISO도 그대로)에서 창 단위로 원본을 읽어 `korean/<target_filename>.part`에 쓰며 SHA-256을
-  계산한다. 크기·해시가 manifest와 맞으면 이름을 바꾸고 `settings.ini`의 `korean = 1`, `ko_image`를 쓴다.
-  디스크 헤더가 `GAEJ01`·버전 1이 아니면 시작하지 않고, 창의 Adler-32가 다르면(다른 판·이미 패치된 이미지)
-  멈춘다. 리눅스에서 v0.9.2 적용에 0.2초 남짓.
-- 다음 실행 때 `pc_disc_init`이 `korean = 1`이면 `ko_image`를 먼저 연다(없거나 디스크가 아니면 원래 이미지).
+- Distribution zip (`Doubutsu-no-Mori-e-plus-Korean-v0.9.2/`): `*.xdelta` (about 8MB), `manifest.json`,
+  patching tools (`vcdiff.py`, `apply_gc_xdelta.py`, `패치적용.html` ("apply patch") for browsers), documentation.
+  The patch tools are MIT-licensed.
+- The `.xdelta` is VCDIFF (RFC 3284) produced by xdelta3: header `D6 C3 C4 00`, no secondary compression and
+  no application-defined code table, 58 windows, and each window has an Adler-32 (window indicator `0x04`), an
+  xdelta3 extension. Source windows are 4MB or smaller and source positions range over the whole disc
+  (1,459,978,240 bytes); the result is a truncated ISO of 36,995,072 bytes.
+- `manifest.json`: `patch_sha256`, `target_bytes`, `target_sha256`, `target_filename`, `source_*`
+  (CRC-32/MD5/SHA-1/SHA-256 of the original; the original is the Japanese Rev 1 GAEJ01).
+- The PC port's installer (`pc/src/pc_ko_patch.c`, pure code in `pc/src/ko/ko_patch.c` +
+  `pc/tests/test_ko_patch.c`): for a zip it extracts the `.xdelta` and `manifest.json` inside (its own inflate
+  implementation), reads the source window by window from the original image (CISO also works as is), opened
+  separately from the disc the settings menu uses, writes to `korean/<target_filename>.part` and computes the
+  SHA-256 along the way. If size and hash match the manifest, it renames the file and writes `korean = 1` and
+  `ko_image` to `settings.ini`. It does not start if the disc header is not `GAEJ01` version 1, and it stops
+  if a window's Adler-32 differs (a different revision or an already-patched image). Applying v0.9.2 takes a
+  little over 0.2 seconds on Linux.
+- On the next run, if `korean = 1`, `pc_disc_init` opens `ko_image` first (or the original image if it is
+  missing or not a disc).
 
-## PC 포트 구현 계획
+## PC port implementation plan
 
-1. 패치 디스크 감지 → 한국어 모드.
-2. 글자 크기·그리기·폭: 위 형식대로 C로 구현(`TARGET_PC`), 글리프는 디스크의 msg.bin에서 읽는다.
-3. REL 데이터 덮어쓰기: 디스크의 REL에서 데이터 객체를 읽어 PC 빌드의 같은 객체에 덮어쓴다
-   (텍스처·이름표·문자열·폭 표 등). 같은 장치로 런타임 에셋 로더(M6)도 해결한다.
-4. 메시지 조립·말버릇·줄 검사·고정 길이 상수를 한국어 모드에 맞게 조정.
-5. 입력기: 물리 키보드 QWERTY 두벌식 + 한/영 전환(`pc/src/ko/ko_ime.c`)을 패치 인코딩으로 출력 —
-   구현됨(README의 "편집기 연결"). 게임패드·터치용 화면 키보드도 구현됨(`pc_ko_editor.c`, `ko_osk.c`).
-   이름·마을 이름·편지(머리말·본문·맺음말)·말버릇·도루묵씨 대답·K.K. 신청곡을 확인했다
-   (`make_opening_script.py --korean`, `make_ko_edit_script.py`). 역 앞 알림판과 일기 쓰기도 확인했다(`make_ko_edit_script.py boards`).
-   편지 보내기(펠리에게 "편지를 보내고 싶어")와 다음 날 17시 배달로 온 주민 답장, K.K. 신청곡 대답도 실제 경로로 확인했다
-   (`make_days_script.py`). 주민은 짧은 한글 편지(5글자 미만, "나쁜 편지")에만 답장한다: 답장 여부를 정하는
-   `mNpc_CheckNormalMail_length`와 그 일본어 낱말 표(`m_mail_check_ovl.c`)를 패치가 그대로 두어, 한글로 몇 마디 쓴 편지는
-   "좋은 편지"도 "나쁜 편지"도 아니게 되어 답장이 없다(게임큐브에서도 같음, foresta.rel의 그 함수·표 바이트가 원본과 같다).
-   남은 것: 실제 대화에서 말버릇을 바꿔 달라는 요청(무작위)은 디버그 명령으로만 시험했다.
+1. Detect the patched disc → Korean mode.
+2. Character size, drawing, width: implemented in C following the formats above (`TARGET_PC`); glyphs are read
+   from msg.bin on the disc.
+3. REL data overwrite: read data objects from the RELs on the disc and overwrite the same objects in the PC
+   build (textures, name plates, strings, width tables, etc.). The same mechanism also solves the runtime
+   asset loader (M6).
+4. Adjust message assembly, catchphrases, line checks and fixed-length constants for Korean mode.
+5. Input method: physical-keyboard QWERTY Dubeolsik + 한/영 toggle (`pc/src/ko/ko_ime.c`), output in the patch
+   encoding — implemented (see "Editor hookup" in [README.md](README.md)). An on-screen keyboard for gamepad
+   and touch is implemented too (`pc_ko_editor.c`, `ko_osk.c`). Verified: name, town name, letters (header,
+   body, footer), catchphrase, reply to Mr. Resetti, K.K. Slider song request
+   (`make_opening_script.py --korean`, `make_ko_edit_script.py`). Writing on the bulletin board in front of
+   the train station and in the diary is verified too (`make_ko_edit_script.py boards`). Sending a letter (to
+   Pelly: "편지를 보내고 싶어" ("I want to send a letter")), the villager's reply that arrives with the 17:00 delivery
+   the next day, and K.K. Slider's song request reply are also verified along the actual path
+   (`make_days_script.py`). Villagers reply only to short Hangul letters (under 5 characters, a "bad letter"):
+   the patch leaves `mNpc_CheckNormalMail_length`, which decides whether to reply, and its Japanese word table
+   (`m_mail_check_ovl.c`) unchanged, so a letter with a few words written in Hangul is neither a "good letter"
+   nor a "bad letter" and gets no reply (same on GameCube; the bytes of that function and table in foresta.rel
+   are identical to the original). Remaining: the request in actual conversation to change the catchphrase
+   (random) has only been tested with a debug command.
 
-## REL 데이터 오버레이 범위
+## REL data overlay scope
 
-`gen_rel_overlay.py`는 요소 형식이 단순한(바이트·u16·u32·Vtx) 객체만 덮어쓴다. 함수 안의 static
-(`country_str$457` 같은 것, PC 빌드에서는 `country_str.1`)도 포함한다 — 마을 이름 입력의 접미사
-`마을로`가 여기서 온다. 앞부분이 글자인 구조체는 그 부분만 덮는다(`STRUCT_PREFIXES`: 태그 메뉴 문구
-`mTG_tag_word_c`의 8바이트). 그 밖의 포인터 표·구조체(`type:None`, `type:Gfx` 등)는 빠진다.
-한 소스에 같은 이름의 함수 안 static이 여러 형으로 있으면(`m_police_box.c`의 `int category_table[]`와
-`mActor_name_t category_table[6]`) 객체 크기에 맞는 선언의 형을 쓰고, 그래도 모르면 덮어쓰지 않는다
-(빌드에 들어간 원래 값을 쓴다). 예전에는 마지막 선언의 형을 써서 이 int 표가 u16 단위로 뒤집혔고,
-날이 바뀌면 분실물 추가(`mPB_force_set_keep_item`)에서 크래시가 났다.
+`gen_rel_overlay.py` only overwrites objects with a simple element type (byte, u16, u32, Vtx). Function-local
+statics (such as `country_str$457`, which is `country_str.1` in the PC build) are included — the suffix `마을로`
+("to the town") in town-name entry comes from here. For structs that start with text, only that part is
+overwritten (`STRUCT_PREFIXES`: the 8 bytes of the tag menu text `mTG_tag_word_c`). Other pointer tables and
+structs (`type:None`, `type:Gfx`, etc.) are left out. When one source file has function-local statics of the
+same name with different types (`int category_table[]` and `mActor_name_t category_table[6]` in
+`m_police_box.c`), the type of the declaration that matches the object size is used, and if that still does
+not settle it, the object is not overwritten (the original value compiled into the build is used). Previously
+the type of the last declaration was used, so this int table got byte-swapped in u16 units, and adding a lost
+item (`mPB_force_set_keep_item`) crashed when the day changed.

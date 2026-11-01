@@ -1,0 +1,27 @@
+name: Release notes
+
+# Release titles and notes come from .github/release-notes/<tag>.md (see sync.py).
+# A pull request that changes them shows what would change; the push to main applies it.
+on:
+  push:
+    branches: [main]
+    paths: ['.github/release-notes/**', '.github/workflows/release-notes.yml']
+  pull_request:
+    paths: ['.github/release-notes/**', '.github/workflows/release-notes.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write # gh release edit
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v5
+
+    - name: Sync release notes
+      env:
+        GH_TOKEN: ${{ github.token }}
+        DRY_RUN: ${{ github.event_name == 'pull_request' && '--dry-run' || '' }}
+      run: python3 .github/release-notes/sync.py $DRY_RUN

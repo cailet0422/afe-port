@@ -1,98 +1,116 @@
-# 64비트 빌드 (진행 중)
+**English** · [한국어](64bit.ko.md)
 
-최신 Android 기기 상당수(예: Pixel 7 이후, 2024년 이후 플래그십)는 32비트 앱을 실행하지 못하므로
-arm64-v8a 빌드가 필요하다. 디컴프 코드는 포인터를 `u32`에 담는 곳이 많아, 32비트 빌드와 매칭 빌드는
-그대로 두고 `#ifdef TARGET_PC` 안에서 포인터 크기를 따르도록 고친다.
+# 64-bit build (in progress)
 
-## 빌드
+Many recent Android devices (e.g. Pixel 7 and later, flagships from 2024 on) cannot run 32-bit apps, so an
+arm64-v8a build is needed. The decomp code stores pointers in `u32` in many places, so the 32-bit build and the
+matching build are left as they are, and the code is fixed inside `#ifdef TARGET_PC` to follow the pointer size.
 
-리눅스 x86_64에서 먼저 시험한다(같은 문제가 arm64에도 그대로 나타나고 gdb로 보기 쉽다).
+## Build
+
+Test on Linux x86_64 first (the same problems show up on arm64 unchanged, and they are easy to look at with gdb).
 
 ```
 CC=clang CXX=clang++ cmake -G Ninja -S pc -B pc/build64 -DPC_ALLOW_64BIT=ON \
-    -DSDL2_DIR=<64비트 SDL2>/lib/cmake/SDL2 -DPC_BUILD_TESTS=OFF
+    -DSDL2_DIR=<64-bit SDL2>/lib/cmake/SDL2 -DPC_BUILD_TESTS=OFF
 ```
 
-`PC_ALLOW_64BIT`가 없으면 CMake는 여전히 64비트 구성을 거부한다(아직 모든 장면을 점검하지 않음).
+Without `PC_ALLOW_64BIT`, CMake still refuses a 64-bit configuration (not every scene has been checked yet).
 
-## 방침
+## Approach
 
-- **타입**: LP64(리눅스·안드로이드 64비트)에서는 `long`이 8바이트라 `u32`/`s32`(원래 `unsigned long`/
-  `long`)를 `__LP64__`일 때만 `int`로 정의한다(`types.h`, `dolphin/types.h`, `PR/ultratypes.h`,
-  `msl_types.h`, `pc_types.h`). `long`으로 선언된 SDK 함수 중 `s32` 선언과 겹치는 것(CARD, SI,
-  JKR*의 `long` 인자)은 PC 쪽 선언을 `s32`로 맞춘다.
-- **디스플레이 리스트**: `Gfx`의 두 번째 워드 `w1`을 `uintptr_t`로 넓힌다(64비트에서 `Gfx`는 16바이트).
-  주소를 담는 GBI 매크로(`gDma*p`, `gSPVertex`, `gImmp1/21`, `gSetImage`, `gSPLoadUcodeEx`, Dolphin
-  확장의 TLUT/텍스처 이미지)는 `gbi.h`/`gbi_extensions.h` 끝의 `TARGET_PC` 블록에서 캐스트만 넓혀 다시
-  정의한다. 비트필드 구조체(`Gdma`, `Gsetimg2`, `Gmovemem` …)는 첫 워드 뒤에 `GBI_PC_W1_PAD`를 넣어
-  두 번째 워드가 `w1` 자리(8바이트 뒤)에 오게 하고, 주소 필드는 `uintptr_t`로 한다. emu64의 세그먼트
-  표·DL 스택·`seg2k0`도 `uintptr_t`.
-- **디스크 구조체 안의 포인터**: 디스크 데이터에 그대로 겹쳐 읽는 구조체에 런타임 포인터 칸(디스크에선 0)이
-  있으면 크기를 바꿀 수 없다. RARC 파일 엔트리의 `mData`는 `PCPtr32`(`pc/include/pc_ptr32.h`, 64비트에서는
-  포인터 표의 인덱스, 32비트에서는 포인터 그대로)로 바꿨다.
-- **ARAM·DMA·콜백**: 메인 메모리 주소를 `u32`로 받던 `ARStartDMA`/`ARQPostRequest`/`JKRAramPiece`/
-  `JKRAramPcs`와 포인터를 `u32`로 넘기던 콜백(`ARQCallback`, JKR 명령 콜백)을 `uintptr_t`로 바꿨다.
-- **PC 계층**: `DVDFileInfo`를 고정 오프셋 대신 같은 배치의 구조체로 읽고, `GXTexObj`/`GXTlutObj` 안의
-  포인터는 두 칸에 memcpy로 담으며, 텍스처 캐시·EFB 캡처의 키를 `uintptr_t`로 한다.
-- **포인터→정수 캐스트**: clang 경고(`-Wpointer-to-int-cast` 등, 디컴프 소스는 평소 `-w`)가 알려 주는 열의
-  캐스트만 `uintptr_t`/`intptr_t`로 바꿔 원래 줄을 `#else`에 남기는 도구로 일괄 처리했다(약 250줄). 결과가
-  다시 `u32` 변수·필드·인자에 들어가는 곳은 `-Wshorten-64-to-32`로 찾아 그 선언을 넓힌다(메뉴 인자
-  `data3`/`param3`, 플레이어 옷 텍스처 주소, 구조물·곤충 액터의 작업 칸 등).
-- **`long`**: libultra의 `Mtx_t`(`long[4][4]`)는 LP64에서 두 배가 되어 emu64가 읽는 행렬이 깨지므로
-  `s32`로 한다.
-- **`Gfx`를 `u64`로 다루는 곳**: emu64가 결합기(`G_SETCOMBINE*`)·`G_TEXTURE`·삼각형 명령을 `u64`
-  하나로 복사·비교하던 곳은 64비트에서 `w1`을 잃으므로 `Gfx` 전체를 복사·비교한다.
-- **메시지 큐**: `OSMesg`는 포인터 크기라 4바이트 변수로 받으면 스택을 덮어쓴다. 받는 곳은 `OSMesg`로
-  받은 뒤 `u32`로 줄인다(오디오 스레드, 초기 메뉴, NES 사운드 이벤트).
-- **오디오**: N64식 오디오(Nas)의 뱅크 표는 64비트에서 디스크 데이터를 그 자리에서 고치지 않고 호스트
-  배치의 구조체로 새로 만든다(`Nas_BankOfsToAddr64`). 오디오 명령(Acmd)의 주소 칸, 콜백·멜로디 데이터
-  같은 포인터 인자(`Nap_SetPtr`), DVD 작업 큐의 콜백 복사 크기를 포인터 크기에 맞췄다. 부팅 징글
-  (JAudio)의 파형·뱅크 표는 32비트 포인터를 제자리에 담으므로 64비트에서는 등록하지 않는다(32비트에서는 `pc_dsp.c`가
-  소리를 낸다).
-- **액터 라벨**: 플레이어의 그물·문·눈덩이·모기 요청 등 액터를 가리키는 `u32` 라벨, 구조물의
-  `arg1`/`arg3`를 `uintptr_t`/`intptr_t`로 넓혔다. 비교만 하는 ID(효과음 위치, 셔터 라벨)는 그대로 둔다.
-- **아레나 주소**: 게임은 아레나(24MB 메인 메모리, `OSInit`)의 주소를 32비트 변수에 담는다(`boot.c`의 `ARENA` 출력과
-  메모리 크기 검사 등). 그래서 아레나는 4GB 아래, 그리고 N64 세그먼트 주소와 겹치지 않게 `0x10000000` 이상에
-  `MAP_FIXED_NOREPLACE`로 잡는다. 예전에는 `0x10000000`–`0x50000000`만 찾아보고 실패하면 `malloc`으로 넘어갔는데,
-  64비트에서는 그 주소가 4GB 위라 부팅하자마자 죽었다(리눅스에서 그 범위를 `LD_PRELOAD`로 막아 재현). 64비트
-  Android는 ART의 자바 힙과 부트 이미지가 낮은 4GB(흔히 `0x12c00000`부터)에 있으므로, 이제 `0x10000000`–`0xF0000000`
-  전체를 16MB 간격으로 찾는다. 4.17 이전 커널은 이 플래그를 모르고 주소를 힌트로만 쓰므로 다른 주소가 오면 버리고
-  다음 주소를 시도한다. 아레나를 `0x52000000`·`0x80000000`으로 밀어도 오프닝과 한 번에 일주일 진행의 스크린샷·세이브가
-  `0x10000000`일 때와 바이트까지 같다. 로그에 `[PC] arena at …`으로 남긴다.
-- **ARAM 주소**: ARAM은 `malloc`한 버퍼이고 게임에는 오프셋으로 준다(`ARGetBaseAddress`는 0). 가져온 PC 포트의
-  `ARStartDMA`는 `aram_base + 오프셋`이 들어와도 받으려고, 오프셋을 버퍼 주소의 하위 32비트와 비교해 그 범위면 빼 주었다.
-  64비트에서는 ASLR 때문에 그 하위 32비트가 가끔 작아져(`0x0023c010` 등), 그보다 큰 모든 오프셋이 엉뚱한 곳을 읽었다.
-  오디오 뱅크가 깨져 시작 직후 `Nas_BankOfsToAddr64`에서 죽거나 멈췄다(약 70번에 1번). 그런 호출자는 없으므로(32·64비트
-  모두 일주일 진행 동안 그 분기에 한 번도 들어가지 않음) 64비트에서는 빼고, 32비트에서는 버퍼가 오프셋 범위 위에 있을 때만
-  쓴다. ARAM 버퍼를 `0x500000100000`에 놓는 `LD_PRELOAD`로 재현했다. 고치기 전에는 오프닝에서 멈췄고, 고친 뒤에는 오프닝과
-  일주일 진행이 보통 실행과 바이트까지 같다.
-- **고정 크기 풀**: NPC 액터 풀의 칸(0xBA0)은 64비트에서 NPC 구조체가 커지므로 0xE00으로 한다.
-- **원시 바이트 디스플레이 리스트**: `u8 x[] = { #include "....inc" }`로 추출되어 `gsSPDisplayList`로 불리는
-  리스트 11개(이름 입력 창의 `nam_win_modeT`, 편집기 결합기 `lat_sousa_*_combine`, 달력·일기·편지 등)는 디스크의
-  8바이트 명령 그대로라 64비트 `Gfx`(16바이트)로 읽으면 두 명령씩 섞인다(이름 입력 창과 연필, 편집기의 A/B
-  버튼 글자가 흰 덩어리로 나왔다). `gen_data_fixups.py`가 이들을 `PC_FIX_GFX`로 표시하고, 부팅 때 바이트 순서를
-  바꾼 뒤 64비트에서는 호스트 배치의 사본을 만들어 emu64의 `G_DL`이 그 사본을 실행한다(`pc_raw_dl_host`).
-- **세그먼트 안 바이트 오프셋으로 부르는 디스플레이 리스트**: `gsSPDisplayList(anime_4_txt + 0x18)`처럼 세그먼트가
-  가리키는 `Gfx` 목록의 중간을 부르는 14곳(지도 안내판 `annai`, 창 테두리 `kan_win_waku4`·`kan_win_moji1`, 선택지
-  탭 `ctl_sentaku`, 카드 편지 `ctl_win_nuno8`)은 오프셋이 게임큐브의 8바이트 명령 단위라 64비트에서는 명령 중간을
-  읽었다(지도 왼쪽 판의 번가·번지 숫자와 건물 이름이 통째로 빠짐, 로그의 `予期しないコマンド`). `TARGET_PC`에서
-  `PC_GFX_OFS(0x18)`(8바이트 명령 수 × `sizeof(Gfx)`)로 바꾼다.
-- **한글패치 표의 칸 크기**: 패치된 foresta `.data`의 표는 게임큐브 배치라 칸 크기를 호스트 `sizeof`로 곱하면
-  64비트에서 어긋난다. 지도 건물 이름(`mMP_label_data`, 칸 0x1C, 64비트 구조체는 40바이트)이 그래서 빠지거나
-  깨졌다. 표를 읽는 곳(`pc_ko_data_*`)은 모두 디스크 칸 크기를 숫자로 쓴다.
+- **Types**: on LP64 (Linux and Android 64-bit) `long` is 8 bytes, so `u32`/`s32` (originally `unsigned long`/
+  `long`) are defined as `int` only under `__LP64__` (`types.h`, `dolphin/types.h`, `PR/ultratypes.h`,
+  `msl_types.h`, `pc_types.h`). For SDK functions declared with `long` that clash with `s32` declarations (CARD,
+  SI, the `long` arguments of JKR*), the PC-side declarations are changed to `s32`.
+- **Display lists**: the second word of `Gfx`, `w1`, is widened to `uintptr_t` (on 64-bit `Gfx` is 16 bytes).
+  GBI macros that hold addresses (`gDma*p`, `gSPVertex`, `gImmp1/21`, `gSetImage`, `gSPLoadUcodeEx`, the
+  TLUT/texture image macros of the Dolphin extensions) are redefined, with only the casts widened, in a `TARGET_PC`
+  block at the end of `gbi.h`/`gbi_extensions.h`. Bitfield structs (`Gdma`, `Gsetimg2`, `Gmovemem` …) get
+  `GBI_PC_W1_PAD` after the first word so the second word lands at the `w1` position (8 bytes in), and their
+  address fields are `uintptr_t`. emu64's segment table, DL stack and `seg2k0` are also `uintptr_t`.
+- **Pointers inside disc structs**: if a struct that is overlaid directly on disc data has a runtime pointer slot
+  (0 on disc), its size cannot change. The `mData` of RARC file entries was changed to `PCPtr32`
+  (`pc/include/pc_ptr32.h`; on 64-bit an index into a pointer table, on 32-bit the pointer itself).
+- **ARAM, DMA, callbacks**: `ARStartDMA`/`ARQPostRequest`/`JKRAramPiece`/`JKRAramPcs`, which took main-memory
+  addresses as `u32`, and the callbacks that passed pointers as `u32` (`ARQCallback`, the JKR command callbacks)
+  were changed to `uintptr_t`.
+- **PC layer**: `DVDFileInfo` is read through a struct with the same layout instead of fixed offsets, pointers
+  inside `GXTexObj`/`GXTlutObj` are stored across two slots with memcpy, and the keys of the texture cache and
+  the EFB capture are `uintptr_t`.
+- **Pointer-to-integer casts**: handled in bulk (about 250 lines) with a tool that changes only the cast at the
+  column a clang warning points to (`-Wpointer-to-int-cast` etc.; decomp sources normally build with `-w`) to
+  `uintptr_t`/`intptr_t` and keeps the original line under `#else`. Where the result goes back into a `u32`
+  variable, field or argument, `-Wshorten-64-to-32` finds it and that declaration is widened (the menu arguments
+  `data3`/`param3`, the player's clothing texture address, the work slots of structure and insect actors, etc.).
+- **`long`**: libultra's `Mtx_t` (`long[4][4]`) doubles in size on LP64, which breaks the matrices emu64 reads,
+  so it is made `s32`.
+- **Places that treat `Gfx` as a `u64`**: where emu64 copied and compared combiner (`G_SETCOMBINE*`),
+  `G_TEXTURE` and triangle commands as a single `u64`, it would lose `w1` on 64-bit, so it copies and compares
+  the whole `Gfx`.
+- **Message queues**: `OSMesg` is pointer-sized, so receiving it into a 4-byte variable overwrites the stack.
+  Receivers take it as an `OSMesg` and then narrow it to `u32` (audio thread, initial menu, NES sound events).
+- **Audio**: on 64-bit, the bank tables of the N64-style audio (Nas) are not patched in place in the disc data but
+  rebuilt as structs in host layout (`Nas_BankOfsToAddr64`). The address slots of audio commands (Acmd), pointer
+  arguments such as callback and melody data (`Nap_SetPtr`), and the callback copy size in the DVD work queue were
+  made pointer-sized. The wave and bank tables of the boot jingle (JAudio) store 32-bit pointers in place, so they
+  are not registered on 64-bit (on 32-bit `pc_dsp.c` plays the sound).
+- **Actor labels**: the `u32` labels that point to actors (the player's net, door, snowball, mosquito request
+  and so on) and the `arg1`/`arg3` of structures were widened to `uintptr_t`/`intptr_t`. IDs that are only
+  compared (sound effect position, shutter label) are left as they are.
+- **Arena address**: the game stores addresses in the arena (24MB of main memory, `OSInit`) in 32-bit variables
+  (the `ARENA` output in `boot.c`, the memory size check, etc.). So the arena is mapped below 4GB, and at
+  `0x10000000` or above so it does not overlap N64 segment addresses, with `MAP_FIXED_NOREPLACE`. It used to
+  search only `0x10000000`–`0x50000000` and fall back to `malloc` on failure; on 64-bit that address is above
+  4GB, so the game crashed right at boot (reproduced on Linux by blocking that range with `LD_PRELOAD`). On 64-bit
+  Android, ART's Java heap and boot image sit in the low 4GB (often from `0x12c00000`), so it now searches the
+  whole `0x10000000`–`0xF0000000` range in 16MB steps. Kernels before 4.17 do not know this flag and treat the
+  address only as a hint, so if a different address comes back it is discarded and the next address is tried.
+  With the arena pushed to `0x52000000` or `0x80000000`, the screenshots and saves of the opening and of the
+  week-in-one-run playthrough are byte-identical to those at `0x10000000`. It is logged as `[PC] arena at …`.
+- **ARAM address**: ARAM is a `malloc`ed buffer, and the game is given offsets into it (`ARGetBaseAddress` is 0).
+  To also accept `aram_base + offset`, the `ARStartDMA` of the imported PC port compared the offset with the low
+  32 bits of the buffer address and subtracted them if the offset was in that range. On 64-bit, ASLR sometimes
+  makes those low 32 bits small (`0x0023c010` etc.), and then every larger offset read from the wrong place.
+  Audio banks got corrupted, and the game crashed in `Nas_BankOfsToAddr64` or hung right after start (about 1 run
+  in 70). There are no such callers (in a week-long playthrough on both 32-bit and 64-bit that branch is never
+  entered once), so on 64-bit it is removed, and on 32-bit it is used only when the buffer lies above the offset
+  range. Reproduced with an `LD_PRELOAD` that places the ARAM buffer at `0x500000100000`. Before the fix it hung
+  in the opening; after the fix the opening and the week-long playthrough are byte-identical to a normal run.
+- **Fixed-size pools**: the NPC actor pool slot (0xBA0) is made 0xE00, since the NPC struct grows on 64-bit.
+- **Raw-byte display lists**: 11 lists extracted as `u8 x[] = { #include "....inc" }` and called through
+  `gsSPDisplayList` (the name-entry window's `nam_win_modeT`, the editor combiners `lat_sousa_*_combine`,
+  calendar, diary, letters, etc.) are the disc's 8-byte commands as they are, so reading them as 64-bit `Gfx` (16
+  bytes) mixes two commands at a time (the name-entry window and pencil, and the A/B button letters of the editor,
+  came out as white blobs). `gen_data_fixups.py` marks them with `PC_FIX_GFX`; at boot, after byte-swapping, a
+  host-layout copy is made on 64-bit and emu64's `G_DL` executes that copy (`pc_raw_dl_host`).
+- **Display lists called by byte offset into a segment**: the 14 places that call into the middle of a `Gfx` list
+  a segment points to, like `gsSPDisplayList(anime_4_txt + 0x18)` (map guide board `annai`, window borders
+  `kan_win_waku4`/`kan_win_moji1`, choice tab `ctl_sentaku`, card letter `ctl_win_nuno8`), use offsets in units
+  of GameCube 8-byte commands, so on 64-bit they read from the middle of a command (the block and lot numbers and
+  the building names on the left panel of the map vanished entirely, with `予期しないコマンド` ("unexpected
+  command") in the log). Under `TARGET_PC` they become `PC_GFX_OFS(0x18)` (number of 8-byte commands ×
+  `sizeof(Gfx)`).
+- **Slot sizes of Korean patch tables**: the tables in the patched foresta `.data` are in GameCube layout, so
+  multiplying by the host `sizeof` as the slot size goes wrong on 64-bit. That is why the map building names
+  (`mMP_label_data`, slot 0x1C, 40 bytes as a 64-bit struct) vanished or were garbled. Every place that reads the
+  tables (`pc_ko_data_*`) writes the disc slot size as a number.
 
-- **공용체를 다른 멤버로 쓰고 읽는 곳**: 소지품에서 NPC에게 건네는 요청(`mPlib_request_main_give_from_submenu`)은
-  공용체의 `give`로 쓰고 `give_from_submenu`로 읽는다. 32비트에서는 앞의 포인터+int 둘과 `xyz_t`가 같은 12바이트라
-  맞았지만 64비트에서는 아이템이 0으로 읽혀 건넨 물건이 NPC 손에 그려지지 않았다. 읽는 쪽 멤버로 쓴다.
-- **초기화하지 않은 버퍼가 세이브에 들어가는 곳**: 게시판 자동 글(`mNtc_set_auto_nwrite`)은 스택의 글 구조체를
-  일부만 채워 저장한다. 게임에는 보이지 않지만 32·64비트 세이브가 달라지므로 0으로 비우고 쓴다.
+- **Unions written through one member and read through another**: the request to hand something from the pockets
+  to an NPC (`mPlib_request_main_give_from_submenu`) writes the union's `give` and reads `give_from_submenu`. On
+  32-bit the leading pointer+int pair and `xyz_t` are both 12 bytes, so they lined up, but on 64-bit the item read
+  as 0 and the handed-over item was not drawn in the NPC's hand. It now writes through the member that is read.
+- **Uninitialized buffers that end up in saves**: message board auto posts (`mNtc_set_auto_nwrite`) save a post
+  struct on the stack that is only partly filled. It is invisible in the game but makes 32-bit and 64-bit saves
+  differ, so the struct is zeroed before it is written.
 
-## 점검 방법
+## How to check
 
-32비트 기본 빌드(gcc)와 64비트 빌드(clang)는 같은 `--deterministic` 스크립트로도 화면이 다르다. 두 컴파일러가
-함수 인자를 계산하는 순서가 달라서(gcc는 오른쪽부터, clang은 왼쪽부터), 인자 둘이 난수를 부르는 곳
-(`aNPC_set_tex_anime(..., 32 + RANDOM(16), 1 + RANDOM_F(3))` 등)에서 난수가 다른 곳에 쓰이고, 마을 배치·옷·주민
-움직임이 갈라진다. 그래서 64비트는 **clang 32비트 빌드와** 비교한다.
+The default 32-bit build (gcc) and the 64-bit build (clang) give different screens even with the same
+`--deterministic` script. The two compilers evaluate function arguments in different orders (gcc right to left,
+clang left to right), so where two arguments call the RNG
+(`aNPC_set_tex_anime(..., 32 + RANDOM(16), 1 + RANDOM_F(3))` etc.), the random numbers end up in different places,
+and town layout, clothes and villager movement diverge. So 64-bit is compared **against a clang 32-bit build**.
 
 ```
 sed 's/gcc)/clang)/; s/g++)/clang++)/' pc/cmake/Toolchain-multilib32.cmake > /tmp/Toolchain-clang32.cmake
@@ -100,64 +118,75 @@ cmake -S pc -B pc/build32clang -G Ninja -DCMAKE_TOOLCHAIN_FILE=/tmp/Toolchain-cl
       -DCMAKE_CXX_FLAGS="-m32 -mlong-double-64 -fno-aligned-new"
 ```
 
-(`-malign-double`과 libstdc++의 `long double` 표, 32비트 clang의 정렬 `new`를 피하는 플래그. 비교용 빌드에만 쓴다.)
-각 빌드 폴더의 relmap을 그 실행 파일 옆에 두고 돌린 뒤 스크린샷을 `compare -metric AE`로 비교한다.
+(Flags that avoid `-malign-double`, libstdc++'s `long double` tables and 32-bit clang's aligned `new`. Used only
+for the comparison build.) Put each build folder's relmap next to its executable, run both, then compare the
+screenshots with `compare -metric AE`.
 
-세이브가 필요한 경로는 gcc 32비트 빌드가 `make_newgame_script.py --korean --save`로 만든 첫날 세이브에서 시작한다
-(clang 빌드의 마을은 그 경로가 저장까지 가지 않는다). 건물 안은 `make_interior_script.py`(`--days 1`로 돌린다,
-[dev_setup.md](dev_setup.md)), 세이브는 `cmp`로 바이트를 비교한다(파일 안에 같은 세이브가 두 벌, 0x10000과
-0x3E000에서 시작).
+Paths that need a save start from the first-day save that the gcc 32-bit build makes with
+`make_newgame_script.py --korean --save` (in the clang build's town, that path does not get as far as saving).
+Building interiors use `make_interior_script.py` (run it with `--days 1`, [dev_setup.md](dev_setup.md)), and saves
+are compared byte for byte with `cmp` (the file holds two copies of the same save, starting at 0x10000 and
+0x3E000).
 
-## 현재 상태
+## Current status
 
-리눅스 x86_64에서 clang 32비트와 같은 `--deterministic` 스크립트로 비교한 결과(장 수는 스크린샷):
+Results of comparing against clang 32-bit with the same `--deterministic` script on Linux x86_64 (counts are
+screenshots):
 
-| 경로 | 결과 |
+| Path | Result |
 |---|---|
-| 원래 디스크 오프닝 | 52장 같음 |
-| 한국어 새 게임 → 자유 이동 → 동쪽 구역 주민 | 202장 중 201장 같음(1장은 플레이어 팔 자세가 한 프레임 다름, 다음 장면부터 같음; 32·64비트 libm 실수 오차로 보임) |
-| 한국어 편집기 6개 시나리오(`make_ko_edit_script.py`: 편지·저장·다시 열기, 말버릇·저장, 신청곡, 도루묵씨) | 134장 같음 |
-| 건물 안(`make_interior_script.py all`: 너굴 상점, 박물관 홀·부엉 방·물고기 방, 우체국, 에이블, 파출소, 플레이어 집, 주민 집 둘) | 71장 같음 |
-| 저장 경로(`state`: 집에 가구 놓기, 박물관 기증, 상점에서 사기, 하니와에서 저장) | 44장 같음, 세이브 파일 바이트까지 같음 |
-| 불러오기(`state-check`: 32비트 세이브를 64비트가, 64비트 세이브를 32비트가 불러와 같은 방을 돌고 다시 저장) | 35장 같음, 다시 저장한 파일도 같음. 가구·산 물건(SOLD OUT, 지갑)·기증(박물관 표시 비트)이 남아 있음 |
-| 타이틀 데모(원래 디스크·한글패치, `make_opening_script.py --idle 12000`) | 38장씩 같음 |
-| 다른 날·시간(`town`: 첫날 밤, 11/4 아침, 눈 오는 12/21, 2/9 저녁, `town-rain`: 큰비) | 13장씩 같음 |
-| 패미컴(`famicom`: 집에 놓고 켜기, 크루크루랜드) | 14장 같음 |
-| 아르바이트 전 과정(`make_job_script.py` plant·hello·furniture·letter·carpet·axe·notice, 단계마다 앞 단계의 세이브로) | 13·17·8·10·8·8·9장 같음, 단계마다 세이브 바이트까지 같음 |
-| 여러 날(`make_days_script.py` letter·reply·kk: 편지와 다음 날 답장, 토요일 밤 K.K.) | 24·14·42장 같음, 세이브 같음 |
-| 집 증축·섬(`house`·`house-next`·`island-buy`·`island`·`rooms`: 대출 갚기와 증축, 섬 왕복, 2층·지하) | 16·16·21·59·12장 같음, 세이브 같음 |
-| 장치 없음(`make_device_script.py all`·`station`: 사진 메뉴 SD, 우체국 카드e 단말, 에이블 GBA, 역 외출) | 51·25장 같음, 세이브 같음 |
-| 부팅 징글(`--audio-dump`) | 32비트와 같은 소리(아래) |
-| 패미컴 소리(`make_famicom_script.py --game 0·1·2·13` + `--audio-dump`, 쿠루쿠루랜드·벌룬 파이트·동키콩·익사이트바이크) | 4개 모두 WAV가 샘플 단위로 같음 |
-| 패미컴 최고 점수(`--game 4`, 핀볼 6000프레임 플레이) | 31장 같음, 최고 점수(016860)가 든 패미컴 세이브까지 같음 |
-| 한 번에 일주일(`make_days_script.py week`: `CLOCK`으로 자정 다섯 번, 저장·이어하기, 답장, K.K.) | 99장 같음, 세이브 같음 |
-| 이벤트(`broker`·`harvest`·`countdown`: 브로커 텐트, 추수감사절 프랭클, 새해 카운트다운) | 7·10·17장 같음, 세이브 같음 |
-| `static` 팔레트(리셋 센터 `FG 2140,1540 008D`, 분홍일기장) | 17·4장 같음 |
-| GLES 64비트(`-DPC_GLES=ON`, Mesa GLES 3.2) | 건물 안 71장·타이틀 데모 38장이 데스크톱 GL 64비트와 같음 |
-| 한글패치 지도(`MENU 5`, 30구역 전부)·서브메뉴 30여 개(`MENU 1`~`31`, 우편함·주소록 등 안쪽 메뉴 포함) | 지도 30장·서브메뉴 4장씩 32비트와 같음, arm64(qemu, GLES)도 채널당 차이 3 이하 |
+| Original disc opening | 52 identical |
+| Korean new game → free roam → villagers in the east area | 201 of 202 identical (1 differs by one frame in the player's arm pose, identical again from the next scene; looks like 32/64-bit libm floating-point error) |
+| Korean editor, 6 scenarios (`make_ko_edit_script.py`: letter/save/reopen, catchphrase/save, song request, Mr. Resetti) | 134 identical |
+| Building interiors (`make_interior_script.py all`: Tom Nook's shop, museum hall/Blathers' room/fish room, post office, Able Sisters, police station, player house, two villager houses) | 71 identical |
+| Save path (`state`: placing furniture in the house, museum donation, buying at the shop, saving at a gyroid) | 44 identical, save file byte-identical |
+| Loading (`state-check`: 64-bit loads a 32-bit save and 32-bit loads a 64-bit save, both walk the same rooms and save again) | 35 identical, re-saved files also identical. Furniture, bought items (SOLD OUT, wallet) and donations (museum display bits) persist |
+| Title demo (original disc and Korean patch, `make_opening_script.py --idle 12000`) | 38 identical each |
+| Other days and times (`town`: first night, 11/4 morning, snowy 12/21, 2/9 evening; `town-rain`: heavy rain) | 13 identical each |
+| Famicom (`famicom`: placing it in the house and turning it on, Clu Clu Land) | 14 identical |
+| Full part-time job (`make_job_script.py` plant/hello/furniture/letter/carpet/axe/notice, each step from the previous step's save) | 13/17/8/10/8/8/9 identical, save byte-identical at every step |
+| Multiple days (`make_days_script.py` letter/reply/kk: a letter and the reply the next day, K.K. Slider on Saturday night) | 24/14/42 identical, saves identical |
+| House expansion and island (`house`/`house-next`/`island-buy`/`island`/`rooms`: paying off the loan and expanding, island round trip, second floor and basement) | 16/16/21/59/12 identical, saves identical |
+| No device (`make_device_script.py all`/`station`: photo menu SD, Card e-Reader terminal at the post office, GBA at Able Sisters, going out from the train station) | 51/25 identical, saves identical |
+| Boot jingle (`--audio-dump`) | Same sound as 32-bit (below) |
+| Famicom sound (`make_famicom_script.py --game 0·1·2·13` + `--audio-dump`, Clu Clu Land/Balloon Fight/Donkey Kong/Excitebike) | WAVs identical sample for sample for all 4 |
+| Famicom high score (`--game 4`, 6000 frames of Pinball play) | 31 identical, the Famicom save holding the high score (016860) also identical |
+| A week in one run (`make_days_script.py week`: five midnights via `CLOCK`, save/continue, reply, K.K. Slider) | 99 identical, saves identical |
+| Events (`broker`/`harvest`/`countdown`: broker tent (Crazy Redd), Franklin at the Harvest Festival, New Year countdown) | 7/10/17 identical, saves identical |
+| `static` palettes (Reset Center `FG 2140,1540 008D`, pink diary) | 17/4 identical |
+| GLES 64-bit (`-DPC_GLES=ON`, Mesa GLES 3.2) | 71 interior and 38 title demo screenshots identical to desktop GL 64-bit |
+| Korean-patch map (`MENU 5`, all 30 areas) and about 30 submenus (`MENU 1`–`31`, including inner menus such as the mailbox and address book) | 30 map screenshots and 4 per submenu identical to 32-bit; arm64 (qemu, GLES) also differs by at most 3 per channel |
 
-gcc 32비트 빌드도 위 경로를 모두 크래시 없이 돈다(마을이 달라 화면은 비교하지 않음). 64비트 크래시 없음.
+The gcc 32-bit build also runs all of the paths above without crashing (its town differs, so its screens are not
+compared). No 64-bit crashes.
 
-- 고친 것: 이름 입력 창·편집기 버튼(원시 바이트 디스플레이 리스트, 위). 소지품의 아이템 메뉴 낱말
-  (`mTG_tag_word_c`, 앞 8바이트만 디스크에서 덮어쓰는 구조체)이 64비트에서는 구조체가 커서 REL 오버레이에서
-  빠져 일본어로 나오던 것. 박물관에 기증한 물고기가 부엉 손에 그려지지 않던 것(공용체, 위). 32·64비트 세이브가
-  게시판 자동 글의 쓰레기 바이트만큼 다르던 것(위). 한글패치 지도의 왼쪽 판(번가·번지, 건물 이름)이 비던 것(세그먼트
-  오프셋·표 칸 크기, 위).
-- 32비트에서도 있던 것: 너굴 상점의 여섯 선택지 메뉴(아르바이트가 끝난 뒤)에서 gcc 32비트가 스택 보호로 죽었다.
-  선택지 문자열을 72바이트 읽어 66바이트 칸에 넣는 원래 코드라 마지막 칸이 호출한 쪽 배열 밖을 덮었다
-  (`mChoice_Load_ChoseStringFromRom`, `TARGET_PC`에서 72바이트 버퍼에 읽어 맞는 만큼 복사).
-- 패미컴(`make_famicom_script.py`, gcc 빌드의 `--save` 세이브): 가구 놓기 → 쿠루쿠루랜드 실행·플레이 → L+R+Z로 복귀까지
-  스크린샷 14장이 clang 32비트와 모두 같고, NES 구간 소리도 샘플 단위로 같다. 크래시 없음.
-- 부팅 징글: JAudio의 WSYS(파형)·IBNK(악기 뱅크) 표는 디스크 바이트를 제자리에서 32비트 포인터로 고쳐 쓰는
-  구조라 64비트에서는 쓸 수 없어, 64비트에서만 같은 내용을 호스트 구조체로 다시 만든다(`pc_jaudio_host_wsys`·
-  `pc_jaudio_host_ibnk`, `pc_jaudio_bswap.c`; 32비트는 원래 표를 그대로 돌려줌). 그 밖에 게임큐브 구조체 오프셋을
-  숫자로 쓰던 곳(`seqsetup.c` 트랙 주소, `jammain_2.c` 트랙 필드·자식 목록, `oneshot_getchannel.c_inc` 파형 주소,
-  `waveread.c`), DSP 채널 주인을 `u32`로 넘기던 곳(`dspdriver.c`)을 `TARGET_PC`에서 고쳤다. 징글 소리는 clang
-  32비트와 같다.
-- Android APK에 arm64-v8a 라이브러리를 함께 넣는다([android.md](android.md)). arm64 실행은 기기가 없어
-  확인하지 못했다(같은 LP64 모델인 x86_64로 확인). 이번 점검으로 Android 빌드 설정은 바뀌지 않았다.
-- Windows 64비트(MinGW x86_64, LLP64)도 빌드된다: 부팅 징글의 `PTconvert`가 4GB 아래의 표 사본에서 포인터를 망가뜨리던 것을
-  고친 뒤, Wine에서 32비트 Windows판과 같은 화면·세이브(README "Windows (64비트)").
-- 남은 것:
-  - 텐트 안에서 사기, 다른 계절 이벤트(낚시 대회·불꽃놀이·할로윈 등)는 경로가 없다.
-  - arm64 실기기.
+- Fixed: the name-entry window and editor buttons (raw-byte display lists, above). The item menu words in the
+  pockets (`mTG_tag_word_c`, a struct of which only the first 8 bytes are overwritten from disc) were left out of
+  the REL overlay on 64-bit because the struct is larger, and came out in Japanese. Fish donated to the museum were
+  not drawn in Blathers' hands (union, above). 32-bit and 64-bit saves differed by the garbage bytes of message
+  board auto posts (above). The left panel of the Korean-patch map (block and lot numbers, building names) was
+  empty (segment offsets and table slot sizes, above).
+- Also present on 32-bit: in Tom Nook's shop's six-choice menu (after the part-time job is done), the gcc 32-bit
+  build died from stack protection. The original code reads 72 bytes of choice strings into a 66-byte slot, so the
+  last slot overwrote memory past the caller's array (`mChoice_Load_ChoseStringFromRom`; under `TARGET_PC` it
+  reads into a 72-byte buffer and copies as much as fits).
+- Famicom (`make_famicom_script.py`, from the gcc build's `--save` save): placing the furniture → launching and
+  playing Clu Clu Land → returning with L+R+Z; all 14 screenshots are identical to clang 32-bit, and the sound
+  during the NES part is also identical sample for sample. No crashes.
+- Boot jingle: JAudio's WSYS (wave) and IBNK (instrument bank) tables work by rewriting disc bytes in place into
+  32-bit pointers, so they cannot be used on 64-bit; on 64-bit only, the same content is rebuilt as host structs
+  (`pc_jaudio_host_wsys`/`pc_jaudio_host_ibnk`, `pc_jaudio_bswap.c`; on 32-bit the original tables are returned
+  as they are). In addition, places that hardcoded GameCube struct offsets as numbers (`seqsetup.c` track address,
+  `jammain_2.c` track fields and child list, `oneshot_getchannel.c_inc` wave address, `waveread.c`) and the place
+  that passed the DSP channel owner as a `u32` (`dspdriver.c`) were fixed under `TARGET_PC`. The jingle sound is
+  identical to clang 32-bit.
+- The Android APK bundles the arm64-v8a library as well ([android.md](android.md)). Running on arm64 has not been
+  verified for lack of a device (verified on x86_64, which uses the same LP64 model). This round of checks did not
+  change the Android build settings.
+- Windows 64-bit (MinGW x86_64, LLP64) also builds: after fixing the boot jingle's `PTconvert` corrupting pointers
+  in the table copies below 4GB, it gives the same screens and saves as the 32-bit Windows build under Wine
+  (README.md, "Windows (64-bit)").
+- Remaining:
+  - Buying inside the tent and the other seasonal events (Fishing Tourney, fireworks, Halloween, etc.) have no
+    path.
+  - arm64 real device.
