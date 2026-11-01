@@ -28,7 +28,8 @@ typedef int PCPadInput;
 #define PC_PAD_TRIGGER_RIGHT 0x101
 #define PC_PAD_BINDS         2 /* gamepad inputs per action (Start = start, back) */
 
-/* GameCube controls, in the order of keybindings.ini and the settings menu */
+/* GameCube controls, in the order of keybindings.ini and the settings menu,
+   then the port's own (no GameCube button) */
 enum {
     PC_BIND_A,
     PC_BIND_B,
@@ -50,6 +51,7 @@ enum {
     PC_BIND_DPAD_DOWN,
     PC_BIND_DPAD_LEFT,
     PC_BIND_DPAD_RIGHT,
+    PC_BIND_MAP, /* opens and closes the game's map (pc_minimap.c) */
     PC_BIND_COUNT
 };
 

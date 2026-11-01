@@ -34,3 +34,7 @@ jobs:
     # match them (pc/tools/gen_save_swap.py writes it again if not)
     - name: Save swap table
       run: python3 pc/tools/gen_save_swap.py --check
+
+    # The minimap's acre tables are copied from the decomp's m_map_ovl.c
+    - name: Minimap tables
+      run: python3 pc/tools/gen_minimap_tables.py --check

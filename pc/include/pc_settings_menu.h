@@ -16,6 +16,10 @@ struct game_s;
  * Call when opening the menu from either host (pause or title). */
 void pc_settings_menu_enter(void);
 
+/* Opens the menu straight on the update page (pc_update.h); leaving that
+ * page closes the menu */
+void pc_settings_menu_enter_update(void);
+
 /* 1 while the menu (settings page or res-confirm sub-page) is active. */
 int  pc_settings_menu_active(void);
 

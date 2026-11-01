@@ -17,6 +17,10 @@ def assetDir = file("${buildDir}/generated/afe_assets")
 // the release APK is signed with the debug key, as before. Never commit it.
 def releaseKeyProps = file(project.findProperty('releaseKeyProps') ?: "${rootDir}/release-key/keystore.properties")
 def releaseKey = new Properties()
+// The port's version, shared with the PC build (pc/VERSION). versionCode grows
+// with it: 0.1.7 is 107 (the releases up to 0.1.6 had 1 to 6)
+def portVersion = file("${rootDir}/../VERSION").text.trim()
+def portVersionCode = portVersion.tokenize('.').collect { it as int }.with { it[0] * 10000 + it[1] * 100 + it[2] }
 if (releaseKeyProps.exists()) {
     releaseKeyProps.withInputStream { releaseKey.load(it) }
 }
@@ -30,8 +34,8 @@ android {
         applicationId 'org.afedecomp.dobutsunomori'
         minSdk 21
         targetSdk 34
-        versionCode 6
-        versionName '0.1.6'
+        versionCode portVersionCode
+        versionName portVersion
         ndk {
             // Many recent phones run only 64-bit apps (docs/64bit.md).
             // -Pabis=x86_64 builds for the emulator instead

@@ -21,13 +21,17 @@ extern int g_pc_nes_active;
 /* ESC handler in pc_main calls this. Also needed if I reintroduce the audio pause on game pause. */
 void pc_pause_menu_toggle(void);
 
+/* Pauses and opens the settings menu's update page (pc_update.c found a
+ * new version); closing that page resumes the game */
+void pc_pause_menu_open_update(void);
+
 /* Forward an SDL event for menu navigation. Returns 1 if consumed. 
 *  Doesn't do anything if not paused. */
 int  pc_pause_menu_handle_event(const SDL_Event* e);
 
 /* Append the pause overlay to the GAME's font display list. Call from
  * graph_main right after game_main() returns. 
- * Doesn't do anything if not paused. */
+ * Doesn't draw anything if not paused; also runs pc_minimap_game_frame. */
 void pc_pause_menu_draw(struct game_s* game);
 
 #ifdef __cplusplus

@@ -4,6 +4,7 @@
 #include "pc_settings.h"
 #include "pc_typing.h"
 #include "pc_ko.h"
+#include "pc_minimap.h"
 
 #include <dolphin/pad.h>
 #include <math.h>
@@ -175,6 +176,9 @@ void pc_touch_finger_down(s64 id, float x, float y) {
     if (pc_ko_osk_touch(1, x, y)) {
         return; /* a key of the editor's on-screen keyboard */
     }
+    if (pc_minimap_touch(x, y)) {
+        return; /* the minimap: opens the map */
+    }
     if (!enabled()) {
         return;
     }
@@ -207,6 +211,9 @@ void pc_touch_finger_down(s64 id, float x, float y) {
         s_stick_y = SDL_clamp(f->y, r, g_pc_window_h - r);
     } else if (g_pc_editor_active && pc_typing_system_ime()) {
         SDL_StartTextInput(); /* brings back a keyboard the user put away */
+    } else if (!g_pc_paused && pc_minimap_map_open()) {
+        f->active = 0; /* a tap outside the controls closes the map */
+        pc_minimap_request_toggle();
     }
 }
 

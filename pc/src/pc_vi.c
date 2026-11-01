@@ -2,6 +2,8 @@
 #include "pc_platform.h"
 #include "pc_input_script.h"
 #include "pc_touch.h"
+#include "pc_minimap.h"
+#include "pc_update.h"
 
 #define VI_TVMODE_NTSC_INT    0
 #define VI_TVMODE_NTSC_DS     1
@@ -40,6 +42,8 @@ void VIWaitForRetrace(void) {
     }
 
     pc_audio_frame();
+    pc_update_frame();
+    pc_minimap_draw();
     pc_touch_draw();
     if (!pc_input_script_frame(pc_frame_counter)) {
         g_pc_running = 0;

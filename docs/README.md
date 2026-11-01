@@ -224,6 +224,59 @@ Change them under pause menu → Settings → **Controls** → **Buttons** (`pc_
   `[Gamepad]`; up to two per line for the pad: `L = leftshoulder, lefttrigger`). An old `keybindings.ini` (keyboard
   only) is still read as is.
 - While paused, the gamepad also navigates the menu (D-pad, A = confirm, B/Start = back).
+- After the GameCube buttons comes the port's own **Map** (`M`; no gamepad button by default), see below. A
+  `keybindings.ini` from before it gives `M` to nothing new: if that file already uses `M` for a GameCube button,
+  Map starts unbound.
+
+### Minimap and the map key
+
+`pc/src/pc_minimap.c` (state, input, drawing) and `pc/src/pc_minimap_core.c` (no game or GL: acre pictures, layout;
+test `pc/tests/test_minimap.c`).
+
+- **Minimap**: outside in the town (`SCENE_FG`, the FG field, not the island or the sea), with no submenu, message
+  window, demo (talking, events), fade or wipe, the 5 × 6 acres are drawn in the bottom right corner of the window,
+  with the player (a point the way they face) and the villagers' houses (from the save's home positions). The acre
+  pictures are the game's own map's (`kan_tizu_*_TA_tex_txt`, 32 × 32 CI4, two RGB5A3 palettes) chosen the way
+  `m_map_ovl.c` does (`mMP_set_map_texture_pal`, bridges included). Those tables are static in `m_map_ovl.c`, so
+  `pc/tools/gen_minimap_tables.py` copies them into `pc/src/pc_minimap_tables.inc` (CI runs it with `--check`).
+- It reads the game after `game_main` (`pc_minimap_game_frame`, called from `pc_pause_menu_draw`, which `graph.c`
+  already calls there) and draws with OpenGL over the finished frame like the touch pad (`pc_vi.c`), so no decomp
+  change was needed. With `touch_controls = 1` it is smaller and sits in the corner the pad's buttons leave free (the
+  test checks it against the pad's layout). `minimap = 0` in `[Gameplay]` turns it off (Settings → Gameplay →
+  Minimap).
+- **Map key**: the Map control (default `M`) opens the game's map (`mSM_OVL_MAP` with `data0 = 1`, the player's own map
+  that the X button opens) with the conditions of `mSM_check_open_MAP` except `map_flag`, so it works before the
+  player has the map from the police box, and also indoors (not in the island's cottage or at sea, like X). Pressing
+  it again closes the map with a B press. A tap on the minimap opens it (Android, and a left click on PC when the
+  left mouse button is not a game control); while the map is open a tap outside the on-screen pad's buttons closes
+  it. The input script command `MAP` does what the key does.
+
+### Updates (release builds)
+
+`pc/src/pc_update.c`, `pc/src/pc_update_core.c` (no network or files: versions, GitHub's release JSON,
+`SHA256SUMS.txt`, zip; test `pc/tests/test_update.c`), Android `Updater.java` and `UpdateProvider.java`.
+
+- The version is `pc/VERSION` (CMake defines `PC_PORT_VERSION`; Android's `build.gradle` takes `versionName` from it
+  and makes `versionCode` major × 10000 + minor × 100 + patch). **Bump it for every release**, before building, and
+  give the release the tag `v<VERSION>`.
+- Only release builds update: CMake `PC_UPDATER` is on by default with `PC_STRIP_ASSETS` (not for Android), and the
+  Android app only when it is signed with the release key. Asset names are matched by their ends:
+  `-Windows-x64.zip`, `-Windows-x86.zip`, `-Linux-x86_64.zip`, `-Android.apk`; keep naming the release files that
+  way, and keep `SHA256SUMS.txt` in the release.
+- At start (not with `--deterministic` or an input script) a thread reads
+  `api.github.com/repos/cailet0422/afe-port/releases` and picks the newest non-draft release newer than this build
+  that has this platform's file. Pre-releases count (all releases so far are previews). The pause menu then opens on
+  the update page (Settings' `SUB_UPDATE`; not on the title's menu, in a Famicom game or while typing). Settings →
+  Gameplay → Version checks by hand.
+- Windows / Linux: the zip is downloaded (WinHTTP; Linux runs `curl` or `wget`), checked against `SHA256SUMS.txt` and
+  the size from the release list, and every file under the zip's top folder is written next to its old one as
+  `<name>.new`; then each old file is renamed to `<name>.old` (Windows lets a running program and its DLL be renamed,
+  not overwritten) and the new one takes its name. If any step fails, everything is put back. The `.old` files are
+  listed in `update_old.txt` and removed at the next start. **Restart now** starts the new program by its path
+  (`pc_update_restart_path`; on Linux `/proc/self/exe` would be the renamed old one).
+- Android: the APK goes to the cache folder, is checked the same way and is handed to the system's installer
+  (`content://<package>.update/update.apk` from `UpdateProvider` on Android 7+, a file before), which needs
+  `REQUEST_INSTALL_PACKAGES`. "Skip this version" is kept in the app's preferences there and in `update_skip` on PC.
 
 ### Scripted test input
 
@@ -236,6 +289,7 @@ With `--deterministic` the same script produces the same screens every time (`--
 `--time H[:M]` at that time of day; 2026-11-01 is a Sunday, so `--days 6 --time 20` is Saturday night).
 `--audio-dump file.wav` records the sound output as WAV (with `--deterministic` the same script gives the same WAV;
 analysis with `pc/tools/audio_stats.py`, [dev_setup.md](dev_setup.md)).
+`MAP` opens or closes the town map as the Map key does.
 Debug commands for scenes that come up only occasionally: `GIVE` (item into pockets), `LEDIT` (open the name-entry
 editor: villager catchphrase etc.), `RESETS` (number of times the game was turned off without saving — Mr. Resetti
 comes), `CATCH` (print the villager's catchphrase bytes), `ITEM` (print the item the menu selected), `JOBDONE` (finish

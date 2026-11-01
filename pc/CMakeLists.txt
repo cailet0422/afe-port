@@ -35,6 +35,18 @@ else()
 endif()
 option(PC_GLES "Render with OpenGL ES 3.0 instead of OpenGL 3.3 core" ${PC_GLES_DEFAULT})
 option(PC_STRIP_ASSETS "Leave the extracted assets out of the executable; it reads them from the disc at boot" OFF)
+# Release builds are the ones without assets: those look for new releases on
+# GitHub and can install them (pc_update.c). Android does it in Java.
+if(PC_STRIP_ASSETS AND NOT ANDROID)
+    set(PC_UPDATER_DEFAULT ON)
+else()
+    set(PC_UPDATER_DEFAULT OFF)
+endif()
+option(PC_UPDATER "Update from the project's GitHub releases (release builds)" ${PC_UPDATER_DEFAULT})
+
+# The port's version, for the updater and the pause menu (Android's build.gradle reads it too)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" PC_PORT_VERSION LIMIT_COUNT 1)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
 
 set(AFE_VERSION "GAEJ01_01" CACHE STRING "Game version to build (GAEJ01_00 or GAEJ01_01)")
 if(AFE_VERSION STREQUAL "GAEJ01_00")
@@ -95,6 +107,24 @@ if(PC_BUILD_TESTS)
     target_include_directories(test_ko_patch PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
     target_compile_options(test_ko_patch PRIVATE -Wall -Wextra)
     add_test(NAME ko_patch COMMAND test_ko_patch)
+
+    add_executable(test_minimap
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_minimap_core.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_minimap.c
+    )
+    target_include_directories(test_minimap PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_compile_options(test_minimap PRIVATE -Wall -Wextra)
+    target_link_libraries(test_minimap m)
+    add_test(NAME minimap COMMAND test_minimap)
+
+    add_executable(test_update
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_update_core.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_patch.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_update.c
+    )
+    target_include_directories(test_update PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_compile_options(test_update PRIVATE -Wall -Wextra)
+    add_test(NAME update COMMAND test_update)
 
     add_executable(test_dsp_voice
         ${CMAKE_CURRENT_SOURCE_DIR}/src/audio/dsp_voice.c
@@ -224,7 +254,11 @@ add_compile_definitions(
     BUGFIXES          # Original out-of-bounds bugs that corrupt host memory (e.g. m_collision_bg_column)
     _LANGUAGE_C       # Required for N64 GBI/ultratypes headers
     PC_ENHANCEMENTS   # Optional visual improvements (MSAA, etc). Remove to get pure PC port.
+    PC_PORT_VERSION="${PC_PORT_VERSION}"
 )
+if(PC_UPDATER)
+    add_compile_definitions(PC_UPDATER)
+endif()
 
 add_compile_options(
     -fno-strict-aliasing
@@ -423,6 +457,10 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_typing.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_ptr32.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_touch.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_minimap.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_minimap_core.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_update.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_update_core.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_android.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_input_script.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_ko.c
@@ -592,6 +630,9 @@ endif()
 
 if(WIN32)
     target_link_libraries(afe_pc opengl32 winmm imm32 version setupapi ole32 uuid) # ole32/uuid: folder dialog (pc_rom_dir.c)
+    if(PC_UPDATER)
+        target_link_libraries(afe_pc winhttp) # pc_update.c
+    endif()
 elseif(ANDROID)
     target_link_libraries(afe_pc android log dl m)
 else()

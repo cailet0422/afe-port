@@ -23,7 +23,8 @@ import org.libsdl.app.SDLActivity;
  * patch file comes from the system file picker. The static methods are
  * called from the game thread, see pc/src/pc_rom_dir.c.
  *
- * LaunchActivity starts it, after showing the last crash if there was one. */
+ * LaunchActivity starts it, after showing the last crash if there was one.
+ * Release builds look for a newer version as it starts (Updater). */
 public class MainActivity extends SDLActivity {
     private static final int REQUEST_DISC_FOLDER = 0x4166;
     private static final int REQUEST_PATCH_FILE = 0x4167;
@@ -53,6 +54,8 @@ public class MainActivity extends SDLActivity {
         /* Java exceptions go to crash.txt; LaunchActivity shows them next time */
         CrashReport.installHandler(this);
         super.onCreate(savedInstanceState);
+        /* a newer release, if any, is offered over the game (Updater.java) */
+        Updater.checkInBackground(this);
     }
 
     /* Opens the folder picker; returns 1 if it did (then poll pickState) */

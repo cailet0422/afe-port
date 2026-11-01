@@ -49,6 +49,13 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
 - Korean fan patch support: install the patch zip from inside the game, switch between Korean and
   Japanese at any time, and type Hangul with a real keyboard (2-set layout) or an on-screen keyboard.
 - Android: on-screen touch gamepad, physical gamepads, and a crash report shown on the next launch.
+- Minimap: outside in town, a small map of the town sits in the bottom right corner (you, facing the
+  way you walk, and the villagers' houses). **M** opens the game's full map at any time, even before
+  you have the map from the police station; on Android, tap the minimap. Turn it off under
+  **Settings** → **Gameplay** → **Minimap**.
+- Updates: from v0.1.7 on, the game looks for a new release when it starts and offers to install it
+  (saves, settings, the disc and the Korean patch stay). Turn it off under **Settings** → **Gameplay**
+  → **Updates**.
 - NES (Famicom) furniture games, saved high scores and the boot jingle all work.
 - GameCube memory card saves (GCI) can be imported and exported with the `afe_gci` tool (build from
   source).
@@ -77,6 +84,24 @@ old one and keep your saves, which live in `Android/data/org.afedecomp.dobutsuno
 If the app ever closes unexpectedly, the next launch shows what happened before the game starts —
 tap **복사** (Copy) and paste it into an issue.
 
+### Updating
+
+From v0.1.7 on, the downloads above update themselves. When the game starts it checks the
+[releases](https://github.com/cailet0422/afe-port/releases); if there is a newer one, the pause menu opens
+with **Update now**, **Later** or **Skip this version**.
+
+- Windows / Linux: the new zip is downloaded and checked against the release's `SHA256SUMS.txt`, its
+  files replace the old ones in the game folder, and **Restart now** starts the new version. Your
+  `rom/`, `save/`, `korean/` and settings are not touched. The game folder must be writable (not
+  `Program Files`). Linux needs `curl` or `wget`.
+- Android: the new APK is downloaded and checked, then the system installer opens (allow installing
+  from this app if Android asks). It installs over the old version and keeps your saves and the Korean
+  patch.
+
+Updates come only from this repository's releases, and a build made from source never updates itself.
+**Settings** → **Gameplay** → **Updates** turns the check off (`auto_update = 0` in `settings.ini`).
+Version v0.1.6 and earlier can't update themselves: download v0.1.7 once by hand.
+
 ### Playing in Korean
 
 The Korean translation is a separate fan patch, not part of this project.
@@ -103,6 +128,7 @@ The patched image is written to `korean/`; your original image stays untouched. 
 | X / Y / Z | X / Y / Z |
 | L / R | Q / E |
 | Start | Enter |
+| Town map (open / close) | M |
 | Pause menu | Esc |
 
 Change them under pause menu → **Settings** → **Controls** → **Buttons**; gamepads can be rebound there

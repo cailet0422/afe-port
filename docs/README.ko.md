@@ -201,6 +201,54 @@ ninja -C pc/build32strip
 - **Reset to defaults**로 처음 값. 바꾸면 바로 `keybindings.ini`에 저장된다(`[Keyboard]`, `[Gamepad]`,
   패드는 한 줄에 두 개까지: `L = leftshoulder, lefttrigger`). 예전 `keybindings.ini`(키보드만)도 그대로 읽는다.
 - 일시정지 중에는 게임패드로도 메뉴를 움직인다(십자키, A = 결정, B/Start = 뒤로).
+- 게임큐브 버튼 뒤에 포트 자체의 **Map**(`M`, 게임패드는 기본으로 없음)이 있다(아래). 그 전의
+  `keybindings.ini`가 이미 `M`을 게임큐브 버튼에 쓰고 있으면 Map은 비어 있는 채로 시작한다.
+
+### 미니맵과 지도 키
+
+`pc/src/pc_minimap.c`(상태, 입력, 그리기)와 `pc/src/pc_minimap_core.c`(게임·GL 없이: 구획 그림, 배치;
+테스트 `pc/tests/test_minimap.c`).
+
+- **미니맵**: 마을 야외(`SCENE_FG`, FG 필드, 섬과 바다는 제외)에서 서브메뉴·메시지 창·데모(대화, 이벤트)·
+  페이드·와이프가 없을 때, 창 오른쪽 아래에 5 × 6 구획을 그리고 플레이어(보는 방향 표시)와 주민 집(세이브의
+  집 위치)을 표시한다. 구획 그림은 게임 지도의 것(`kan_tizu_*_TA_tex_txt`, 32 × 32 CI4, RGB5A3 팔레트 2개)을
+  `m_map_ovl.c`와 같은 방법(`mMP_set_map_texture_pal`, 다리 포함)으로 고른다. 그 표들은 `m_map_ovl.c` 안의
+  static이라 `pc/tools/gen_minimap_tables.py`가 `pc/src/pc_minimap_tables.inc`로 옮긴다(CI가 `--check`로 확인).
+- `game_main` 다음에 게임 상태를 읽고(`pc_minimap_game_frame`, `graph.c`가 이미 그 자리에서 부르는
+  `pc_pause_menu_draw`에서 호출), 터치 패드처럼 완성된 화면 위에 OpenGL로 그린다(`pc_vi.c`). 그래서 디컴프는
+  바꾸지 않았다. `touch_controls = 1`이면 더 작게, 패드 버튼이 비워 둔 구석에 놓인다(테스트가 패드 배치와
+  겹치지 않는지 확인). `[Gameplay]`의 `minimap = 0`으로 끈다(Settings → Gameplay → Minimap).
+- **지도 키**: Map(기본 `M`)은 게임의 지도(`mSM_OVL_MAP`, `data0 = 1`: X 버튼이 여는 플레이어의 지도)를
+  `mSM_check_open_MAP`의 조건에서 `map_flag`만 빼고 연다. 그래서 파출소에서 지도를 받기 전에도, 실내에서도
+  열린다(섬의 별장과 바다 위는 X처럼 안 됨). 한 번 더 누르면 B를 눌러 닫는다. 미니맵을 터치하면 열리고
+  (Android, PC에서는 왼쪽 마우스 버튼이 게임 조작이 아닐 때 클릭), 지도가 열려 있을 때 화면 패드 버튼 밖을
+  터치하면 닫힌다. 입력 스크립트 명령 `MAP`이 키와 같은 일을 한다.
+
+### 업데이트 (릴리즈 빌드)
+
+`pc/src/pc_update.c`, `pc/src/pc_update_core.c`(네트워크·파일 없이: 버전, GitHub 릴리즈 JSON,
+`SHA256SUMS.txt`, zip; 테스트 `pc/tests/test_update.c`), Android는 `Updater.java`와 `UpdateProvider.java`.
+
+- 버전은 `pc/VERSION`이다(CMake가 `PC_PORT_VERSION`을 정의하고, Android `build.gradle`이 `versionName`을
+  여기서 가져와 `versionCode`를 major × 10000 + minor × 100 + patch로 만든다). **릴리즈마다 빌드 전에 올리고**,
+  릴리즈 태그는 `v<VERSION>`으로 한다.
+- 릴리즈 빌드만 업데이트한다: CMake `PC_UPDATER`는 `PC_STRIP_ASSETS`일 때 기본으로 켜지고(Android 제외),
+  Android 앱은 정식 키로 서명됐을 때만. 파일은 이름 끝으로 고른다: `-Windows-x64.zip`, `-Windows-x86.zip`,
+  `-Linux-x86_64.zip`, `-Android.apk`. 릴리즈 파일 이름을 계속 이렇게 짓고 `SHA256SUMS.txt`도 함께 올린다.
+- 시작할 때(`--deterministic`이나 입력 스크립트일 때는 안 함) 스레드가
+  `api.github.com/repos/cailet0422/afe-port/releases`를 읽어, 초안이 아니고 이 빌드보다 새로우며 이 플랫폼의
+  파일이 있는 가장 새 릴리즈를 고른다. 사전 릴리즈도 포함한다(지금까지 릴리즈는 모두 미리보기). 그러면
+  일시정지 메뉴가 업데이트 화면(설정의 `SUB_UPDATE`)으로 열린다(타이틀 메뉴, 패미컴 게임, 글자 입력 중에는
+  기다림). Settings → Gameplay → Version으로 직접 확인할 수도 있다.
+- Windows / Linux: zip을 받아(WinHTTP, Linux는 `curl`이나 `wget` 실행) `SHA256SUMS.txt`와 릴리즈 목록의
+  크기로 확인하고, zip의 최상위 폴더 아래 파일을 각각 기존 파일 옆에 `<이름>.new`로 쓴다. 그다음 기존 파일을
+  `<이름>.old`로 바꾸고(Windows는 실행 중인 프로그램과 DLL의 이름 바꾸기는 되지만 덮어쓰기는 안 된다) 새 파일이
+  그 이름을 갖는다. 중간에 실패하면 모두 되돌린다. `.old` 파일은 `update_old.txt`에 적어 두고 다음 시작 때
+  지운다. **Restart now**는 새 프로그램을 경로로 실행한다(`pc_update_restart_path`; Linux의 `/proc/self/exe`는
+  이름이 바뀐 옛 프로그램을 가리킨다).
+- Android: APK를 캐시 폴더에 받아 같은 방법으로 확인하고 시스템 설치 화면에 넘긴다(Android 7 이상은
+  `UpdateProvider`의 `content://<패키지>.update/update.apk`, 그 전은 파일). `REQUEST_INSTALL_PACKAGES` 권한이
+  필요하다. "이 버전 건너뛰기"는 Android에서는 앱 설정에, PC에서는 `update_skip`에 남는다.
 
 ### 자동 테스트 입력
 
@@ -212,6 +260,7 @@ ninja -C pc/build32strip
 시각; 2026-11-01은 일요일이라 `--days 6 --time 20`이 토요일 밤).
 `--audio-dump 파일.wav`는 소리 출력을 WAV로 남긴다(`--deterministic`이면 같은 스크립트가 같은 WAV, 분석은
 `pc/tools/audio_stats.py`, [dev_setup.md](dev_setup.ko.md)).
+`MAP`은 지도 키처럼 마을 지도를 열고 닫는다.
 가끔만 나오는 장면을 위한 디버그 명령: `GIVE`(소지품에 아이템), `LEDIT`(이름 입력 편집기 열기: 주민의 말버릇
 등), `RESETS`(저장 없이 끈 횟수 — 도루묵씨가 온다), `CATCH`(주민의 말버릇 바이트 출력), `ITEM`(메뉴가 고른
 아이템 출력), `JOBDONE`(아르바이트를 게임이 끝내는 것처럼 끝냄: 심부름을 지우고 HRA 안내를 기다리게 하고 시계를 다시 돌림),
