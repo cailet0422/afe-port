@@ -137,13 +137,15 @@ ninja -C pc/build32
 
 ### 문서
 
+모든 문서는 영어판(`*.md`)도 있습니다.
+
 | 문서 | 내용 |
 |---|---|
-| [docs/README.md](docs/README.ko.md) | 구조, 플랫폼별 빌드·실행 방법, 마일스톤, 알려진 문제 |
-| [docs/android.md](docs/android.ko.md) | Android 빌드, 서명, 터치 조작 |
-| [docs/64bit.md](docs/64bit.ko.md) | 디컴프의 64비트 포팅 |
-| [docs/korean_patch.md](docs/korean_patch.ko.md) | 한글패치 형식과 포트의 지원 방식 |
-| [docs/dev_setup.md](docs/dev_setup.ko.md) | 개발 환경, 테스트 스크립트, 세이브 도구 |
+| [docs/README.ko.md](docs/README.ko.md) | 구조, 플랫폼별 빌드·실행 방법, 마일스톤, 알려진 문제 |
+| [docs/android.ko.md](docs/android.ko.md) | Android 빌드, 서명, 터치 조작 |
+| [docs/64bit.ko.md](docs/64bit.ko.md) | 디컴프의 64비트 포팅 |
+| [docs/korean_patch.ko.md](docs/korean_patch.ko.md) | 한글패치 형식과 포트의 지원 방식 |
+| [docs/dev_setup.ko.md](docs/dev_setup.ko.md) | 개발 환경, 테스트 스크립트, 세이브 도구 |
 
 ## 저장소 구성
 
@@ -151,12 +153,12 @@ ninja -C pc/build32
 |---|---|
 | `pc/` | 플랫폼 계층: SDL2, OpenGL/GLES 렌더러, 오디오, 디스크 읽기, 설정·일시정지 메뉴, 한글패치 설치기, 한글 입력기. Android 프로젝트(`pc/android`), 생성·시험 도구(`pc/tools`), 단위 테스트(`pc/tests`)도 여기 있습니다 |
 | `decomp/` | [afe-decomp](https://github.com/cailet0422/afe-decomp) 서브모듈. 게임 코드와 그 안의 `#ifdef TARGET_PC` 훅 |
-| `docs/` | 개발 문서 |
+| `docs/` | 개발 문서(영어판 `*.md`, 한국어판 `*.ko.md`) |
 
 ## 기여하기
 
 게임 코드의 PC용 수정은 afe-decomp에 `#ifdef TARGET_PC` 안으로만 커밋합니다. 그래야 매칭 빌드가 원래
-바이너리를 그대로 만듭니다(해시는 [docs/README.md](docs/README.ko.md)에 있습니다). 그 커밋이 들어가면 이
+바이너리를 그대로 만듭니다(해시는 [docs/README.ko.md](docs/README.ko.md)에 있습니다). 그 커밋이 들어가면 이
 저장소에서 `decomp` 서브모듈을 올립니다.
 
 게임 데이터(디스크 이미지, 디스크에서 추출한 에셋, 그것이 들어간 빌드 결과물 — 에셋을 넣어 빌드한 실행
