@@ -17,16 +17,16 @@
 ## 다운로드
 
 <!-- 새 릴리즈를 내면 아래 링크의 버전을 바꾼다(README.md도 함께). -->
-최신 릴리즈: **[v0.1.6](https://github.com/cailet0422/afe-port/releases/tag/v0.1.6)** (미리보기)
+최신 릴리즈: **[v1.0.0](https://github.com/cailet0422/afe-port/releases/tag/v1.0.0)**
 
 | 플랫폼 | 다운로드 | 필요 사항 |
 |---|---|---|
-| Windows 64비트 | [DobutsuNoMoriEPlus-v0.1.6-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v0.1.6/DobutsuNoMoriEPlus-v0.1.6-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` 포함) |
-| Windows 32비트 | [DobutsuNoMoriEPlus-v0.1.6-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v0.1.6/DobutsuNoMoriEPlus-v0.1.6-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v0.1.6-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v0.1.6/DobutsuNoMoriEPlus-v0.1.6-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v0.1.6-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v0.1.6/DobutsuNoMoriEPlus-v0.1.6-Android.apk) | Android 5.0 이상, ARM 32·64비트 |
+| Windows 64비트 | [DobutsuNoMoriEPlus-v1.0.0-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.0/DobutsuNoMoriEPlus-v1.0.0-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` 포함) |
+| Windows 32비트 | [DobutsuNoMoriEPlus-v1.0.0-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.0/DobutsuNoMoriEPlus-v1.0.0-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.0.0-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.0/DobutsuNoMoriEPlus-v1.0.0-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.0.0-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.0.0/DobutsuNoMoriEPlus-v1.0.0-Android.apk) | Android 5.0 이상, ARM 32·64비트 |
 
-체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v0.1.6/SHA256SUMS.txt) ·
+체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.0.0/SHA256SUMS.txt) ·
 이전 버전과 릴리즈 노트: [전체 릴리즈](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -35,9 +35,8 @@
 > 빌드에는 디스크에서 꺼낸 에셋이 없고, 실행할 때 본인의 디스크 이미지에서 모두 읽어 옵니다.
 
 > [!NOTE]
-> 릴리즈는 **미리보기**입니다. 리눅스에서 자동 입력 스크립트로 폭넓게 확인했고 Windows판은 Wine,
-> Android판은 에뮬레이터에서 확인했지만, 실제 Windows PC와 Android 기기에서는 아직 충분히 확인하지
-> 못했습니다. 문제가 있으면 [이슈](https://github.com/cailet0422/afe-port/issues)로 알려 주세요.
+> 릴리즈는 리눅스에서 자동 입력 스크립트로 폭넓게 확인했고 Windows판은 Wine, Android판은
+> 에뮬레이터에서 확인했지만, 실제 Windows PC와 Android 기기에서는 아직 충분히 확인하지 못했습니다. 문제가 있으면 [이슈](https://github.com/cailet0422/afe-port/issues)로 알려 주세요.
 
 ## 특징
 

@@ -17,16 +17,16 @@
 ## Download
 
 <!-- When a new release is published, update the version in these links (here and in README.ko.md). -->
-Latest release: **[v0.1.6](https://github.com/cailet0422/afe-port/releases/tag/v0.1.6)** (preview)
+Latest release: **[v1.0.0](https://github.com/cailet0422/afe-port/releases/tag/v1.0.0)**
 
 | Platform | Download | Requirements |
 |---|---|---|
-| Windows 64-bit | [DobutsuNoMoriEPlus-v0.1.6-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v0.1.6/DobutsuNoMoriEPlus-v0.1.6-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
-| Windows 32-bit | [DobutsuNoMoriEPlus-v0.1.6-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v0.1.6/DobutsuNoMoriEPlus-v0.1.6-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v0.1.6-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v0.1.6/DobutsuNoMoriEPlus-v0.1.6-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v0.1.6-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v0.1.6/DobutsuNoMoriEPlus-v0.1.6-Android.apk) | Android 5.0+, ARM 32/64-bit |
+| Windows 64-bit | [DobutsuNoMoriEPlus-v1.0.0-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.0/DobutsuNoMoriEPlus-v1.0.0-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
+| Windows 32-bit | [DobutsuNoMoriEPlus-v1.0.0-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.0/DobutsuNoMoriEPlus-v1.0.0-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.0.0-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.0/DobutsuNoMoriEPlus-v1.0.0-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.0.0-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.0.0/DobutsuNoMoriEPlus-v1.0.0-Android.apk) | Android 5.0+, ARM 32/64-bit |
 
-Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v0.1.6/SHA256SUMS.txt) ·
+Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.0.0/SHA256SUMS.txt) ·
 Older versions and release notes: [all releases](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -36,9 +36,8 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
 > your image at start-up.
 
 > [!NOTE]
-> Releases are **previews**. They are tested widely on Linux with scripted play-throughs, the
-> Windows builds under Wine and the Android build on an emulator, but not yet on many real Windows
-> PCs or Android phones. Please report problems in [Issues](https://github.com/cailet0422/afe-port/issues).
+> Releases are tested widely on Linux with scripted play-throughs, the Windows builds under Wine
+> and the Android build on an emulator, but not yet on many real Windows PCs or Android phones. Please report problems in [Issues](https://github.com/cailet0422/afe-port/issues).
 
 ## Features
 
