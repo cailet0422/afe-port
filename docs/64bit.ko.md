@@ -1,3 +1,5 @@
+[English](64bit.md) · **한국어**
+
 # 64비트 빌드 (진행 중)
 
 최신 Android 기기 상당수(예: Pixel 7 이후, 2024년 이후 플래그십)는 32비트 앱을 실행하지 못하므로
@@ -105,7 +107,7 @@ cmake -S pc -B pc/build32clang -G Ninja -DCMAKE_TOOLCHAIN_FILE=/tmp/Toolchain-cl
 
 세이브가 필요한 경로는 gcc 32비트 빌드가 `make_newgame_script.py --korean --save`로 만든 첫날 세이브에서 시작한다
 (clang 빌드의 마을은 그 경로가 저장까지 가지 않는다). 건물 안은 `make_interior_script.py`(`--days 1`로 돌린다,
-[dev_setup.md](dev_setup.md)), 세이브는 `cmp`로 바이트를 비교한다(파일 안에 같은 세이브가 두 벌, 0x10000과
+[dev_setup.md](dev_setup.ko.md)), 세이브는 `cmp`로 바이트를 비교한다(파일 안에 같은 세이브가 두 벌, 0x10000과
 0x3E000에서 시작).
 
 ## 현재 상태
@@ -154,7 +156,7 @@ gcc 32비트 빌드도 위 경로를 모두 크래시 없이 돈다(마을이 �
   숫자로 쓰던 곳(`seqsetup.c` 트랙 주소, `jammain_2.c` 트랙 필드·자식 목록, `oneshot_getchannel.c_inc` 파형 주소,
   `waveread.c`), DSP 채널 주인을 `u32`로 넘기던 곳(`dspdriver.c`)을 `TARGET_PC`에서 고쳤다. 징글 소리는 clang
   32비트와 같다.
-- Android APK에 arm64-v8a 라이브러리를 함께 넣는다([android.md](android.md)). arm64 실행은 기기가 없어
+- Android APK에 arm64-v8a 라이브러리를 함께 넣는다([android.md](android.ko.md)). arm64 실행은 기기가 없어
   확인하지 못했다(같은 LP64 모델인 x86_64로 확인). 이번 점검으로 Android 빌드 설정은 바뀌지 않았다.
 - Windows 64비트(MinGW x86_64, LLP64)도 빌드된다: 부팅 징글의 `PTconvert`가 4GB 아래의 표 사본에서 포인터를 망가뜨리던 것을
   고친 뒤, Wine에서 32비트 Windows판과 같은 화면·세이브(README "Windows (64비트)").

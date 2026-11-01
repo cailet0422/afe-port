@@ -139,11 +139,11 @@ ninja -C pc/build32
 
 | 문서 | 내용 |
 |---|---|
-| [docs/README.md](docs/README.md) | 구조, 플랫폼별 빌드·실행 방법, 마일스톤, 알려진 문제 |
-| [docs/android.md](docs/android.md) | Android 빌드, 서명, 터치 조작 |
-| [docs/64bit.md](docs/64bit.md) | 디컴프의 64비트 포팅 |
-| [docs/korean_patch.md](docs/korean_patch.md) | 한글패치 형식과 포트의 지원 방식 |
-| [docs/dev_setup.md](docs/dev_setup.md) | 개발 환경, 테스트 스크립트, 세이브 도구 |
+| [docs/README.md](docs/README.ko.md) | 구조, 플랫폼별 빌드·실행 방법, 마일스톤, 알려진 문제 |
+| [docs/android.md](docs/android.ko.md) | Android 빌드, 서명, 터치 조작 |
+| [docs/64bit.md](docs/64bit.ko.md) | 디컴프의 64비트 포팅 |
+| [docs/korean_patch.md](docs/korean_patch.ko.md) | 한글패치 형식과 포트의 지원 방식 |
+| [docs/dev_setup.md](docs/dev_setup.ko.md) | 개발 환경, 테스트 스크립트, 세이브 도구 |
 
 ## 저장소 구성
 
@@ -156,7 +156,7 @@ ninja -C pc/build32
 ## 기여하기
 
 게임 코드의 PC용 수정은 afe-decomp에 `#ifdef TARGET_PC` 안으로만 커밋합니다. 그래야 매칭 빌드가 원래
-바이너리를 그대로 만듭니다(해시는 [docs/README.md](docs/README.md)에 있습니다). 그 커밋이 들어가면 이
+바이너리를 그대로 만듭니다(해시는 [docs/README.md](docs/README.ko.md)에 있습니다). 그 커밋이 들어가면 이
 저장소에서 `decomp` 서브모듈을 올립니다.
 
 게임 데이터(디스크 이미지, 디스크에서 추출한 에셋, 그것이 들어간 빌드 결과물 — 에셋을 넣어 빌드한 실행

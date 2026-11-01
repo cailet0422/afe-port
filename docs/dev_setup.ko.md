@@ -1,3 +1,5 @@
+[English](dev_setup.md) · **한국어**
+
 # PC 포트 개발 환경 (Linux 컨테이너)
 
 새 컨테이너에서 이어서 작업할 때의 순서. 게임 데이터는 저장소에 없으므로 매번 준비한다.
@@ -42,7 +44,7 @@ sha1sum build/GAEJ01_01/static.dol build/GAEJ01_01/*/*.rel && cd ..
 
 반드시 다음과 같아야 한다(디컴프 소스를 고칠 때마다 확인):
 `7574bec2…` static.dol, `a3b987c9…` foresta, `49fd5f04…` forestd, `98246b73…` foresti, `73ddcf0d…` foresto
-(전체 값은 README.md). 고친 파일은 `unifdef -UTARGET_PC -UBUGFIXES`로 원래 텍스트와 같은지도 본다.
+(전체 값은 [README.ko.md](README.ko.md)). 고친 파일은 `unifdef -UTARGET_PC -UBUGFIXES`로 원래 텍스트와 같은지도 본다.
 
 ## 4. PC 빌드와 실행
 
@@ -226,7 +228,7 @@ cp ../bin/settings.ini ../bin/keybindings.ini . && ln -sfn /tmp/disc/ko.iso rom/
 한글 입력 확인: `python3 pc/tools/make_opening_script.py --korean 9000 > /tmp/op_ko.txt`로 만든 스크립트를
 돌리면 `shots/name_*.ppm`, `town_*.ppm`, `eng_*.ppm`에 단계별 화면이 남는다.
 패치의 코드 분석은 `pc/tools/reldis.py hooks|dis`(패치된 foresta.rel은 `gcdisc.py extract`로 꺼냄)와
-[korean_patch.md](korean_patch.md) 참고.
+[korean_patch.md](korean_patch.ko.md) 참고.
 
 ## 6. Windows 빌드와 Wine 확인
 

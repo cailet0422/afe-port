@@ -1,3 +1,5 @@
+[English](android.md) · **한국어**
+
 # Android 빌드
 
 PC 포트를 SDL2 + OpenGL ES 3.0으로 Android에서 돌린다. APK 하나에 **32비트 ARM(armeabi-v7a)과
