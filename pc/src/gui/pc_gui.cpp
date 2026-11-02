@@ -182,6 +182,8 @@ static void apply_scale() {
     g_scale = s;
 }
 
+static void set_ime_data(ImGuiContext*, ImGuiViewport*, ImGuiPlatformImeData* data);
+
 static bool init() {
     if (s_ready || s_failed) {
         return s_ready;
@@ -206,6 +208,7 @@ static bool init() {
         ImGui::DestroyContext();
         return false;
     }
+    ImGui::GetPlatformIO().Platform_SetImeDataFn = set_ime_data;
 #ifdef PC_GLES
     const char* glsl = "#version 300 es";
 #else
@@ -233,6 +236,34 @@ static bool init() {
     s_ready = true;
     printf("[GUI] Dear ImGui %s ready (scale %.2f)\n", IMGUI_VERSION, g_scale);
     return true;
+}
+
+/* The system's text input (and the phone's keyboard) only while a field of
+ * the menus has the focus, put back as it was after: the game's text editor
+ * turns it off for the built-in Hangul input, or on for the system's */
+static bool s_ime_on = false;
+static bool s_ime_was_active = false;
+
+static void set_ime_data(ImGuiContext*, ImGuiViewport*, ImGuiPlatformImeData* data) {
+    if (data->WantVisible) {
+        SDL_Rect r;
+
+        r.x = (int)data->InputPos.x;
+        r.y = (int)data->InputPos.y;
+        r.w = 1;
+        r.h = (int)data->InputLineHeight;
+        SDL_SetTextInputRect(&r);
+        if (!s_ime_on) {
+            s_ime_was_active = SDL_IsTextInputActive() == SDL_TRUE;
+            SDL_StartTextInput();
+            s_ime_on = true;
+        }
+    } else if (s_ime_on) {
+        s_ime_on = false;
+        if (!s_ime_was_active) {
+            SDL_StopTextInput();
+        }
+    }
 }
 
 /* --- Widgets ----------------------------------------------------------- */

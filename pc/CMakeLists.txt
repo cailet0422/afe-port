@@ -726,6 +726,15 @@ add_custom_command(TARGET afe_pc POST_BUILD
         "${PC_DATA_DIR}/shaders/"
     COMMENT "Copying shader files to ${PC_DATA_DIR}/shaders/"
 )
+# Notices of what the game carries: the menu font (SIL OFL) and the libraries
+add_custom_command(TARGET afe_pc POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${PC_DATA_DIR}/licenses"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/res/gui_font_OFL.txt" "${PC_DATA_DIR}/licenses/menu_font_OFL.txt"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/lib/imgui/LICENSE.txt" "${PC_DATA_DIR}/licenses/dear_imgui_LICENSE.txt"
+    COMMENT "Copying third-party notices to ${PC_DATA_DIR}/licenses/"
+)
 
 if(WIN32)
     # MSYS2 keeps it in $MINGW_PREFIX/bin; the SDL2 MinGW devel package (for
@@ -764,6 +773,7 @@ if(PC_STRIP_ASSETS AND NOT ANDROID)
         COMMAND ${CMAKE_COMMAND} -E make_directory "${PC_DIST_DIR}"
         COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:afe_pc>" "${PC_DATA_DIR}/${PC_RELMAP_NAME}" "${PC_DIST_DIR}/"
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${PC_DATA_DIR}/shaders" "${PC_DIST_DIR}/shaders"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${PC_DATA_DIR}/licenses" "${PC_DIST_DIR}/licenses"
         COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE" "${PC_DIST_DIR}/LICENSE.txt")
     if(WIN32 AND SDL2_DLL_PATH)
         list(APPEND PC_DIST_COMMANDS COMMAND ${CMAKE_COMMAND} -E copy "${SDL2_DLL_PATH}" "${PC_DIST_DIR}/")
