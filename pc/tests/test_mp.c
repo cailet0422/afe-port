@@ -111,7 +111,16 @@ static void node_tick(void) {
 
         if (!q || !t || !pc_bdec_str(q, end, &qs, &ql) || !pc_bdec_str(t, end, &ts, &tl)) continue;
         if (ql == 13 && memcmp(qs, "announce_peer", 13) == 0) {
-            if (s_nannounced < 16) s_announced[s_nannounced++] = from; /* implied_port */
+            const uint8_t* a = pc_bdec_dict_get(buf, end, "a");
+            const uint8_t* implied = a ? pc_bdec_dict_get(a, end, "implied_port") : NULL;
+            const uint8_t* port = a ? pc_bdec_dict_get(a, end, "port") : NULL;
+            PcNetAddr who = from;
+
+            /* as a real node: the given port unless implied_port is 1 */
+            if (implied != NULL && implied[0] == 'i' && implied[1] == '0' && port != NULL && port[0] == 'i') {
+                who.port = (uint16_t)atoi((const char*)port + 1);
+            }
+            if (s_nannounced < 16) s_announced[s_nannounced++] = who;
             o = sprintf(out, "d1:rd2:id20:NODEnodeNODEnodeNODEe1:t%d:", tl);
             memcpy(out + o, ts, (size_t)tl);
             o += tl;
@@ -321,6 +330,36 @@ static void test_internet(void) {
         pc_net_sleep(5);
     }
     CHECK(pc_mp_mode(guest) == PC_MP_JOINED);
+
+    /* the router forwards a port (UPnP) and its address is the one the DHT
+     * sees (1.2.3.4): the code and the public listing carry that port */
+    CHECK(pc_mp_ip_is_public(0x01020304u) && !pc_mp_ip_is_public(0xC0A80001u) && !pc_mp_ip_is_public(0x64400001u) &&
+          !pc_mp_ip_is_public(0xAC1F0001u) && pc_mp_ip_is_public(0xAC200001u));
+    pc_mp_set_port_mapping(host, 0x01020304u, 47070);
+    CHECK(pc_mp_port_mapped(host));
+    pc_mp_room_code(host, code, sizeof(code));
+    CHECK(pc_mp_code_parse(code, &code_addr, &room16) && code_addr.ip == 0x01020304u && code_addr.port == 47070);
+    /* (the guest's own join announce may come in too: look for the room's) */
+    s_nannounced = 0;
+    found = 0;
+    for (int i = 0; i < 600 && !found; i++) {
+        pc_mp_tick(host);
+        pc_mp_tick(guest);
+        node_tick();
+        for (int k = 0; k < s_nannounced; k++) found |= s_announced[k].port == 47070;
+        pc_net_sleep(5);
+    }
+    CHECK(found);
+    for (int k = 0; k < s_nannounced; k++) CHECK(s_announced[k].port != pc_mp_port(host));
+    /* a router behind another router (its address is not the one seen):
+     * the code keeps the address and port the internet sees */
+    pc_mp_set_port_mapping(host, 0xC0A80101u, 47070);
+    CHECK(!pc_mp_port_mapped(host));
+    pc_mp_room_code(host, code, sizeof(code));
+    CHECK(pc_mp_code_parse(code, &code_addr, &room16) && code_addr.ip == 0x01020304u &&
+          code_addr.port == pc_mp_port(host));
+    pc_mp_set_port_mapping(host, 0x05060708u, 47070);
+    CHECK(!pc_mp_port_mapped(host));
     (void)ev;
     (void)both;
     pc_mp_free(guest);

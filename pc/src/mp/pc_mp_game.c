@@ -60,7 +60,7 @@ static PcNetAddr s_stun;
 static int s_stun_given = 0;
 static int s_net_started = 0;
 static volatile int s_upnp = 0; /* 0 not tried, 1 trying, 2 open, 3 no */
-static uint32_t s_upnp_ext = 0;
+static volatile uint32_t s_upnp_ext = 0;
 static uint16_t s_upnp_port = 0;
 
 /* where we are */
@@ -251,6 +251,12 @@ static int upnp_thread(void* unused) {
     return 0;
 }
 
+/* the router's forwarded port, for the room code and the listings */
+static void set_port_mapping(void) {
+    if (s_upnp == 2) pc_mp_set_port_mapping(s_mp, s_upnp_ext, s_upnp_port);
+    else pc_mp_set_port_mapping(s_mp, 0, 0);
+}
+
 static int unmap_thread(void* arg) {
     pc_upnp_unmap((uint16_t)(uintptr_t)arg);
     return 0;
@@ -309,7 +315,7 @@ int pc_mp_game_host(const PcMpHostConfig* cfg) {
         s_upnp_port = pc_mp_port(s_mp);
         SDL_DetachThread(SDL_CreateThread(upnp_thread, "upnp", NULL));
     }
-    pc_mp_set_port_open(s_mp, s_upnp == 2);
+    set_port_mapping();
     return 1;
 }
 
@@ -352,6 +358,8 @@ void pc_mp_game_leave(void) {
     if (is_host() && s_upnp == 2) {
         SDL_DetachThread(SDL_CreateThread(unmap_thread, "upnp", (void*)(uintptr_t)s_upnp_port));
         s_upnp = 0;
+    } else if (s_upnp == 3) {
+        s_upnp = 0; /* no router answered: ask again for the next room */
     }
     pc_mp_leave(s_mp);
     /* a guest still in the host's town keeps slot B until it is home:
@@ -415,10 +423,19 @@ void pc_mp_game_net_status(char* buf, size_t n) {
         return;
     }
     if (pc_mp_external_addr(s_mp, &ext)) {
-        if (s_upnp_ext != 0) ext.ip = s_upnp_ext;
+        const char* port = "";
+
+        if (pc_mp_port_mapped(s_mp)) {
+            port = ko ? " (공유기 포트 열림)" : " (router port open)";
+        } else if (s_upnp == 2 && s_upnp_ext != 0) {
+            /* the router answered with an address the internet does not see */
+            port = ko ? " (공유기가 다른 공유기 뒤에 있어 연 포트가 쓰이지 않음)"
+                      : " (the router is behind another router: its open port is not used)";
+        } else if (s_upnp == 2) {
+            port = ko ? " (공유기 포트 열림, 공유기 주소 모름)" : " (router port open, router address unknown)";
+        }
         pc_net_addr_str(&ext, a, sizeof(a));
-        snprintf(buf, n, ko ? "인터넷 주소 %s%s%s" : "Internet address %s%s%s", a,
-                 s_upnp == 2 ? (ko ? " (공유기 포트 열림)" : " (router port open)") : "",
+        snprintf(buf, n, ko ? "인터넷 주소 %s%s%s" : "Internet address %s%s%s", a, port,
                  pc_mp_internet_ready(s_mp) ? (ko ? ", DHT 연결됨" : ", DHT connected") : "");
     } else if (s_nboot == 0 && s_net_started) {
         snprintf(buf, n, ko ? "인터넷 확인 중... (같은 네트워크는 바로 됩니다)" : "Looking for the internet... (LAN works now)");
@@ -902,7 +919,7 @@ void pc_mp_game_frame(struct game_s* game) {
         }
         SDL_UnlockMutex(s_lock);
     }
-    if (is_host()) pc_mp_set_port_open(s_mp, s_upnp == 2);
+    if (is_host()) set_port_mapping();
 
     /* where we are */
     if (play != NULL && Common_Get(now_private) != NULL) {

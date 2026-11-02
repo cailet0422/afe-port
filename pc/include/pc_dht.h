@@ -41,6 +41,9 @@ void pc_dht_tick(PcDht* d, uint32_t now_ms);
 /* Starts a lookup of key in slot (0..PC_DHT_MAX_LOOKUPS-1), replacing
  * what was there. announce: once found, announce this socket under key. */
 void pc_dht_lookup(PcDht* d, int slot, const uint8_t key[20], int announce);
+/* After pc_dht_lookup: announce port (one the router forwards) instead of
+ * the port the nodes see the packets come from */
+void pc_dht_lookup_port(PcDht* d, int slot, uint16_t port);
 /* 1 while running */
 int pc_dht_lookup_running(PcDht* d, int slot);
 /* The peers found so far; returns how many */

@@ -131,10 +131,19 @@ void pc_mp_set_state(PcMp* mp, const PcMpState* state);
  * caller) and STUN ask this server; without them it is LAN only */
 void pc_mp_add_bootstrap(PcMp* mp, const PcNetAddr* node);
 void pc_mp_set_stun(PcMp* mp, const PcNetAddr* server);
-/* The address outside the router, 0 until STUN (or the DHT) said */
+/* The address outside the router, 0 until STUN (or the DHT) said; the
+ * router's forwarded port once pc_mp_set_port_mapping gave one the
+ * internet reaches. Room codes and public listings carry this address. */
 int pc_mp_external_addr(PcMp* mp, PcNetAddr* out);
-/* Tell the host's listing that the router's port is open (UPnP worked) */
-void pc_mp_set_port_open(PcMp* mp, int open);
+/* The host's router forwards port to us (UPnP worked) and says its outside
+ * address is router_ip; 0, 0: no forwarded port. Used only if router_ip is
+ * the address the internet sees (STUN or the DHT; until they answer, any
+ * public address). Cleared when the room ends. */
+void pc_mp_set_port_mapping(PcMp* mp, uint32_t router_ip, uint16_t port);
+/* 1 if the room code and listings use the forwarded port */
+int pc_mp_port_mapped(PcMp* mp);
+/* 0 for private, carrier-NAT (100.64/10), loopback, link-local, multicast */
+int pc_mp_ip_is_public(uint32_t ip);
 int pc_mp_internet_ready(PcMp* mp); /* 1 if the DHT answered */
 
 /* --- Browsing --- */

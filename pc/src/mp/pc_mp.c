@@ -153,7 +153,8 @@ struct PcMp {
     uint8_t stun_tx[12];
     uint32_t stun_sent;
     PcNetAddr external;
-    int port_open;
+    PcNetAddr mapped; /* the router's address and the port it forwards to us (UPnP) */
+    int punch_alt;
     uint32_t dht_rooms_ms, dht_seek_ms, dht_punch_ms;
     int dht_rooms_was_running, dht_seek_was_running, dht_punch_was_running;
 
@@ -308,6 +309,8 @@ static void send_unrel_all(PcMp* mp, uint8_t type, const void* data, size_t len,
 
 /* --- Room info, players --- */
 
+static int mapped_usable(PcMp* mp);
+
 static size_t pack_room(PcMp* mp, uint8_t* p) {
     PcMpRoomInfo* r = &mp->room;
     int n = 0;
@@ -320,7 +323,7 @@ static size_t pack_room(PcMp* mp, uint8_t* p) {
     p[116] = (uint8_t)n;
     p[117] = r->max_players;
     p[118] = (uint8_t)((r->is_public ? 1 : 0) | (r->has_password ? 2 : 0) | (mp->my_look.korean ? 4 : 0) |
-                       (mp->port_open ? 8 : 0));
+                       (mapped_usable(mp) ? 8 : 0));
     p[119] = 0;
     w16(p + 120, PC_MP_PROTOCOL);
     wstr(p + 122, PC_PORT_VERSION, 16);
@@ -434,6 +437,8 @@ static void reset_room(PcMp* mp) {
     mp->nkicked = 0;
     mp->my_slot = 0;
     mp->mode = PC_MP_IDLE;
+    memset(&mp->mapped, 0, sizeof(mp->mapped));
+    mp->punch_alt = 0;
     free(mp->town_in);
     mp->town_in = NULL;
     mp->town_in_len = mp->town_in_got = 0;
@@ -501,7 +506,8 @@ void pc_mp_set_stun(PcMp* mp, const PcNetAddr* server) {
     mp->stun_sent = 0;
 }
 
-int pc_mp_external_addr(PcMp* mp, PcNetAddr* out) {
+/* What the internet sees of our socket: STUN's answer, else the DHT's */
+static int seen_addr(PcMp* mp, PcNetAddr* out) {
     if (mp->external.ip != 0) {
         *out = mp->external;
         return 1;
@@ -514,8 +520,48 @@ int pc_mp_external_addr(PcMp* mp, PcNetAddr* out) {
     return 0;
 }
 
-void pc_mp_set_port_open(PcMp* mp, int open) {
-    mp->port_open = open;
+int pc_mp_ip_is_public(uint32_t ip) {
+    uint32_t a = ip >> 24, b = (ip >> 16) & 255;
+
+    if (a == 0 || a == 10 || a == 127 || a >= 224) return 0;
+    if (a == 100 && (b & 0xC0) == 64) return 0; /* 100.64/10: the carrier's NAT */
+    if (a == 169 && b == 254) return 0;
+    if (a == 172 && (b & 0xF0) == 16) return 0;
+    if (a == 192 && b == 168) return 0;
+    return 1;
+}
+
+/* The port the router forwards is reached from the internet only if the
+ * router's own outside address is the one the internet sees: not a router
+ * behind another router or behind the carrier's NAT */
+static int mapped_usable(PcMp* mp) {
+    PcNetAddr seen;
+
+    if (mp->mapped.ip == 0 || mp->mapped.port == 0) return 0;
+    if (seen_addr(mp, &seen)) return seen.ip == mp->mapped.ip;
+    return pc_mp_ip_is_public(mp->mapped.ip);
+}
+
+int pc_mp_external_addr(PcMp* mp, PcNetAddr* out) {
+    /* the forwarded port, not the one the router happened to pick for STUN
+     * (some routers change the port even when one is forwarded) */
+    if (mapped_usable(mp)) {
+        *out = mp->mapped;
+        return 1;
+    }
+    return seen_addr(mp, out);
+}
+
+void pc_mp_set_port_mapping(PcMp* mp, uint32_t router_ip, uint16_t port) {
+    if (mp->mapped.ip == router_ip && mp->mapped.port == port) return;
+    mp->mapped.ip = router_ip;
+    mp->mapped.port = port;
+    /* a public room tells the DHT the forwarded port now, not in 10 minutes */
+    if (mp->mode == PC_MP_HOSTING && mp->room.is_public) mp->dht_rooms_ms = 0;
+}
+
+int pc_mp_port_mapped(PcMp* mp) {
+    return mapped_usable(mp);
 }
 
 int pc_mp_internet_ready(PcMp* mp) {
@@ -1231,6 +1277,7 @@ static void internet_tick(PcMp* mp) {
         if (mp->room.is_public && (mp->dht_rooms_ms == 0 || mp->now - mp->dht_rooms_ms > 600000)) {
             pc_dht_key("afe-port/v1/rooms", key);
             pc_dht_lookup(mp->dht, 0, key, 1);
+            if (mapped_usable(mp)) pc_dht_lookup_port(mp->dht, 0, mp->mapped.port);
             mp->dht_rooms_ms = mp->now;
         }
         /* public: guests looking for rooms get our info (opens our router to them) */
@@ -1250,6 +1297,12 @@ static void internet_tick(PcMp* mp) {
         }
         /* guests that want in: punch */
         if (pc_mp_external_addr(mp, &ext) && (mp->dht_punch_ms == 0 || mp->now - mp->dht_punch_ms > 8000)) {
+            PcNetAddr seen;
+
+            /* a code made before the router's port was known holds the
+             * address STUN saw: look for those guests too, every other time */
+            if (mp->punch_alt && seen_addr(mp, &seen) && (seen.ip != ext.ip || seen.port != ext.port)) ext = seen;
+            mp->punch_alt ^= 1;
             punch_key(&ext, mp->room.room_id, key);
             pc_dht_lookup(mp->dht, 2, key, 0);
             mp->dht_punch_ms = mp->now;
