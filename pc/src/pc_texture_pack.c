@@ -833,6 +833,9 @@ static int load_entry(const Entry* e, FILE** zip_files, Image* im) {
 static GLuint upload(Image* im) {
     GLuint tex;
 
+    /* an error the game's drawing left must not count as this upload's */
+    for (int i = 0; i < 16 && glGetError() != GL_NO_ERROR; i++) {
+    }
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
     if (im->gl_internal != 0) {
