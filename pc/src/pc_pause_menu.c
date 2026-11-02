@@ -3,6 +3,7 @@
 #include "pc_pause_menu.h"
 #include "pc_gui.h"
 #include "pc_minimap.h"
+#include "pc_mp_game.h"
 
 #include <stdio.h>
 
@@ -50,4 +51,5 @@ void pc_pause_menu_draw(struct game_s* game) {
     /* the hook after game_main, for the minimap (it draws later, in pc_vi.c);
      * the menu is drawn over the finished frame by pc_gui_frame */
     pc_minimap_game_frame(game);
+    pc_mp_game_frame(game); /* the multiplayer reads and changes the game here */
 }

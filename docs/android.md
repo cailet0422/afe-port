@@ -108,7 +108,7 @@ Requests), run it again a little later (the native build is already done, so it 
    it (허용). The chosen folder is remembered, and later launches start right away. Android does not let you pick
    the storage root or `Download` itself, so make a folder inside it. It must be a folder on the device, not in
    the cloud (Google Drive etc.).
-3. Change the folder in the pause menu (Back button) → Settings → Disc → Folder (applies after a relaunch).
+3. Change the folder in the pause menu (Back button) → Settings → Disc → Choose folder (applies after a relaunch).
 4. As before, you can also put the image in the app data folder
    `Internal storage/Android/data/org.afedecomp.dobutsunomori/files/rom/` (searched when the chosen folder has no
    image). `settings.ini`, `save/` and `log.txt` (run log) are created in this data folder.
@@ -118,8 +118,8 @@ The app reads the chosen folder with the permission granted through the system f
 
 ### Applying the Korean patch (in-game)
 
-1. Launch with the original disc image (Japanese Rev 1), then Back button → Settings → Disc →
-   **Korean patch: Install**.
+1. Launch with the original disc image (Japanese Rev 1), then Back button → Settings → Disc → Korean patch
+   **Install...**.
 2. In the system file picker, pick the downloaded Korean patch **zip** (or the `.xdelta` inside it). It can stay in the
    Downloads folder as it is.
 3. When it finishes, **Restart now**. The app restarts itself and comes up in Korean.
@@ -210,7 +210,8 @@ never look, because the releases could not install over them anyway.
   it died with "stack corruption detected" (reproduced on the emulator with `kill -SEGV` while running). Such faults
   now go straight to the crash report.
 - The Back button opens the pause menu instead of closing the app (`SDL_HINT_ANDROID_TRAP_BACK_BUTTON`, same as Esc).
-  The pause menu only takes key input, so the on-screen pad's D-pad/A/B (START) are sent as arrow keys/Enter/Esc.
+  The menus are touch windows (`pc/src/gui`): tap buttons, tabs and switches, drag a page to scroll; the on-screen pad
+  hides while paused and the Back button goes back one step.
   If you dismissed the on-screen keyboard during text entry, tap a spot without the pad to bring it back up. Touches
   are not turned into mouse clicks (`SDL_HINT_TOUCH_MOUSE_EVENTS`), and the accelerometer is not picked up as a
   joystick.

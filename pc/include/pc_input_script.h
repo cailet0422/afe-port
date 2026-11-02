@@ -57,6 +57,8 @@
  *     <frame> PAD <name>              a gamepad button or trigger event (SDL names: a,
  *                                     dpdown, leftshoulder, lefttrigger ...)
  *     <frame> CLICK x,y               a left mouse click (percent of the window): the menus
+ *     <frame> MPHOST [private]        open a multiplayer room (pc_mp_game.h); MPJOIN code|ip:port,
+ *                                     MPLEAVE, MPKICK slot, MPCHAT text ('_' for spaces)
  *     <frame> MAP                     open the town map, or close it, as the Map control
  *                                     (M) does (pc_minimap.c)
  *

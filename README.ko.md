@@ -43,7 +43,15 @@
 - SDL2와 OpenGL 3.3 / OpenGL ES 3.0으로 Windows(32·64비트), Linux, Android(ARM 32·64비트)에서
   에뮬레이터 없이 직접 실행됩니다.
 - 디스크 이미지에서 바로 읽으며, 원래 이미지는 바꾸지 않습니다.
-- 게임 안 설정·일시정지 메뉴: 화면 설정, 키보드·게임패드 키 바꾸기, 디스크 폴더 선택.
+- 포트 전용 일시정지·설정 메뉴: 게임 위에 뜨는 창으로, PC는 마우스·키보드(또는 게임패드), Android는 손가락으로
+  조작합니다. 한국어/영어. 화면 설정, 음량, 키보드·게임패드 키 바꾸기, 디스크 폴더, 한글패치, HD 텍스처, 멀티플레이.
+- **HD 텍스처**: 메뉴에서 Dolphin용 HD 텍스처팩 zip을 설치합니다
+  ([Animal Crossing HD Texture Pack](https://forums.dolphin-emu.org/Thread-animal-crossing-hd-texture-pack-version-25-october-11th-2026)
+  v25 기준). zip을 풀지 않고 바로 읽고, 플레이하면서 불러오며, 한글패치가 바꾼 텍스처는 건드리지 않습니다
+  ([docs/texture_pack.ko.md](docs/texture_pack.ko.md)).
+- **서버 없는 멀티플레이**: 내 마을에 방을 열면(공개방, 또는 방 코드·비밀번호가 있는 비공개방) 같은 네트워크나
+  인터넷의 친구가 기차를 타고 놀러 옵니다. 서로 보고, 채팅하고, 같은 마을에서 아이템을 떨어뜨리고 줍고 심고 팝니다.
+  호스트는 손님을 내보낼 수 있습니다([docs/multiplayer.ko.md](docs/multiplayer.ko.md)).
 - 한글패치 지원: 게임 안에서 패치 zip을 골라 바로 적용하고, 한국어와 일본어를 언제든 오갈 수 있습니다.
   실제 키보드(두벌식)나 화면 키보드로 한글을 입력합니다.
 - Android: 화면 터치 게임패드, 실제 게임패드, 비정상 종료 시 다음 실행 때 크래시 리포트 표시.
@@ -101,14 +109,33 @@ v0.1.6 이하는 스스로 업데이트하지 못하니 v1.0.0은 한 번 직접
 
 1. [retrodb 한글패치 — 동물의 숲 e+](https://retrodb.info/krpatch/7428/%EB%8F%99%EB%AC%BC%EC%9D%98-%EC%88%B2-e)에서
    패치 zip을 받습니다(패치 v0.9.2·v0.9.3 확인).
-2. 원래 디스크로 게임을 실행하고 일시정지 메뉴(PC는 **Esc**, Android는 **뒤로** 버튼) → **Settings** →
-   **Disc** → **Korean patch: Install**을 엽니다.
+2. 원래 디스크로 게임을 실행하고 일시정지 메뉴(PC는 **Esc**, Android는 **뒤로** 버튼) → **설정** →
+   **디스크·한글** → 한글패치 **설치...**를 누릅니다.
 3. 받은 zip을 그대로 고릅니다(Windows·Android는 파일 선택 창, Linux는 먼저 게임 폴더의 `patch/`에 zip을
    넣어 둡니다).
-4. 1초 안팎으로 끝나면 **Restart now**를 고릅니다.
+4. 1초 안팎으로 끝나면 **지금 다시 시작**을 고릅니다.
 
 한글판 이미지는 `korean/`에 따로 만들어지고 원래 이미지는 그대로 남습니다. 같은 탭의
-**Korean: On / Off**로 한국어판과 원래 디스크를 오갈 수 있습니다.
+**한국어로 플레이** 스위치로 한국어판과 원래 디스크를 오갈 수 있습니다.
+
+### HD 텍스처
+
+1. Animal Crossing HD Texture Pack(v25, `ACHD V25.zip`, 160MB)을
+   [Google Drive](https://drive.google.com/file/d/1Z8-pMx20xO8q3caiqy4NOrSNVT1veDSk/view)에서 받습니다. TechieAndroid와
+   [Dolphin 포럼 프로젝트](https://forums.dolphin-emu.org/Thread-animal-crossing-hd-texture-pack-version-25-october-11th-2026)
+   기여자들이 만든 것으로, 이 프로젝트에는 들어 있지 않습니다.
+2. 일시정지 메뉴 → **설정** → **HD 텍스처** → **텍스처팩 설치 (zip 선택)...**에서 받은 zip을 그대로 고릅니다
+   (파일 선택 창이 없는 Linux에서는 게임 폴더의 `texture_pack/`에 넣고 **다시 읽기**).
+
+다시 시작할 필요 없이 플레이하면서 바뀝니다. 한글패치와 함께 써도 패치가 바꾼 텍스처(로고, 이름표, 글자)는 바뀌지
+않습니다.
+
+### 멀티플레이
+
+일시정지 메뉴 → **멀티플레이**. 한 사람이 저장한 뒤 방을 열고(**방 만들기**), 나머지는 **방 찾기**(같은 네트워크와
+인터넷의 공개방)에서 고르거나 방 코드를 넣습니다(**코드로 참여**). 호스트 마을이 도착하면 내 마을 기차역 역무원에게
+여행을 부탁하세요. 호스트 마을에 도착합니다. 돌아올 때는 평소처럼 기차를 탑니다. 인터넷으로 할 때는 호스트 공유기의
+UDP 47070 포트가 열려 있어야 할 수 있습니다. 게임이 공유기에 직접 요청하고(UPnP), 열리지 않아도 연결을 시도합니다.
 
 ### 기본 조작 (PC)
 
@@ -124,8 +151,8 @@ v0.1.6 이하는 스스로 업데이트하지 못하니 v1.0.0은 한 번 직접
 | 마을 지도 (열기 / 닫기) | M |
 | 일시정지 메뉴 | Esc |
 
-일시정지 메뉴 → **Settings** → **Controls** → **Buttons**에서 바꿀 수 있고, 게임패드 버튼도 여기서
-정합니다. 한글 입력 화면에서는 실제 키보드로 두벌식 입력을 할 수 있습니다(한/영 키, 오른쪽 Alt 또는
+메뉴는 마우스(클릭, 휠), 방향키와 Enter·Esc, 또는 게임패드(십자키, A, B)로 씁니다. 조작은 일시정지 메뉴 → **설정**
+→ **조작**에서 칸을 누르고 바꿀 키나 버튼을 누르면 바뀌고, 게임패드 버튼도 여기서 정합니다. 한글 입력 화면에서는 실제 키보드로 두벌식 입력을 할 수 있습니다(한/영 키, 오른쪽 Alt 또는
 Shift+Space로 전환). 입력 중에는 **Shift+Enter**(또는 Ctrl+Enter)가 Start처럼 글을 끝냅니다. Enter는
 줄바꿈이고, 더 바꿀 줄이 없으면 다음 줄로, 편지에서는 맺음말로 넘어가며 맺음말에서는 끝내기입니다.
 
@@ -168,13 +195,15 @@ ninja -C pc/build32
 | [docs/android.ko.md](docs/android.ko.md) | Android 빌드, 서명, 터치 조작 |
 | [docs/64bit.ko.md](docs/64bit.ko.md) | 디컴프의 64비트 포팅 |
 | [docs/korean_patch.ko.md](docs/korean_patch.ko.md) | 한글패치 형식과 포트의 지원 방식 |
+| [docs/texture_pack.ko.md](docs/texture_pack.ko.md) | HD 텍스처팩: 설치, 불러오기, 한글패치와 함께 |
+| [docs/multiplayer.ko.md](docs/multiplayer.ko.md) | 서버 없는 멀티플레이: 방, 인터넷(DHT, STUN, UPnP), 함께 쓰는 마을 |
 | [docs/dev_setup.ko.md](docs/dev_setup.ko.md) | 개발 환경, 테스트 스크립트, 세이브 도구 |
 
 ## 저장소 구성
 
 | 경로 | 내용 |
 |---|---|
-| `pc/` | 플랫폼 계층: SDL2, OpenGL/GLES 렌더러, 오디오, 디스크 읽기, 설정·일시정지 메뉴, 한글패치 설치기, 한글 입력기. Android 프로젝트(`pc/android`), 생성·시험 도구(`pc/tools`), 단위 테스트(`pc/tests`)도 여기 있습니다 |
+| `pc/` | 플랫폼 계층: SDL2, OpenGL/GLES 렌더러, 오디오, 디스크 읽기, 메뉴(`pc/src/gui`, Dear ImGui), HD 텍스처팩, 멀티플레이(`pc/src/mp`), 한글패치 설치기, 한글 입력기. Android 프로젝트(`pc/android`), 생성·시험 도구(`pc/tools`), 단위 테스트(`pc/tests`)도 여기 있습니다 |
 | `decomp/` | [afe-decomp](https://github.com/cailet0422/afe-decomp) 서브모듈. 게임 코드와 그 안의 `#ifdef TARGET_PC` 훅 |
 | `docs/` | 개발 문서(영어판 `*.md`, 한국어판 `*.ko.md`) |
 
@@ -193,6 +222,12 @@ ninja -C pc/build32
   했습니다([pc/LICENSE](pc/LICENSE)). 패미컴 게임에는 [FixNES](https://github.com/FIX94/fixNES)(MIT)를
   씁니다.
 - 디컴프(`decomp/`)는 afe-decomp의 라이선스(CC0 1.0)를 따릅니다.
+- 메뉴는 [Dear ImGui](https://github.com/ocornut/imgui)(MIT)와 NHN 나눔고딕의 일부(SIL Open Font License 1.1, 라이선스에
+  따라 "AFE Menu Gothic"으로 이름을 바꿈; `pc/res/gui_font_OFL.txt`)를 씁니다. HD 텍스처는
+  [bcdec](https://github.com/iOrange/bcdec)(MIT)과 [stb_image](https://github.com/nothings/stb)(퍼블릭 도메인)로 풉니다.
+- Animal Crossing HD Texture Pack은 TechieAndroid와 기여자들의 작업입니다
+  ([Dolphin 포럼](https://forums.dolphin-emu.org/Thread-animal-crossing-hd-texture-pack-version-25-october-11th-2026)).
+  이 저장소에는 들어 있지 않습니다.
 - 한글패치는 이 저장소와 관계없는 별도 제작자(역전맞고)의 작업입니다. 이 저장소와 그 관리자는 패치 제작에
   참여하지 않았고, 패치 파일·번역문·글꼴은 저장소에 넣지 않습니다. 패치 자체에 관한 문의는 패치 배포처로
   해 주세요.

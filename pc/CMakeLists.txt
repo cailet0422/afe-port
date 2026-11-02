@@ -126,6 +126,21 @@ if(PC_BUILD_TESTS)
     target_compile_options(test_update PRIVATE -Wall -Wextra)
     add_test(NAME update COMMAND test_update)
 
+    # The multiplayer's rooms over loopback (two sessions in one process)
+    add_executable(test_mp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_mp.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_net.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_dht.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_patch.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_mp.c
+    )
+    target_include_directories(test_mp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_compile_options(test_mp PRIVATE -Wall -Wextra)
+    if(WIN32)
+        target_link_libraries(test_mp ws2_32 iphlpapi)
+    endif()
+    add_test(NAME mp COMMAND test_mp)
+
     add_executable(test_dsp_voice
         ${CMAKE_CURRENT_SOURCE_DIR}/src/audio/dsp_voice.c
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_dsp_voice.c
@@ -505,6 +520,12 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_voice.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_patch.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_ko_patch.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_net.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_dht.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_mp.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_upnp.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_mp_game.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_mp_puppet.c
     ${SYSTEM_FONT_C}
     ${WINDOW_ICON_C}
     ${GUI_FONT_C}
@@ -600,6 +621,8 @@ set_source_files_properties(${PC_CXX_SOURCES}
 # The port's own code that does heavy work (no decomp code: optimizing is safe):
 # HD textures (hashes, inflating, BC7 decoding) and the menus
 set_property(SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_texture_pack.c ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_patch.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_net.c ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_dht.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_mp.c ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_upnp.c
     APPEND PROPERTY COMPILE_OPTIONS "-O2")
 set_source_files_properties(${IMGUI_SOURCES} PROPERTIES COMPILE_OPTIONS "-O2;-w")
 set_property(SOURCE ${IMGUI_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui.cpp
@@ -672,6 +695,7 @@ endif()
 
 if(WIN32)
     target_link_libraries(afe_pc opengl32 winmm imm32 version setupapi ole32 uuid) # ole32/uuid: folder dialog (pc_rom_dir.c)
+    target_link_libraries(afe_pc ws2_32 iphlpapi) # multiplayer (pc/src/mp)
     if(PC_UPDATER)
         target_link_libraries(afe_pc winhttp) # pc_update.c
     endif()

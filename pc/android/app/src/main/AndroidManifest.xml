@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Updater.java: the list of releases and the new APK, and handing it to the installer -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- multiplayer: the room list on the same Wi-Fi (broadcasts) -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application

@@ -1,5 +1,6 @@
 /* pc_input_script.c - see pc_input_script.h */
 #include "pc_input_script.h"
+#include "pc_mp_game.h"
 #include "pc_touch.h"
 #include "pc_typing.h"
 #include "pc_minimap.h"
@@ -73,6 +74,7 @@ typedef enum {
     SCRIPT_BGM,
     SCRIPT_MAP,
     SCRIPT_CLICK,
+    SCRIPT_MP,
 } ScriptKind;
 
 typedef struct {
@@ -293,6 +295,16 @@ int pc_input_script_load(const char* path) {
         } else if (strcmp(word, "BGM") == 0 && fields >= 3) {
             ev.kind = SCRIPT_BGM;
             ev.value[0] = (u32)strtoul(arg, NULL, 16);
+        } else if (strncmp(word, "MP", 2) == 0 && strcmp(word, "MENU") != 0 &&
+                   (strcmp(word, "MPHOST") == 0 || strcmp(word, "MPJOIN") == 0 || strcmp(word, "MPLEAVE") == 0 ||
+                    strcmp(word, "MPKICK") == 0 || strcmp(word, "MPCHAT") == 0)) {
+            /* the multiplayer (pc_mp_game.h): MPHOST [private], MPJOIN code|ip:port, MPLEAVE, MPKICK slot,
+             * MPCHAT text ('_' for spaces) */
+            ev.kind = SCRIPT_MP;
+            snprintf(ev.name, sizeof(ev.name), "%s %s", word, fields >= 3 ? arg : "");
+            for (char* p = ev.name + strlen(word) + 1; *p != '\0'; p++) {
+                if (*p == '_') *p = ' ';
+            }
         } else if (strcmp(word, "MAP") == 0) {
             ev.kind = SCRIPT_MAP;
         } else if (strcmp(word, "TYPE") == 0 && fields >= 3) {
@@ -709,6 +721,40 @@ static void push_key_or_pad(const ScriptEvent* ev) {
     }
 }
 
+/* MPHOST [private] | MPJOIN code|ip:port | MPLEAVE | MPKICK slot | MPCHAT text */
+static void mp_command(const char* cmd) {
+    const char* arg = strchr(cmd, ' ');
+
+    arg = arg != NULL ? arg + 1 : "";
+    printf("[INPUT] frame %u: %s\n", s_frame, cmd);
+    if (strncmp(cmd, "MPHOST", 6) == 0) {
+        PcMpHostConfig cfg;
+        char name[PC_MP_NAME_LEN], town[32];
+
+        memset(&cfg, 0, sizeof(cfg));
+        pc_mp_game_my_names(name, sizeof(name), town, sizeof(town));
+        snprintf(cfg.room_name, sizeof(cfg.room_name), "%s", town);
+        snprintf(cfg.town, sizeof(cfg.town), "%s", town);
+        cfg.is_public = strstr(arg, "private") == NULL;
+        cfg.max_players = 4;
+        pc_mp_game_host(&cfg);
+        if (pc_mp_game_session() != NULL) {
+            char code[32];
+
+            pc_mp_room_code(pc_mp_game_session(), code, sizeof(code));
+            printf("[MP] hosting on port %u, code %s\n", pc_mp_port(pc_mp_game_session()), code);
+        }
+    } else if (strncmp(cmd, "MPJOIN", 6) == 0) {
+        printf("[MP] join %s: %d\n", arg, pc_mp_game_join_text(arg, ""));
+    } else if (strncmp(cmd, "MPLEAVE", 7) == 0) {
+        pc_mp_game_leave();
+    } else if (strncmp(cmd, "MPKICK", 6) == 0) {
+        pc_mp_game_kick(atoi(arg));
+    } else if (strncmp(cmd, "MPCHAT", 6) == 0) {
+        pc_mp_game_chat(arg);
+    }
+}
+
 static int s_click_pending = 0;
 
 /* A left click at x, y (0-1 of the window) */
@@ -1107,6 +1153,8 @@ int pc_input_script_frame(u32 real_frame) {
             push_key_or_pad(ev);
         } else if (ev->kind == SCRIPT_CLICK) {
             push_click(ev->touch[0], ev->touch[1]);
+        } else if (ev->kind == SCRIPT_MP) {
+            mp_command(ev->name);
         } else if (ev->kind == SCRIPT_POS) {
             log_positions(frame);
         } else if (ev->kind == SCRIPT_MAP) {

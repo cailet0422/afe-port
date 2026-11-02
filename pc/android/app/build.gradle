@@ -10,6 +10,8 @@ def sdlDir = file(project.findProperty('sdlDir') ?: "${rootDir}/SDL")
 // -PstripAssets: leave the extracted assets out of the library; it reads them
 // from the disc at start (PC_STRIP_ASSETS, docs/README.md)
 def stripAssets = project.hasProperty('stripAssets') ? 'ON' : 'OFF'
+// -PdecompRoot=/path/to/afe-decomp: a decomp checkout other than the decomp/ submodule
+def decompRoot = project.findProperty('decompRoot') ?: file("${rootDir}/../../decomp").absolutePath
 def assetDir = file("${buildDir}/generated/afe_assets")
 // Release signing: a keystore.properties (storeFile, storePassword, keyAlias,
 // keyPassword; storeFile relative to that file) at pc/android/release-key/,
@@ -49,6 +51,7 @@ android {
                           // 16 KB-page devices (Android 15+) load only 16 KB-aligned libraries
                           '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON',
                           "-DPC_STRIP_ASSETS=${stripAssets}",
+                          "-DDECOMP_ROOT=${decompRoot}",
                           '-DANDROID_STL=c++_shared'
             }
         }

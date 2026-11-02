@@ -189,7 +189,7 @@ patch files, translated text or font data.
 **Apply in game** (same on Windows, Android and Linux, `pc/src/pc_ko_patch.c`):
 
 1. Launch the game with the original disc image (Japanese Rev 1, `.iso`/`.ciso`/`.gcm`).
-2. Pause menu (Esc; the Back button on Android) → Settings → **Disc** tab → press Enter on **Korean patch: Install**.
+2. Pause menu (Esc; the Back button on Android) → Settings → **Disc** tab → Korean patch **Install...**.
    - Windows: a File Explorer file picker opens. Select the downloaded **zip as is** (or the `.xdelta` inside it).
    - Android: pick the zip in the system file picker (Downloads folder etc.).
    - Others (Linux): put the zip in `patch/` in the game folder and it is used.
@@ -210,20 +210,45 @@ patch files, translated text or font data.
 game is in Korean mode (character widths, Hangul glyphs, logo, name plates etc. are read from the disc). See
 [korean_patch.md](korean_patch.md) for the format.
 
+### Menus
+
+The pause menu and the settings are the port's own windows over the game, drawn with Dear ImGui 1.92 (MIT,
+`pc/lib/imgui`; `pc/src/gui/`): `pc_gui.cpp` (set-up, input, theme, widgets), `pc_gui_menu.cpp` (pause page, settings
+tabs, the Korean patch, resolution and update dialogs), `pc_gui_textures.cpp` (HD textures), `pc_gui_mp.cpp`
+(multiplayer, name tags). `pc_pause_menu.c` only keeps the game's pause (`g_pc_paused`).
+
+- `pc_platform_poll_events` hands every event to `pc_gui_handle_event` first; while paused the menus take the keyboard,
+  the mouse and the pad. Esc / Android Back / pad B go back one step (closing a dialog, leaving a page, then resuming),
+  Start resumes. Keyboard (arrows, Enter, Space) and gamepad (D-pad, A) move through the items.
+- Fingers come as fingers (`pc_touch.c` → `pc_gui_touch`; SDL's mouse events made from touches are ignored): a tap's
+  press is given a frame after its position so tabs (which want a hover first) react to the first tap, and a vertical
+  drag scrolls the page (`gui::TouchScroll`), cancelling the press it started on. The touch pad hides while paused.
+- It is drawn over the finished frame in `VIWaitForRetrace` after the minimap and the touch pad (`pc_gui_frame`),
+  with ImGui's OpenGL 3 renderer on glad (desktop) or OpenGL ES 3.0 (Android). With `--script-fast` it still runs every
+  frame but draws only the screenshot frames.
+- Size follows the window's height (1 at 720 lines, ×1.25 on Android); `ui_scale` in `[Interface]` (Settings >
+  Interface) changes it. Labels are Korean or English (`ui_language`: automatic = Korean with the Korean patch or a
+  Korean system language).
+- Font: `pc/res/gui_font.ttf`, a subset of NanumGothic (SIL OFL 1.1, `pc/res/gui_font_OFL.txt`) made by
+  `pc/tools/make_gui_font.py` — ASCII, Latin-1, punctuation, and KS X 1001 without the Hanja (the 2,350 Hangul
+  syllables, compatibility jamo, kana); renamed "AFE Menu Gothic" because the OFL keeps the Reserved Font Names for the
+  unmodified font. Embedded with `bin2c.py --own --size`. ImGui 1.92 rasterizes glyphs as they are needed, at any size.
+- Settings apply at once (and are saved); a display mode or resolution change asks to keep it and reverts after 15 s.
+  MSAA, the HD texture loading mode, the disc folder and Korean on/off say "restart" until the next start.
+
 ### Rebinding controls
 
-Change them under pause menu → Settings → **Controls** → **Buttons** (`pc_settings_menu.c`, `pc_keybindings.c`).
+Change them under pause menu → Settings → **Controls** (`pc/src/gui/pc_gui_menu.cpp`, `pc_keybindings.c`).
 
 - Each of the 20 GameCube buttons (A B X Y Start Z L R, and four directions each of the stick, C-stick and D-pad) has a
-  **Keyboard** and a **Gamepad** column. Pick a row with up/down and a column with left/right, press Enter, then press
-  the key you want (mouse buttons included) or a pad button (LT/RT triggers included). Esc or 6 seconds without input
-  cancels.
+  **Keyboard** and a **Gamepad** column. Click a cell (or move to it and press Enter / A), then press the key you want
+  (mouse buttons included) or a pad button (LT/RT triggers included). Esc or 6 seconds without input cancels.
 - Choosing a key already used by another button swaps the keys of the two buttons (so no key is duplicated or lost).
 - The pad's left/right sticks are always the main stick/C-stick. Pad buttons can also be added to stick directions.
 - **Reset to defaults** restores the initial values. Changes are saved to `keybindings.ini` immediately (`[Keyboard]`,
   `[Gamepad]`; up to two per line for the pad: `L = leftshoulder, lefttrigger`). An old `keybindings.ini` (keyboard
   only) is still read as is.
-- While paused, the gamepad also navigates the menu (D-pad, A = confirm, B/Start = back).
+- While paused, the gamepad also navigates the menus (D-pad, A = confirm, B = back, Start = resume).
 - After the GameCube buttons comes the port's own **Map** (`M`; no gamepad button by default), see below. A
   `keybindings.ini` from before it gives `M` to nothing new: if that file already uses `M` for a GameCube button,
   Map starts unbound.
@@ -294,7 +319,10 @@ With `--deterministic` the same script produces the same screens every time (`--
 `--time H[:M]` at that time of day; 2026-11-01 is a Sunday, so `--days 6 --time 20` is Saturday night).
 `--audio-dump file.wav` records the sound output as WAV (with `--deterministic` the same script gives the same WAV;
 analysis with `pc/tools/audio_stats.py`, [dev_setup.md](dev_setup.md)).
-`MAP` opens or closes the town map as the Map key does.
+`MAP` opens or closes the town map as the Map key does. `CLICK x,y` clicks the menus with the mouse (percent of the
+window; the pointer moves there one frame before the press, as a real one does). `KEY` and `PAD` also send the release.
+`MPHOST [private]`, `MPJOIN code|ip:port`, `MPLEAVE`, `MPKICK slot` and `MPCHAT text` drive the multiplayer
+([multiplayer.md](multiplayer.md)).
 Debug commands for scenes that come up only occasionally: `GIVE` (item into pockets), `LEDIT` (open the name-entry
 editor: villager catchphrase etc.), `RESETS` (number of times the game was turned off without saving — Mr. Resetti
 comes), `CATCH` (print the villager's catchphrase bytes), `ITEM` (print the item the menu selected), `JOBDONE` (finish
@@ -302,6 +330,13 @@ the part-time job the way the game does: clear the errand, make it wait for the 
 `NOJOB` (turn off only the part-time job event), `CLOCK h[:m]` (advance the clock to that time: past midnight into the
 next day without relaunching), `FG x,z item` (place an item on that ground tile: walking into a `008D` Mr. Resetti hole
 drops you into the Reset Center).
+
+## HD texture packs and multiplayer
+
+- HD texture packs (Dolphin's names, zips read in place, loaded on a thread, BC7 decoded on the CPU where the GPU
+  cannot take it, the Korean patch's textures left as they are): [texture_pack.md](texture_pack.md).
+- Multiplayer without a server (rooms over UDP, the BitTorrent DHT as a lobby, STUN, UPnP, the host's town by train,
+  shared items, the other players as actors): [multiplayer.md](multiplayer.md).
 
 ## Milestones
 
