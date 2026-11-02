@@ -17,16 +17,16 @@
 ## Download
 
 <!-- When a new release is published, update the version in these links (here and in README.ko.md). -->
-Latest release: **[v1.0.2](https://github.com/cailet0422/afe-port/releases/tag/v1.0.2)**
+Latest release: **[v1.1.0](https://github.com/cailet0422/afe-port/releases/tag/v1.1.0)**
 
 | Platform | Download | Requirements |
 |---|---|---|
-| Windows 64-bit | [DobutsuNoMoriEPlus-v1.0.2-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.2/DobutsuNoMoriEPlus-v1.0.2-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
-| Windows 32-bit | [DobutsuNoMoriEPlus-v1.0.2-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.2/DobutsuNoMoriEPlus-v1.0.2-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.0.2-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.0.2/DobutsuNoMoriEPlus-v1.0.2-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.0.2-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.0.2/DobutsuNoMoriEPlus-v1.0.2-Android.apk) | Android 5.0+, ARM 32/64-bit |
+| Windows 64-bit | [DobutsuNoMoriEPlus-v1.1.0-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.1.0/DobutsuNoMoriEPlus-v1.1.0-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
+| Windows 32-bit | [DobutsuNoMoriEPlus-v1.1.0-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.1.0/DobutsuNoMoriEPlus-v1.1.0-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.1.0-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.1.0/DobutsuNoMoriEPlus-v1.1.0-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.1.0-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.1.0/DobutsuNoMoriEPlus-v1.1.0-Android.apk) | Android 5.0+, ARM 32/64-bit |
 
-Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.0.2/SHA256SUMS.txt) ·
+Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.1.0/SHA256SUMS.txt) ·
 Older versions and release notes: [all releases](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -44,7 +44,17 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
 - Runs natively on Windows (32/64-bit), Linux and Android (ARM 32/64-bit) through SDL2 and
   OpenGL 3.3 / OpenGL ES 3.0. No emulator involved.
 - Reads the game straight from your disc image; the original image is never modified.
-- In-game settings and pause menu: video options, key and gamepad rebinding, disc folder selection.
+- The port's own pause and settings menus: windows over the game you use with the mouse and keyboard
+  (or a gamepad) on PC and with your fingers on Android, in Korean or English. Video options, volume,
+  key and gamepad rebinding, disc folder selection, the Korean patch, HD textures and multiplayer.
+- **HD textures**: install a Dolphin HD texture pack zip from the menu (made for the
+  [Animal Crossing HD Texture Pack](https://forums.dolphin-emu.org/Thread-animal-crossing-hd-texture-pack-version-25-october-11th-2026)
+  v25); it is read straight from the zip, loads while you play and leaves the Korean patch's own
+  textures alone ([docs/texture_pack.md](docs/texture_pack.md)).
+- **Multiplayer without a server**: host a room in your town (public, or private with a room code and
+  password) and friends on the same network or over the internet take the train to visit; you see
+  each other, chat, and drop, pick up, plant and dig in the same town. The host can send players out
+  ([docs/multiplayer.md](docs/multiplayer.md)).
 - Korean fan patch support: install the patch zip from inside the game, switch between Korean and
   Japanese at any time, and type Hangul with a real keyboard (2-set layout) or an on-screen keyboard.
 - Android: on-screen touch gamepad, physical gamepads, and a crash report shown on the next launch.
@@ -108,13 +118,35 @@ The Korean translation is a separate fan patch, not part of this project.
 1. Download the patch zip from [retrodb 한글패치 — 동물의 숲 e+](https://retrodb.info/krpatch/7428/%EB%8F%99%EB%AC%BC%EC%9D%98-%EC%88%B2-e)
    (patch versions 0.9.2 and 0.9.3 are tested).
 2. Start the game with your original disc, open the pause menu (**Esc** on PC, **Back** on Android) →
-   **Settings** → **Disc** → **Korean patch: Install**.
+   **Settings** → **Disc** → **Korean patch** → **Install...**.
 3. Select the zip as downloaded (file picker on Windows and Android; on Linux, put the zip in the
    game folder's `patch/` folder first).
 4. When it finishes (about a second), choose **Restart now**.
 
 The patched image is written to `korean/`; your original image stays untouched. Use
-**Korean: On / Off** on the same tab to switch back and forth.
+**Play in Korean** on the same tab to switch back and forth.
+
+### HD textures
+
+1. Download the Animal Crossing HD Texture Pack (v25, `ACHD V25.zip`, 160 MB) from
+   [Google Drive](https://drive.google.com/file/d/1Z8-pMx20xO8q3caiqy4NOrSNVT1veDSk/view). It is made by
+   TechieAndroid and the contributors of the
+   [Dolphin forums project](https://forums.dolphin-emu.org/Thread-animal-crossing-hd-texture-pack-version-25-october-11th-2026);
+   it is not part of this project.
+2. Pause menu → **Settings** → **HD textures** → **Install a texture pack (zip)...** and pick the zip as
+   downloaded (on Linux without a file picker, put it in the game folder's `texture_pack/` and press
+   **Read the folder again**).
+
+Textures change as you play, no restart needed. It works with the Korean patch: the patch's own
+textures (logo, name plates, text) are never replaced.
+
+### Multiplayer
+
+Pause menu → **Multiplayer**. One player saves and opens a room (**Host**); the others pick it from
+**Find a room** (public rooms on the network and the internet) or enter its room code (**Room code**).
+Once the host's town has arrived, go to your train station and ask the station master for a trip: you
+arrive in the host's town. Come home by train as usual. Over the internet the host's router may need
+UDP port 47070 open; the game asks the router itself (UPnP) and tries to connect without it.
 
 ### Default controls (PC)
 
@@ -130,8 +162,9 @@ The patched image is written to `korean/`; your original image stays untouched. 
 | Town map (open / close) | M |
 | Pause menu | Esc |
 
-Change them under pause menu → **Settings** → **Controls** → **Buttons**; gamepads can be rebound there
-too. On Korean text-entry screens you can type Hangul directly (toggle with the 한/영 key, Right Alt or
+In the menus, use the mouse (click, wheel), the arrow keys with Enter and Esc, or a gamepad (D-pad, A,
+B). Change the controls under pause menu → **Settings** → **Controls**: click a cell and press the key
+or button; gamepads can be rebound there too. On Korean text-entry screens you can type Hangul directly (toggle with the 한/영 key, Right Alt or
 Shift+Space). While typing, **Shift+Enter** (or Ctrl+Enter) finishes the text, as Start does. Enter starts a new
 line; where there is no room for one it goes to the next line, in a letter on to the closing, and in the closing
 it finishes too.
@@ -177,13 +210,15 @@ Each document is also available in Korean (`*.ko.md`).
 | [docs/android.md](docs/android.md) | Android build, signing, touch controls |
 | [docs/64bit.md](docs/64bit.md) | Porting the decompilation to 64-bit |
 | [docs/korean_patch.md](docs/korean_patch.md) | Korean patch format and how the port supports it |
+| [docs/texture_pack.md](docs/texture_pack.md) | HD texture packs: installing, loading, the Korean patch |
+| [docs/multiplayer.md](docs/multiplayer.md) | Multiplayer without a server: rooms, the internet (DHT, STUN, UPnP), the shared town |
 | [docs/dev_setup.md](docs/dev_setup.md) | Development environment, test scripts, save tools |
 
 ## Repository layout
 
 | Path | Contents |
 |---|---|
-| `pc/` | Platform layer: SDL2, OpenGL / GLES renderer, audio, disc reading, settings and pause menus, Korean patch installer, Korean input method. Also the Android project (`pc/android`), generators and test tools (`pc/tools`), unit tests (`pc/tests`) |
+| `pc/` | Platform layer: SDL2, OpenGL / GLES renderer, audio, disc reading, the menus (`pc/src/gui`, Dear ImGui), HD texture packs, multiplayer (`pc/src/mp`), Korean patch installer, Korean input method. Also the Android project (`pc/android`), generators and test tools (`pc/tools`), unit tests (`pc/tests`) |
 | `decomp/` | The [afe-decomp](https://github.com/cailet0422/afe-decomp) submodule: the game code and its `#ifdef TARGET_PC` hooks |
 | `docs/` | Developer documentation (English, with Korean versions in `*.ko.md`) |
 
@@ -202,6 +237,13 @@ Never commit game data: disc images, assets extracted from them, or build output
   (MIT); see [pc/LICENSE](pc/LICENSE). It includes [FixNES](https://github.com/FIX94/fixNES) (MIT) for
   the NES games.
 - The decompilation (`decomp/`) is under afe-decomp's license (CC0 1.0).
+- The menus use [Dear ImGui](https://github.com/ocornut/imgui) (MIT) and a subset of NanumGothic by NHN
+  (SIL Open Font License 1.1, renamed "AFE Menu Gothic" as the license asks; `pc/res/gui_font_OFL.txt`).
+  HD textures are decoded with [bcdec](https://github.com/iOrange/bcdec) (MIT) and
+  [stb_image](https://github.com/nothings/stb) (public domain).
+- The Animal Crossing HD Texture Pack is the work of TechieAndroid and its contributors
+  ([Dolphin forums](https://forums.dolphin-emu.org/Thread-animal-crossing-hd-texture-pack-version-25-october-11th-2026));
+  it is not included here.
 - The Korean fan patch is the work of an independent author (역전맞고). This project and its
   maintainers did not take part in making it, and no patch files, translations or fonts are included
   here. Questions about the patch itself should go to its distribution page.

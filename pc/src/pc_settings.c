@@ -27,6 +27,11 @@ PCSettings g_pc_settings = {
 #endif
     .minimap = 1,
     .auto_update = 1,
+    .hd_textures = 1,
+#ifdef __ANDROID__
+    .hd_quality = 1,
+#endif
+    .mp_port = 47070,
 };
 
 static const char* SETTINGS_FILE = "settings.ini";
@@ -65,7 +70,7 @@ static void apply_setting(const char* key, const char* value) {
         if (val == 0 || val == 2 || val == 4 || val == 8)
             g_pc_settings.msaa = val;
     } else if (strcmp(key, "preload_textures") == 0) {
-        if (val >= 0 && val <= 2) g_pc_settings.preload_textures = val;
+        if (val >= 0 && val <= 2) g_pc_settings.preload_textures = val ? 1 : 0;
     } else if (strcmp(key, "disable_resetti") == 0) {
         if (val == 0 || val == 1) g_pc_settings.disable_resetti = val;
     } else if (strcmp(key, "nes_aspect") == 0) {
@@ -82,6 +87,18 @@ static void apply_setting(const char* key, const char* value) {
         if (val == 0 || val == 1) g_pc_settings.auto_update = val;
     } else if (strcmp(key, "update_skip") == 0) {
         snprintf(g_pc_settings.update_skip, sizeof(g_pc_settings.update_skip), "%s", value);
+    } else if (strcmp(key, "ui_language") == 0) {
+        if (val >= 0 && val <= 2) g_pc_settings.ui_language = val;
+    } else if (strcmp(key, "ui_scale") == 0) {
+        if (val == 0 || (val >= 50 && val <= 300)) g_pc_settings.ui_scale = val;
+    } else if (strcmp(key, "hd_textures") == 0) {
+        if (val == 0 || val == 1) g_pc_settings.hd_textures = val;
+    } else if (strcmp(key, "hd_quality") == 0) {
+        if (val == 0 || val == 1) g_pc_settings.hd_quality = val;
+    } else if (strcmp(key, "mp_port") == 0) {
+        if (val >= 1024 && val <= 65535) g_pc_settings.mp_port = val;
+    } else if (strcmp(key, "mp_name") == 0) {
+        snprintf(g_pc_settings.mp_name, sizeof(g_pc_settings.mp_name), "%s", value);
     }
 }
 
@@ -106,8 +123,25 @@ void pc_settings_save(void) {
     fprintf(f, "msaa = %d\n", g_pc_settings.msaa);
     fprintf(f, "\n");
     fprintf(f, "[Enhancements]\n");
-    fprintf(f, "# Preload HD textures at startup: 0 = off (load on demand), 1 = preload, 2 = preload + cache file (fastest)\n");
+    fprintf(f, "# Load HD textures: 0 = while playing (on a thread), 1 = all at startup\n");
     fprintf(f, "preload_textures = %d\n", g_pc_settings.preload_textures);
+    fprintf(f, "\n");
+    fprintf(f, "# Use the HD texture pack installed with Settings > HD textures: 0 = no, 1 = yes\n");
+    fprintf(f, "hd_textures = %d\n", g_pc_settings.hd_textures);
+    fprintf(f, "# HD texture size: 0 = as in the pack, 1 = half (less memory)\n");
+    fprintf(f, "hd_quality = %d\n", g_pc_settings.hd_quality);
+    fprintf(f, "\n");
+    fprintf(f, "[Interface]\n");
+    fprintf(f, "# Language of the pause and settings menus: 0 = automatic, 1 = Korean, 2 = English\n");
+    fprintf(f, "ui_language = %d\n", g_pc_settings.ui_language);
+    fprintf(f, "# Size of the menus in percent (50-300), 0 = automatic\n");
+    fprintf(f, "ui_scale = %d\n", g_pc_settings.ui_scale);
+    fprintf(f, "\n");
+    fprintf(f, "[Multiplayer]\n");
+    fprintf(f, "# UDP port a room you host listens on (1024-65535); open or forward it for players from outside\n");
+    fprintf(f, "mp_port = %d\n", g_pc_settings.mp_port);
+    fprintf(f, "# The name other players see; empty = your player's name\n");
+    fprintf(f, "mp_name = %s\n", g_pc_settings.mp_name);
     fprintf(f, "\n");
     fprintf(f, "[Gameplay]\n");
     fprintf(f, "# Disable Mr. Resetti: 0 = normal, 1 = disable\n");
@@ -238,6 +272,19 @@ void pc_settings_cycle_resolution(int* width, int* height, int dir) {
 
     *width  = res_w_tbl[cur];
     *height = res_h_tbl[cur];
+}
+
+int pc_settings_resolution_count(void) {
+    ensure_presets();
+    return res_count;
+}
+
+void pc_settings_resolution_at(int i, int* width, int* height) {
+    ensure_presets();
+    if (i < 0) i = 0;
+    if (i >= res_count) i = res_count - 1;
+    *width = res_w_tbl[i];
+    *height = res_h_tbl[i];
 }
 
 void pc_settings_apply(void) {

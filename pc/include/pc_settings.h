@@ -23,6 +23,12 @@ typedef struct {
     char ko_image[1024];  /* that disc (UTF-8), written by the patch installer (pc_ko_patch.c) */
     int auto_update;      /* 1 = look for a new version at start (pc_update.c, Android: Updater.java) */
     char update_skip[32]; /* a version not to ask about again ("v0.1.8") */
+    int ui_language;      /* menus (pc_gui): 0 = automatic, 1 = Korean, 2 = English */
+    int ui_scale;         /* menu size in percent, 0 = automatic (from the window and the screen) */
+    int hd_textures;      /* 1 = use the installed HD texture pack (pc_texture_pack.c) */
+    int hd_quality;       /* 0 = the pack's full size, 1 = half (less memory; phones) */
+    int mp_port;          /* multiplayer: the UDP port a hosted room listens on (pc_mp.c) */
+    char mp_name[32];     /* multiplayer: the name others see (UTF-8), "" = the player's own */
 } PCSettings;
 
 extern PCSettings g_pc_settings;
@@ -31,6 +37,9 @@ void pc_settings_load(void);
 void pc_settings_save(void);
 void pc_settings_apply(void);
 void pc_settings_cycle_resolution(int* width, int* height, int dir);
+/* The window sizes the settings offer, smallest first */
+int pc_settings_resolution_count(void);
+void pc_settings_resolution_at(int i, int* width, int* height);
 
 #ifdef __cplusplus
 }

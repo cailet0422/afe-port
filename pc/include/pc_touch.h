@@ -6,8 +6,8 @@
  * and a small D-pad. It hides when a real controller is used and comes back
  * on the next touch.
  *
- * While the pause menu is open the pad drives it like the keyboard (D-pad =
- * arrows, A = Enter, B/START = Esc). In the text editor on a Korean patch
+ * While the pause menu is open the pad is hidden and fingers go to the
+ * menus (pc_gui: tap, drag to scroll). In the text editor on a Korean patch
  * disc a touch on the editor's own keyboard presses that key first
  * (pc_ko_editor.c). Touching the screen outside the controls while the text
  * editor uses the system input method shows the system's keyboard again.

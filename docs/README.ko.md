@@ -171,7 +171,7 @@ ninja -C pc/build32strip
 **게임 안에서 적용** (Windows·Android·Linux 공통, `pc/src/pc_ko_patch.c`):
 
 1. 원래 디스크 이미지(일본판 Rev 1, `.iso`/`.ciso`/`.gcm`)로 게임을 실행한다.
-2. 일시정지 메뉴(Esc, Android는 뒤로 버튼) → Settings → **Disc** 탭 → **Korean patch: Install**에서 Enter.
+2. 일시정지 메뉴(Esc, Android는 뒤로 버튼) → 설정 → **디스크·한글** 탭 → 한글패치 **설치...**.
    - Windows: 탐색기 파일 선택 창이 뜬다. 받은 **zip을 그대로**(또는 그 안의 `.xdelta`) 고른다.
    - Android: 시스템 파일 선택 창(다운로드 폴더 등)에서 zip을 고른다.
    - 그 밖(Linux): 게임 폴더의 `patch/`에 zip을 넣어 두면 그것을 쓴다.
@@ -189,18 +189,43 @@ ninja -C pc/build32strip
 `rom/`에 넣어도 된다. 어느 쪽이든 실행 로그에 `Korean patch detected`가 나오면 한국어 모드다(글자 폭·한글
 글리프·로고·이름표 등을 디스크에서 읽는다). 형식은 [korean_patch.md](korean_patch.ko.md) 참고.
 
+### 메뉴
+
+일시정지 메뉴와 설정은 게임 위에 뜨는 포트 자체의 창으로, Dear ImGui 1.92(MIT, `pc/lib/imgui`; `pc/src/gui/`)로
+그린다: `pc_gui.cpp`(준비, 입력, 테마, 위젯), `pc_gui_menu.cpp`(일시정지 화면, 설정 탭, 한글패치·해상도·업데이트
+창), `pc_gui_textures.cpp`(HD 텍스처), `pc_gui_mp.cpp`(멀티플레이, 이름표). `pc_pause_menu.c`는 게임의
+일시정지(`g_pc_paused`)만 맡는다.
+
+- `pc_platform_poll_events`가 모든 이벤트를 먼저 `pc_gui_handle_event`에 넘기고, 일시정지 중에는 메뉴가 키보드·
+  마우스·패드를 가져간다. Esc / Android 뒤로 / 패드 B는 한 단계씩 뒤로(창 닫기, 화면 나가기, 그다음 게임으로), Start는
+  게임으로. 키보드(방향키, Enter, Space)와 게임패드(십자키, A)로 항목을 옮겨 다닌다.
+- 손가락은 손가락으로 받는다(`pc_touch.c` → `pc_gui_touch`; 터치로 만든 SDL 마우스 이벤트는 무시). 탭은 위치를
+  주고 한 프레임 뒤에 누름을 줘서(탭은 먼저 올라가 있어야 반응함) 첫 탭에 반응하고, 세로로 끌면 화면이 스크롤되며
+  시작한 버튼은 눌리지 않는다(`gui::TouchScroll`). 일시정지 중에는 터치 패드를 숨긴다.
+- 완성된 프레임 위에 `VIWaitForRetrace`에서 미니맵·터치 패드 다음으로 그린다(`pc_gui_frame`). 데스크톱은 glad의
+  OpenGL 3, Android는 OpenGL ES 3.0으로 ImGui의 렌더러를 쓴다. `--script-fast`에서도 매 프레임 돌고 스크린샷
+  프레임만 그린다.
+- 크기는 창 높이를 따른다(720줄에서 1, Android는 ×1.25). `[Interface]`의 `ui_scale`(설정 > 인터페이스)로 바꾼다.
+  글자는 한국어나 영어(`ui_language`: 자동 = 한글패치나 시스템 언어가 한국어면 한국어).
+- 글꼴: `pc/res/gui_font.ttf`, `pc/tools/make_gui_font.py`로 만든 나눔고딕의 일부(SIL OFL 1.1,
+  `pc/res/gui_font_OFL.txt`) — ASCII, Latin-1, 문장부호, 한자를 뺀 KS X 1001(한글 2,350자, 호환 자모, 가나). OFL이
+  예약 글꼴 이름을 원본에만 쓰게 하므로 "AFE Menu Gothic"으로 이름을 바꿨다. `bin2c.py --own --size`로 넣는다.
+  ImGui 1.92가 필요할 때 필요한 크기로 글리프를 만든다.
+- 설정은 바로 적용·저장된다. 화면 모드나 해상도를 바꾸면 유지할지 묻고 15초 뒤 되돌린다. MSAA, HD 텍스처 불러오기
+  방식, 디스크 폴더, 한국어 켜기/끄기는 다음 시작까지 "다시 시작" 안내가 남는다.
+
 ### 조작키 바꾸기
 
-일시정지 메뉴 → Settings → **Controls** → **Buttons**에서 바꾼다(`pc_settings_menu.c`, `pc_keybindings.c`).
+일시정지 메뉴 → 설정 → **조작**에서 바꾼다(`pc/src/gui/pc_gui_menu.cpp`, `pc_keybindings.c`).
 
-- 게임큐브 버튼 20개(A B X Y Start Z L R, 스틱·C스틱·십자키 네 방향)마다 **Keyboard**와 **Gamepad** 칸이
-  있다. 위/아래로 줄, 왼쪽/오른쪽으로 칸을 고르고 Enter를 누른 뒤 원하는 키(마우스 버튼 포함)나 패드
-  버튼(LT/RT 트리거 포함)을 누른다. Esc 또는 6초 동안 입력이 없으면 취소.
+- 게임큐브 버튼 20개(A B X Y Start Z L R, 스틱·C스틱·십자키 네 방향)마다 **키보드**와 **게임패드** 칸이
+  있다. 칸을 누르고(또는 옮겨 가서 Enter / A) 원하는 키(마우스 버튼 포함)나 패드 버튼(LT/RT 트리거 포함)을
+  누른다. Esc 또는 6초 동안 입력이 없으면 취소.
 - 이미 다른 버튼에 쓰이던 키를 고르면 두 버튼의 키가 서로 바뀐다(겹치거나 빠지는 키가 없게).
 - 패드의 왼쪽/오른쪽 스틱은 항상 메인 스틱/C스틱이다. 스틱 방향에 패드 버튼을 더 붙일 수도 있다.
 - **Reset to defaults**로 처음 값. 바꾸면 바로 `keybindings.ini`에 저장된다(`[Keyboard]`, `[Gamepad]`,
   패드는 한 줄에 두 개까지: `L = leftshoulder, lefttrigger`). 예전 `keybindings.ini`(키보드만)도 그대로 읽는다.
-- 일시정지 중에는 게임패드로도 메뉴를 움직인다(십자키, A = 결정, B/Start = 뒤로).
+- 일시정지 중에는 게임패드로도 메뉴를 움직인다(십자키, A = 결정, B = 뒤로, Start = 게임으로).
 - 게임큐브 버튼 뒤에 포트 자체의 **Map**(`M`, 게임패드는 기본으로 없음)이 있다(아래). 그 전의
   `keybindings.ini`가 이미 `M`을 게임큐브 버튼에 쓰고 있으면 Map은 비어 있는 채로 시작한다.
 
@@ -264,13 +289,22 @@ ninja -C pc/build32strip
 시각; 2026-11-01은 일요일이라 `--days 6 --time 20`이 토요일 밤).
 `--audio-dump 파일.wav`는 소리 출력을 WAV로 남긴다(`--deterministic`이면 같은 스크립트가 같은 WAV, 분석은
 `pc/tools/audio_stats.py`, [dev_setup.md](dev_setup.ko.md)).
-`MAP`은 지도 키처럼 마을 지도를 열고 닫는다.
+`MAP`은 지도 키처럼 마을 지도를 열고 닫는다. `CLICK x,y`는 마우스로 메뉴를 누른다(창의 퍼센트; 실제 마우스처럼
+누르기 한 프레임 전에 포인터가 옮겨 감). `KEY`와 `PAD`는 떼는 이벤트도 보낸다. `MPHOST [private]`,
+`MPJOIN 코드|ip:포트`, `MPLEAVE`, `MPKICK 자리`, `MPCHAT 글`은 멀티플레이를 움직인다([multiplayer.ko.md](multiplayer.ko.md)).
 가끔만 나오는 장면을 위한 디버그 명령: `GIVE`(소지품에 아이템), `LEDIT`(이름 입력 편집기 열기: 주민의 말버릇
 등), `RESETS`(저장 없이 끈 횟수 — 도루묵씨가 온다), `CATCH`(주민의 말버릇 바이트 출력), `ITEM`(메뉴가 고른
 아이템 출력), `JOBDONE`(아르바이트를 게임이 끝내는 것처럼 끝냄: 심부름을 지우고 HRA 안내를 기다리게 하고 시계를 다시 돌림),
 `NOJOB`(아르바이트 이벤트만 끔), `CLOCK h[:m]`(시계를 그 시각까지 앞으로: 새로 실행하지 않고 자정을 넘겨 다음 날로),
 `FG x,z 아이템`(땅의 그 칸에 아이템을 놓음: `008D` 도루묵씨 구멍에 걸어 들어가면
 리셋 센터로 떨어진다).
+
+## HD 텍스처팩과 멀티플레이
+
+- HD 텍스처팩(Dolphin 이름 규칙, zip을 풀지 않고 읽기, 스레드에서 불러오기, GPU가 못 받는 BC7은 CPU에서 풀기,
+  한글패치의 텍스처는 그대로): [texture_pack.ko.md](texture_pack.ko.md).
+- 서버 없는 멀티플레이(UDP 방, 로비로 쓰는 BitTorrent DHT, STUN, UPnP, 기차로 가는 호스트 마을, 함께 쓰는 아이템,
+  액터로 그리는 다른 플레이어): [multiplayer.ko.md](multiplayer.ko.md).
 
 ## 마일스톤
 

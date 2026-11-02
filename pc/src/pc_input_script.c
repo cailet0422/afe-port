@@ -1,5 +1,6 @@
 /* pc_input_script.c - see pc_input_script.h */
 #include "pc_input_script.h"
+#include "pc_mp_game.h"
 #include "pc_touch.h"
 #include "pc_typing.h"
 #include "pc_minimap.h"
@@ -72,6 +73,8 @@ typedef enum {
     SCRIPT_CLOCK,
     SCRIPT_BGM,
     SCRIPT_MAP,
+    SCRIPT_CLICK,
+    SCRIPT_MP,
 } ScriptKind;
 
 typedef struct {
@@ -292,6 +295,16 @@ int pc_input_script_load(const char* path) {
         } else if (strcmp(word, "BGM") == 0 && fields >= 3) {
             ev.kind = SCRIPT_BGM;
             ev.value[0] = (u32)strtoul(arg, NULL, 16);
+        } else if (strncmp(word, "MP", 2) == 0 && strcmp(word, "MENU") != 0 &&
+                   (strcmp(word, "MPHOST") == 0 || strcmp(word, "MPJOIN") == 0 || strcmp(word, "MPLEAVE") == 0 ||
+                    strcmp(word, "MPKICK") == 0 || strcmp(word, "MPCHAT") == 0)) {
+            /* the multiplayer (pc_mp_game.h): MPHOST [private], MPJOIN code|ip:port, MPLEAVE, MPKICK slot,
+             * MPCHAT text ('_' for spaces) */
+            ev.kind = SCRIPT_MP;
+            snprintf(ev.name, sizeof(ev.name), "%s %s", word, fields >= 3 ? arg : "");
+            for (char* p = ev.name + strlen(word) + 1; *p != '\0'; p++) {
+                if (*p == '_') *p = ' ';
+            }
         } else if (strcmp(word, "MAP") == 0) {
             ev.kind = SCRIPT_MAP;
         } else if (strcmp(word, "TYPE") == 0 && fields >= 3) {
@@ -312,6 +325,16 @@ int pc_input_script_load(const char* path) {
                 t[i] /= 100.0f; /* percent of the window */
             }
             ev.duration = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : SCRIPT_DEFAULT_HOLD;
+        } else if (strcmp(word, "CLICK") == 0 && fields >= 3) {
+            /* a left click of the mouse (percent of the window): the menus */
+            if (sscanf(arg, "%f,%f", &ev.touch[0], &ev.touch[1]) != 2) {
+                fprintf(stderr, "[INPUT] %s:%d: expected 'CLICK x,y'\n", path, line_no);
+                fclose(f);
+                return 0;
+            }
+            ev.kind = SCRIPT_CLICK;
+            ev.touch[0] /= 100.0f;
+            ev.touch[1] /= 100.0f;
         } else if ((strcmp(word, "KEY") == 0 || strcmp(word, "PAD") == 0) && fields >= 3) {
             /* a key press (SDL key name, '_' for spaces) or a gamepad button (SDL name) as an event */
             ev.kind = word[0] == 'K' ? SCRIPT_KEY : SCRIPT_PAD;
@@ -661,6 +684,7 @@ static void push_key_or_pad(const ScriptEvent* ev) {
     if (ev->kind == SCRIPT_KEY) {
         e.type = SDL_KEYDOWN;
         e.key.state = SDL_PRESSED;
+        e.key.windowID = SDL_GetWindowID(g_pc_window); /* the menus take only their window's */
         e.key.keysym.sym = SDL_GetKeyFromName(ev->name);
         e.key.keysym.scancode = SDL_GetScancodeFromName(ev->name);
         if (e.key.keysym.sym == SDLK_UNKNOWN) {
@@ -684,6 +708,89 @@ static void push_key_or_pad(const ScriptEvent* ev) {
             return;
         }
     }
+    SDL_PushEvent(&e);
+    /* and let go (the menus keep keys held until then) */
+    if (e.type == SDL_KEYDOWN) {
+        e.type = SDL_KEYUP;
+        e.key.state = SDL_RELEASED;
+        SDL_PushEvent(&e);
+    } else if (e.type == SDL_CONTROLLERBUTTONDOWN) {
+        e.type = SDL_CONTROLLERBUTTONUP;
+        e.cbutton.state = SDL_RELEASED;
+        SDL_PushEvent(&e);
+    }
+}
+
+/* MPHOST [private] | MPJOIN code|ip:port | MPLEAVE | MPKICK slot | MPCHAT text */
+static void mp_command(const char* cmd) {
+    const char* arg = strchr(cmd, ' ');
+
+    arg = arg != NULL ? arg + 1 : "";
+    printf("[INPUT] frame %u: %s\n", s_frame, cmd);
+    if (strncmp(cmd, "MPHOST", 6) == 0) {
+        PcMpHostConfig cfg;
+        char name[PC_MP_NAME_LEN], town[32];
+
+        memset(&cfg, 0, sizeof(cfg));
+        pc_mp_game_my_names(name, sizeof(name), town, sizeof(town));
+        snprintf(cfg.room_name, sizeof(cfg.room_name), "%s", town);
+        snprintf(cfg.town, sizeof(cfg.town), "%s", town);
+        cfg.is_public = strstr(arg, "private") == NULL;
+        cfg.max_players = 4;
+        pc_mp_game_host(&cfg);
+        if (pc_mp_game_session() != NULL) {
+            char code[32];
+
+            pc_mp_room_code(pc_mp_game_session(), code, sizeof(code));
+            printf("[MP] hosting on port %u, code %s\n", pc_mp_port(pc_mp_game_session()), code);
+        }
+    } else if (strncmp(cmd, "MPJOIN", 6) == 0) {
+        printf("[MP] join %s: %d\n", arg, pc_mp_game_join_text(arg, ""));
+    } else if (strncmp(cmd, "MPLEAVE", 7) == 0) {
+        pc_mp_game_leave();
+    } else if (strncmp(cmd, "MPKICK", 6) == 0) {
+        pc_mp_game_kick(atoi(arg));
+    } else if (strncmp(cmd, "MPCHAT", 6) == 0) {
+        pc_mp_game_chat(arg);
+    }
+}
+
+static int s_click_pending = 0;
+
+/* A left click at x, y (0-1 of the window) */
+static void push_click(float fx, float fy) {
+    SDL_Event e;
+    int w = 0, h = 0;
+
+    SDL_GetWindowSize(g_pc_window, &w, &h);
+    /* the menus also read the system's pointer */
+    SDL_WarpMouseInWindow(g_pc_window, (int)(fx * w), (int)(fy * h));
+    memset(&e, 0, sizeof(e));
+    e.type = SDL_MOUSEMOTION;
+    e.motion.x = (int)(fx * w);
+    e.motion.y = (int)(fy * h);
+    e.motion.windowID = SDL_GetWindowID(g_pc_window);
+    SDL_PushEvent(&e);
+    s_click_pending = 1; /* pressed on the next frame, as a real pointer moves before it clicks */
+}
+
+static void push_click_button(void) {
+    SDL_Event e;
+    int x = 0, y = 0;
+
+    s_click_pending = 0;
+    SDL_GetMouseState(&x, &y);
+    memset(&e, 0, sizeof(e));
+    e.type = SDL_MOUSEBUTTONDOWN;
+    e.button.button = SDL_BUTTON_LEFT;
+    e.button.state = SDL_PRESSED;
+    e.button.clicks = 1;
+    e.button.x = x;
+    e.button.y = y;
+    e.button.windowID = SDL_GetWindowID(g_pc_window);
+    SDL_PushEvent(&e);
+    e.type = SDL_MOUSEBUTTONUP;
+    e.button.state = SDL_RELEASED;
     SDL_PushEvent(&e);
 }
 
@@ -1008,6 +1115,9 @@ int pc_input_script_frame(u32 real_frame) {
     if (first_waiting() != NULL) {
         s_held++; /* the next real frame is the same script time */
     }
+    if (s_click_pending) {
+        push_click_button();
+    }
     for (i = 0; i < s_count; i++) {
         const ScriptEvent* ev = &s_events[i];
 
@@ -1041,6 +1151,10 @@ int pc_input_script_frame(u32 real_frame) {
             pc_typing_system_text(ev->name);
         } else if (ev->kind == SCRIPT_KEY || ev->kind == SCRIPT_PAD) {
             push_key_or_pad(ev);
+        } else if (ev->kind == SCRIPT_CLICK) {
+            push_click(ev->touch[0], ev->touch[1]);
+        } else if (ev->kind == SCRIPT_MP) {
+            mp_command(ev->name);
         } else if (ev->kind == SCRIPT_POS) {
             log_positions(frame);
         } else if (ev->kind == SCRIPT_MAP) {

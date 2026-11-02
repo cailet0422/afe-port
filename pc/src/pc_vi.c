@@ -4,6 +4,8 @@
 #include "pc_touch.h"
 #include "pc_minimap.h"
 #include "pc_update.h"
+#include "pc_gui.h"
+#include "pc_texture_pack.h"
 
 #define VI_TVMODE_NTSC_INT    0
 #define VI_TVMODE_NTSC_DS     1
@@ -43,8 +45,10 @@ void VIWaitForRetrace(void) {
 
     pc_audio_frame();
     pc_update_frame();
+    pc_texture_pack_frame(); /* HD textures the thread loaded */
     pc_minimap_draw();
     pc_touch_draw();
+    pc_gui_frame(); /* the menus over everything */
     if (!pc_input_script_frame(pc_frame_counter)) {
         g_pc_running = 0;
     }

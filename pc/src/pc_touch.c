@@ -5,6 +5,7 @@
 #include "pc_typing.h"
 #include "pc_ko.h"
 #include "pc_minimap.h"
+#include "pc_gui.h"
 
 #include <dolphin/pad.h>
 #include <math.h>
@@ -133,25 +134,6 @@ static int enabled(void) {
     return g_pc_settings.touch_controls != 0;
 }
 
-/* The pause menu reads keys only */
-static void press_paused(int ctrl) {
-    SDL_Event key;
-
-    memset(&key, 0, sizeof(key));
-    key.type = SDL_KEYDOWN;
-    switch (ctrl) {
-        case CTRL_A:     key.key.keysym.sym = SDLK_RETURN; break;
-        case CTRL_B:
-        case CTRL_START: key.key.keysym.sym = SDLK_ESCAPE; break;
-        case CTRL_UP:    key.key.keysym.sym = SDLK_UP; break;
-        case CTRL_DOWN:  key.key.keysym.sym = SDLK_DOWN; break;
-        case CTRL_LEFT:  key.key.keysym.sym = SDLK_LEFT; break;
-        case CTRL_RIGHT: key.key.keysym.sym = SDLK_RIGHT; break;
-        default: return;
-    }
-    pc_pause_menu_handle_event(&key);
-}
-
 static Finger* find_finger(s64 id) {
     int i;
 
@@ -178,6 +160,9 @@ void pc_touch_finger_down(s64 id, float x, float y) {
     Finger* f = find_finger(id);
     int i;
 
+    if (pc_gui_touch(0, id, x, y)) {
+        return; /* the menus (while paused) */
+    }
     if (pc_ko_osk_touch(1, x, y)) {
         return; /* a key of the editor's on-screen keyboard */
     }
@@ -208,9 +193,6 @@ void pc_touch_finger_down(s64 id, float x, float y) {
     f->minimap_tap = f->ctrl == CTRL_NONE && pc_minimap_at(x, y);
 
     if (f->ctrl != CTRL_NONE) {
-        if (g_pc_paused) {
-            press_paused(f->ctrl);
-        }
     } else if (in_stick_zone(f->x, f->y) && !stick_held()) {
         float r = s_stick_radius;
 
@@ -230,6 +212,7 @@ void pc_touch_finger_move(s64 id, float x, float y) {
     Finger* f = find_finger(id);
 
     if (f == NULL) {
+        pc_gui_touch(1, id, x, y);
         return;
     }
     f->x = x * g_pc_window_w;
@@ -247,9 +230,6 @@ void pc_touch_finger_move(s64 id, float x, float y) {
 
         layout();
         ctrl = hit_control(f->x, f->y);
-        if (ctrl != f->ctrl && ctrl != CTRL_NONE && g_pc_paused) {
-            press_paused(ctrl);
-        }
         f->ctrl = ctrl;
     }
 }
@@ -257,6 +237,9 @@ void pc_touch_finger_move(s64 id, float x, float y) {
 void pc_touch_finger_up(s64 id) {
     Finger* f = find_finger(id);
 
+    if (f == NULL && pc_gui_touch(2, id, 0.0f, 0.0f)) {
+        return;
+    }
     pc_ko_osk_touch(0, 0.0f, 0.0f);
 
     if (f != NULL) {
@@ -579,8 +562,8 @@ extern void pc_gx_restore_after_nes(void); /* rebinds the game's GL state after 
 void pc_touch_draw(void) {
     static int gl_state = 0; /* 0 not built, 1 ready, -1 failed */
 
-    if (!enabled() || s_hidden || g_pc_skip_draw) {
-        return;
+    if (!enabled() || s_hidden || g_pc_skip_draw || g_pc_paused) {
+        return; /* (the menus take the fingers while paused) */
     }
     if (gl_state == 0) {
         gl_state = init_gl() ? 1 : -1;

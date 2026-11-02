@@ -126,6 +126,21 @@ if(PC_BUILD_TESTS)
     target_compile_options(test_update PRIVATE -Wall -Wextra)
     add_test(NAME update COMMAND test_update)
 
+    # The multiplayer's rooms over loopback (two sessions in one process)
+    add_executable(test_mp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_mp.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_net.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_dht.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_patch.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_mp.c
+    )
+    target_include_directories(test_mp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_compile_options(test_mp PRIVATE -Wall -Wextra)
+    if(WIN32)
+        target_link_libraries(test_mp ws2_32 iphlpapi)
+    endif()
+    add_test(NAME mp COMMAND test_mp)
+
     add_executable(test_dsp_voice
         ${CMAKE_CURRENT_SOURCE_DIR}/src/audio/dsp_voice.c
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_dsp_voice.c
@@ -440,6 +455,16 @@ add_custom_command(
     COMMENT "Embedding system font"
 )
 
+# The menus' font (a subset of NanumGothic, SIL OFL: pc/res/gui_font_OFL.txt)
+set(GUI_FONT_C "${CMAKE_BINARY_DIR}/gen/pc_gui_font.c")
+add_custom_command(
+    OUTPUT "${GUI_FONT_C}"
+    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin2c.py" --own --size
+            "${CMAKE_CURRENT_SOURCE_DIR}/res/gui_font.ttf" "${GUI_FONT_C}" pc_gui_font_ttf 4
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/res/gui_font.ttf" "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin2c.py"
+    COMMENT "Embedding the menu font"
+)
+
 # =============================================================================
 # PC port source files
 # =============================================================================
@@ -479,8 +504,10 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_texture_pack.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_settings.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_pause_menu.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_settings_menu.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_text_draw.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_menu.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_textures.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_mp.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_keybindings.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_nes_fixnes.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_stubs.c
@@ -493,8 +520,28 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_voice.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_patch.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_ko_patch.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_net.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_dht.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_mp.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_upnp.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_mp_game.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_mp_puppet.c
     ${SYSTEM_FONT_C}
     ${WINDOW_ICON_C}
+    ${GUI_FONT_C}
+)
+
+# =============================================================================
+# Dear ImGui (MIT, pc/lib/imgui) for the port's menus (pc/src/gui)
+# =============================================================================
+set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/imgui)
+set(IMGUI_SOURCES
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_sdl2.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_impl_opengl3.cpp
 )
 
 # =============================================================================
@@ -571,6 +618,22 @@ set_source_files_properties(${PC_CXX_SOURCES}
     PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;${PC_WARN_SUPPRESS};-fpermissive"
 )
 
+# The port's own code that does heavy work (no decomp code: optimizing is safe):
+# HD textures (hashes, inflating, BC7 decoding) and the menus
+set_property(SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_texture_pack.c ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_patch.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_net.c ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_dht.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_mp.c ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_upnp.c
+    APPEND PROPERTY COMPILE_OPTIONS "-O2")
+set_source_files_properties(${IMGUI_SOURCES} PROPERTIES COMPILE_OPTIONS "-O2;-w")
+set_property(SOURCE ${IMGUI_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_menu.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_textures.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_mp.cpp
+    APPEND PROPERTY INCLUDE_DIRECTORIES ${IMGUI_DIR})
+set_property(SOURCE ${IMGUI_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_menu.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_textures.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_mp.cpp
+    APPEND PROPERTY COMPILE_DEFINITIONS IMGUI_DISABLE_DEMO_WINDOWS IMGUI_DISABLE_DEBUG_TOOLS)
+
 # Padclamp.c defines a plain `inline` helper; MWCC emits it like GNU89 does.
 set_property(SOURCE "${DECOMP_ROOT}/src/static/GAEJ01_01/dolphin/pad/Padclamp.c"
     APPEND PROPERTY COMPILE_OPTIONS "-fgnu89-inline")
@@ -586,6 +649,7 @@ if(ANDROID)
     # libmain.so, loaded by SDLActivity (pc/android)
     add_library(afe_pc SHARED
         ${PC_SOURCES}
+        ${IMGUI_SOURCES}
         ${FIXNES_SOURCES}
         ${DECOMP_C_SOURCES}
         ${DECOMP_CXX_SOURCES}
@@ -598,6 +662,7 @@ if(ANDROID)
 else()
     add_executable(afe_pc
         ${PC_SOURCES}
+        ${IMGUI_SOURCES}
         ${FIXNES_SOURCES}
         ${DECOMP_C_SOURCES}
         ${DECOMP_CXX_SOURCES}
@@ -630,6 +695,7 @@ endif()
 
 if(WIN32)
     target_link_libraries(afe_pc opengl32 winmm imm32 version setupapi ole32 uuid) # ole32/uuid: folder dialog (pc_rom_dir.c)
+    target_link_libraries(afe_pc ws2_32 iphlpapi) # multiplayer (pc/src/mp)
     if(PC_UPDATER)
         target_link_libraries(afe_pc winhttp) # pc_update.c
     endif()
@@ -659,6 +725,15 @@ add_custom_command(TARGET afe_pc POST_BUILD
         "${CMAKE_CURRENT_SOURCE_DIR}/shaders/default.frag"
         "${PC_DATA_DIR}/shaders/"
     COMMENT "Copying shader files to ${PC_DATA_DIR}/shaders/"
+)
+# Notices of what the game carries: the menu font (SIL OFL) and the libraries
+add_custom_command(TARGET afe_pc POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${PC_DATA_DIR}/licenses"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/res/gui_font_OFL.txt" "${PC_DATA_DIR}/licenses/menu_font_OFL.txt"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/lib/imgui/LICENSE.txt" "${PC_DATA_DIR}/licenses/dear_imgui_LICENSE.txt"
+    COMMENT "Copying third-party notices to ${PC_DATA_DIR}/licenses/"
 )
 
 if(WIN32)
@@ -698,6 +773,7 @@ if(PC_STRIP_ASSETS AND NOT ANDROID)
         COMMAND ${CMAKE_COMMAND} -E make_directory "${PC_DIST_DIR}"
         COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:afe_pc>" "${PC_DATA_DIR}/${PC_RELMAP_NAME}" "${PC_DIST_DIR}/"
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${PC_DATA_DIR}/shaders" "${PC_DIST_DIR}/shaders"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${PC_DATA_DIR}/licenses" "${PC_DIST_DIR}/licenses"
         COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE" "${PC_DIST_DIR}/LICENSE.txt")
     if(WIN32 AND SDL2_DLL_PATH)
         list(APPEND PC_DIST_COMMANDS COMMAND ${CMAKE_COMMAND} -E copy "${SDL2_DLL_PATH}" "${PC_DIST_DIR}/")

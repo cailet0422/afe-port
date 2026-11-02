@@ -425,6 +425,13 @@ int pc_ko_patch_start(void) {
         }
     } else {
         fp = find_patch(name, sizeof(name));
+        if (fp == NULL && pc_pick_file_available()) {
+            /* Linux with zenity or kdialog */
+            fp = pc_pick_patch_file(name, sizeof(name));
+            if (fp == NULL) {
+                return 0;
+            }
+        }
         if (fp == NULL) {
             fail("No patch file in the " PC_KO_PATCH_IN_DIR " folder", "Put the downloaded zip there");
             SDL_AtomicSet(&s_state, PC_KO_PATCH_FAILED);

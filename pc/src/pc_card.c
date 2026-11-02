@@ -85,8 +85,22 @@ static void card_slot_free(CARDFileInfo* fi) {
     }
 }
 
-/* Per-channel directory: chan 0 = card_a, chan 1 = card_b */
+/* Per-channel directory: chan 0 = card_a, chan 1 = card_b (or, while a
+ * multiplayer visit uses it, save/card_b_net: pc_card_set_slot_b) */
 static const char* card_dir[2] = { "save/card_a", "save/card_b" };
+
+void pc_card_set_slot_b(const char* dir) {
+    s32 i;
+
+    card_dir[1] = dir != NULL ? dir : "save/card_b";
+    for (i = 0; i < (s32)(sizeof(card_entries[1]) / sizeof(card_entries[1][0])); i++) {
+        card_entries[1][i].used = 0; /* read again at the next mount */
+    }
+}
+
+const char* pc_card_dir(s32 chan) {
+    return chan >= 0 && chan <= 1 ? card_dir[chan] : "";
+}
 
 static int card_chan_valid(s32 chan) {
     return chan >= 0 && chan <= 1;

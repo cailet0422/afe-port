@@ -32,7 +32,7 @@ FILE* pc_fopen_utf8(const char* path, const char* mode) {
 
 #ifdef _WIN32
 /* The Explorer dialog for a folder, or for the Korean patch file */
-static int pick_windows(char* out, size_t n, int folder) {
+static int pick_windows(char* out, size_t n, int folder, int kind) {
     HWND owner = NULL;
     Uint32 fullscreen = 0;
     IFileOpenDialog* dlg = NULL;
@@ -63,6 +63,15 @@ static int pick_windows(char* out, size_t n, int folder) {
         if (folder) {
             IFileOpenDialog_SetOptions(dlg, opts | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
             IFileOpenDialog_SetTitle(dlg, L"디스크 이미지(.iso/.ciso/.gcm)가 있는 폴더 선택");
+        } else if (kind == PC_PICK_TEXTURE_PACK) {
+            static const COMDLG_FILTERSPEC types[] = {
+                { L"HD 텍스처팩 (*.zip)", L"*.zip" },
+                { L"모든 파일", L"*.*" },
+            };
+
+            IFileOpenDialog_SetOptions(dlg, opts | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST);
+            IFileOpenDialog_SetFileTypes(dlg, 2, types);
+            IFileOpenDialog_SetTitle(dlg, L"HD 텍스처팩 zip 선택 (받은 zip 그대로)");
         } else {
             static const COMDLG_FILTERSPEC types[] = {
                 { L"한글패치 (*.zip, *.xdelta)", L"*.zip;*.xdelta" },
@@ -258,7 +267,7 @@ int pc_rom_dir_pick(void) {
 #ifdef _WIN32
     char path[1024];
 
-    if (!pick_windows(path, sizeof(path), 1)) {
+    if (!pick_windows(path, sizeof(path), 1, 0)) {
         return 0;
     }
     snprintf(g_pc_settings.rom_dir, sizeof(g_pc_settings.rom_dir), "%s", path);
@@ -276,17 +285,79 @@ int pc_rom_dir_pick(void) {
 #endif
 }
 
-FILE* pc_pick_patch_file(char* name, size_t n) {
+#if !defined(_WIN32) && !defined(__ANDROID__)
+/* zenity (GNOME) or kdialog (KDE), if there is one */
+static const char* linux_picker(void) {
+    static int found = -1;
+
+    if (found < 0) {
+        found = 0;
+        if (getenv("DISPLAY") != NULL || getenv("WAYLAND_DISPLAY") != NULL) {
+            if (system("command -v zenity >/dev/null 2>&1") == 0) {
+                found = 1;
+            } else if (system("command -v kdialog >/dev/null 2>&1") == 0) {
+                found = 2;
+            }
+        }
+    }
+    return found == 1 ? "zenity" : found == 2 ? "kdialog" : NULL;
+}
+
+static int pick_linux(char* out, size_t n, int kind) {
+    const char* tool = linux_picker();
+    char cmd[512];
+    FILE* p;
+    int ok = 0;
+
+    if (tool == NULL) {
+        return 0;
+    }
+    if (strcmp(tool, "zenity") == 0) {
+        snprintf(cmd, sizeof(cmd), "zenity --file-selection --title='%s' --file-filter='%s' 2>/dev/null",
+                 kind == PC_PICK_TEXTURE_PACK ? "HD texture pack (.zip)" : "Korean patch (.zip / .xdelta)",
+                 kind == PC_PICK_TEXTURE_PACK ? "*.zip" : "*.zip *.xdelta");
+    } else {
+        snprintf(cmd, sizeof(cmd), "kdialog --getopenfilename . '%s' 2>/dev/null",
+                 kind == PC_PICK_TEXTURE_PACK ? "*.zip" : "*.zip *.xdelta");
+    }
+    p = popen(cmd, "r");
+    if (p == NULL) {
+        return 0;
+    }
+    if (fgets(out, (int)n, p) != NULL) {
+        out[strcspn(out, "\r\n")] = '\0';
+        ok = out[0] != '\0';
+    }
+    pclose(p);
+    return ok;
+}
+#endif
+
+int pc_pick_file_available(void) {
+#if defined(_WIN32) || defined(__ANDROID__)
+    return 1;
+#else
+    return linux_picker() != NULL;
+#endif
+}
+
+FILE* pc_pick_file(int kind, char* name, size_t n) {
     name[0] = '\0';
-#ifdef _WIN32
+#if defined(_WIN32) || !defined(__ANDROID__)
     {
         char path[1024];
         FILE* fp;
         const char* base;
 
-        if (!pick_windows(path, sizeof(path), 0)) {
+#ifdef _WIN32
+        if (!pick_windows(path, sizeof(path), 0, kind)) {
             return NULL;
         }
+#else
+        if (!pick_linux(path, sizeof(path), kind)) {
+            return NULL;
+        }
+#endif
         fp = pc_fopen_utf8(path, "rb");
         base = path + strlen(path);
         while (base > path && base[-1] != '/' && base[-1] != '\\') {
@@ -295,11 +366,14 @@ FILE* pc_pick_patch_file(char* name, size_t n) {
         snprintf(name, n, "%s", base);
         return fp;
     }
-#elif defined(__ANDROID__)
-    return pick_patch_android(name, n);
 #else
-    return NULL;
+    (void)kind;
+    return pick_patch_android(name, n);
 #endif
+}
+
+FILE* pc_pick_patch_file(char* name, size_t n) {
+    return pc_pick_file(PC_PICK_KO_PATCH, name, n);
 }
 
 int pc_rom_dir_changed(void) {

@@ -39,7 +39,11 @@ def main():
         if not title or not notes:
             sys.exit(f'{f.name}: needs a title line and notes')
 
-        cur = json.loads(gh('release', 'view', tag, '--repo', repo, '--json', 'name,body'))
+        try:
+            cur = json.loads(gh('release', 'view', tag, '--repo', repo, '--json', 'name,body'))
+        except subprocess.CalledProcessError:
+            print(f'{tag}: no release yet, skipped')  # the notes are ready for when it is made
+            continue
         body = cur['body'].replace('\r\n', '\n')
         m = KO_SECTION.search(body)
         ko = m.group(1) if m else f"**{cur['name']}**\n\n{body.strip()}"

@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
 import android.provider.DocumentsContract;
@@ -26,6 +27,7 @@ import org.libsdl.app.SDLActivity;
  * LaunchActivity starts it, after showing the last crash if there was one.
  * Release builds look for a newer version as it starts (Updater). */
 public class MainActivity extends SDLActivity {
+    private static WifiManager.MulticastLock sMulticastLock;
     private static final int REQUEST_DISC_FOLDER = 0x4166;
     private static final int REQUEST_PATCH_FILE = 0x4167;
     private static final String PREFS = "afe";
@@ -54,6 +56,18 @@ public class MainActivity extends SDLActivity {
         /* Java exceptions go to crash.txt; LaunchActivity shows them next time */
         CrashReport.installHandler(this);
         super.onCreate(savedInstanceState);
+        /* Multiplayer rooms on the same Wi-Fi answer a broadcast (pc_mp.c);
+         * many phones drop those unless an app holds this lock */
+        try {
+            WifiManager wifi = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wifi != null) {
+                sMulticastLock = wifi.createMulticastLock("afe-port multiplayer");
+                sMulticastLock.setReferenceCounted(false);
+                sMulticastLock.acquire();
+            }
+        } catch (Exception e) {
+            // only the LAN room list needs it
+        }
         /* a newer release, if any, is offered over the game (Updater.java) */
         Updater.checkInBackground(this);
     }

@@ -22,6 +22,7 @@
 #include <link.h>   /* ElfW */
 #endif
 #include "pc_pause_menu.h"
+#include "pc_gui.h"
 #include "pc_input_script.h"
 #include "pc_ko.h"
 
@@ -341,6 +342,14 @@ int pc_platform_poll_events(void) {
     pc_typing_frame();
 
     while (SDL_PollEvent(&event)) {
+        if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_AC_BACK) {
+            event.key.keysym.sym = SDLK_ESCAPE; /* Android's back button */
+        }
+        /* The menus (pc_gui) first: while paused they take the keyboard,
+         * the mouse and the pad */
+        if (event.type != SDL_QUIT && pc_gui_handle_event(&event)) {
+            continue;
+        }
         switch (event.type) {
             case SDL_QUIT:
                 g_pc_running = 0;
@@ -351,19 +360,11 @@ int pc_platform_poll_events(void) {
                 }
                 break;
             case SDL_KEYDOWN:
-                if (event.key.keysym.sym == SDLK_AC_BACK) {
-                    event.key.keysym.sym = SDLK_ESCAPE; /* Android's back button */
-                }
                 if (event.key.keysym.sym == SDLK_ESCAPE && !event.key.repeat) {
-                    if (g_pc_paused) {
-                        pc_pause_menu_handle_event(&event);
-                    } else {
-                        pc_pause_menu_toggle();
-                    }
+                    pc_pause_menu_toggle(); /* (while paused the menus took it) */
                     break;
                 }
                 if (g_pc_paused) {
-                    pc_pause_menu_handle_event(&event);
                     break; /* swallow all keys while paused */
                 }
                 if (event.key.keysym.sym == SDLK_F3 && !event.key.repeat) {
@@ -390,10 +391,6 @@ int pc_platform_poll_events(void) {
                 }
                 if (event.type == SDL_MOUSEBUTTONDOWN && !g_pc_paused) {
                     pc_platform_mouse_click(&event);
-                }
-                if (g_pc_paused) {
-                    /* menu navigation, and the bindings page's capture */
-                    pc_pause_menu_handle_event(&event);
                 }
                 break;
         }
