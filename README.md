@@ -49,12 +49,13 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
   key and gamepad rebinding, disc folder selection, the Korean patch, HD textures and multiplayer.
 - **HD textures**: install a Dolphin HD texture pack zip from the menu (made for the
   [Animal Crossing HD Texture Pack](https://forums.dolphin-emu.org/Thread-animal-crossing-hd-texture-pack-version-25-october-11th-2026)
-  v25); it is read straight from the zip, loads while you play and leaves the Korean patch's own
-  textures alone ([docs/texture_pack.md](docs/texture_pack.md)).
+  v25, the work of TechieAndroid and contributors, not of this repository; downloaded separately); it is read
+  straight from the zip, loads while you play and leaves the Korean patch's own textures alone
+  ([HD textures](#hd-textures)).
 - **Multiplayer without a server**: host a room in your town (public, or private with a room code and
   password) and friends on the same network or over the internet take the train to visit; you see
   each other, chat, and drop, pick up, plant and dig in the same town. The host can send players out
-  ([docs/multiplayer.md](docs/multiplayer.md)).
+  ([Multiplayer](#multiplayer)).
 - Korean fan patch support: install the patch zip from inside the game, switch between Korean and
   Japanese at any time, and type Hangul with a real keyboard (2-set layout) or an on-screen keyboard.
 - Android: on-screen touch gamepad, physical gamepads, and a crash report shown on the next launch.
@@ -128,25 +129,108 @@ The patched image is written to `korean/`; your original image stays untouched. 
 
 ### HD textures
 
-1. Download the Animal Crossing HD Texture Pack (v25, `ACHD V25.zip`, 160 MB) from
-   [Google Drive](https://drive.google.com/file/d/1Z8-pMx20xO8q3caiqy4NOrSNVT1veDSk/view). It is made by
-   TechieAndroid and the contributors of the
-   [Dolphin forums project](https://forums.dolphin-emu.org/Thread-animal-crossing-hd-texture-pack-version-25-october-11th-2026);
-   it is not part of this project.
-2. Pause menu → **Settings** → **HD textures** → **Install a texture pack (zip)...** and pick the zip as
-   downloaded (on Linux without a file picker, put it in the game folder's `texture_pack/` and press
-   **Read the folder again**).
+> [!NOTE]
+> **The HD texture pack is not made by the maintainer of this repository.** The Animal Crossing HD Texture
+> Pack is the work of TechieAndroid and the contributors of the
+> [Dolphin forums project](https://forums.dolphin-emu.org/Thread-animal-crossing-hd-texture-pack-version-25-october-11th-2026);
+> all credit and rights for the textures belong to them. The pack is not included in this repository or its
+> releases, and it is not redistributed here: the port only reads the file you download yourself from the
+> original source. The pack's terms of use are those of its original source; questions and requests about the
+> pack itself go to the original thread.
 
-Textures change as you play, no restart needed. It works with the Korean patch: the patch's own
-textures (logo, name plates, text) are never replaced.
+- Original source: [Dolphin forums — Animal Crossing HD Texture Pack](https://forums.dolphin-emu.org/Thread-animal-crossing-hd-texture-pack-version-25-october-11th-2026)
+- Download: [Google Drive](https://drive.google.com/file/d/1Z8-pMx20xO8q3caiqy4NOrSNVT1veDSk/view) (v25, `ACHD V25.zip`, 160 MB)
+
+**Installing**
+
+1. Download the zip from the link above. There is no need to unpack it.
+2. Pause menu → **Settings** → **HD textures** → **Install a texture pack (zip)...** and pick the zip as
+   downloaded. It is copied to the game folder's `texture_pack/` (the app's folder on Android) and turned on.
+   On Linux without a file picker, put the zip in `texture_pack/` yourself and press **Read the folder again**.
+3. Textures change as you play, no restart needed.
+
+**Good to know**
+
+- It works with the Korean patch: the patch's own textures (logo, name plates, Hangul font and text) are never
+  replaced. In Korean mode the pack's textures with text in other languages (`Localisation/`) are not used either.
+- The pack is made for the North American Animal Crossing. Textures that e+ has in exactly the same form are
+  replaced; textures only e+ has, or with different text, stay as they are.
+- Textures load the first time they are drawn, so in a place you visit for the first time the original texture may
+  show for a moment before the HD one.
+- It takes a lot of memory. Most phones cannot use the pack's compressed format (BC7) directly and get the textures
+  decoded, so on Android **Size** is **Half** by default. If the game gets slow or closes, keep **Size: Half** or turn
+  the pack off (size and loading mode take effect after a restart).
+- The **HD textures** switch turns it off and on at once; installed packs are removed with **Delete** on the same
+  page. The zip needs its 160 MB of storage.
+- Details: [docs/texture_pack.md](docs/texture_pack.md)
 
 ### Multiplayer
 
-Pause menu → **Multiplayer**. One player saves and opens a room (**Host**); the others pick it from
-**Find a room** (public rooms on the network and the internet) or enter its room code (**Room code**).
-Once the host's town has arrived, go to your train station and ask the station master for a trip: you
-arrive in the host's town. Come home by train as usual. Over the internet the host's router may need
-UDP port 47070 open; the game asks the router itself (UPnP) and tries to connect without it.
+Up to 8 players in one town, connected directly to each other's games without any server. One player (the
+host) opens a room in their town; the others (guests) take the train from their own town's station to visit.
+How it works: [docs/multiplayer.md](docs/multiplayer.md).
+
+**Hosting**
+
+1. Save in your town once before opening a room: the game needs the town file to send to guests.
+2. Pause menu → **Multiplayer**: set the room name, public or not, a password (optional) and the number of
+   players (2–8), then **Open the room**.
+3. A public room shows in the room list on the same network and over the internet. For a private room, give
+   your friends the **Room code** shown on the page (with a Copy button): private rooms are joined with the
+   code only.
+4. **Send out** in the player list removes a guest, who cannot come back into that room. **Close the room**
+   makes everyone leave.
+
+**Joining**
+
+1. Pause menu → **Multiplayer**: pick a room in the list and **Join**, or enter the code you were given (or an
+   address such as `IP:47070`) under **Room code** and **Join**. Enter the password if the room has one.
+2. Wait until "Receiving the host's town..." is done.
+3. At **your own town's train station**, talk to the station master and ask for a trip. The game saves your
+   town and takes you to the host's town by train.
+4. To come home, take the train at the host's station as usual. What you got there comes home with you.
+
+In the same town you see each other with name tags, and chat lines show over heads for a few seconds. The items
+outside change the same way for everyone: dropping, picking up, placing, digging and filling holes, burying,
+planting, shaking fruit down, chopping trees, pulling weeds. The name others see is set under **Your name**
+(empty = your character's name).
+
+**Things to keep in mind**
+
+- **Everyone should use the same version** of the game; with different versions joining may fail.
+- Guests also need **a saved town of their own**, with **a different name** from the host's town.
+- Only the host's town is shared. Villagers, insects and fish move on each machine by themselves, and talking
+  to a villager is your own conversation.
+- Furniture moved inside houses is not shared, and the host's house shows the furniture as it was saved.
+- Custom designs worn as clothes show as the plain shirt to others.
+- Two players picking up the same item in the same instant can both get it.
+- While a guest is in the host's town, the guest's game clock follows the host's.
+- The room ends when the host closes it or quits. A guest already in the host's town stays there and takes the
+  train home.
+- It is still experimental: back up saves you care about first (copy the game folder's `save/`).
+- **Privacy**: the room code contains the host's internet IP address, and a public room's address is published in
+  the BitTorrent DHT. To play only with people you know, use a private room with a password and give the code only
+  to people you trust.
+
+**Playing across different networks (internet)**
+
+- On the same Wi-Fi or router it works at once.
+- Across networks, UPnP turned on in the host's router works best: the game asks the router to open UDP port
+  47070 and the multiplayer page shows "(router port open)". Without UPnP, forward UDP 47070 to the host's device
+  in the router's settings. Even with no port open, the game tries to connect by opening a path from both sides
+  (hole punching).
+- If the page shows "(the router is behind another router: its open port is not used)", there is another router
+  in front of yours (such as the carrier's modem-router). Forward the port on that outer router or put it in
+  bridge mode.
+- Joining over the internet can take about half a minute while each side finds the other.
+- Public Wi-Fi (cafés, schools, offices), guest Wi-Fi networks, mobile data and hotspots may block it or fail to
+  connect; with both sides on mobile data it most likely will not connect. Host from a home connection.
+- On Windows, allow the game if a firewall prompt appears when you first open or join a room.
+- On Android, keep the game on screen while playing: switching apps or turning the screen off can drop the
+  connection.
+- The port can be changed with `mp_port` in `settings.ini` (default 47070).
+- It has not been tried much between real, different networks yet. If it does not work, please open an
+  [issue](https://github.com/cailet0422/afe-port/issues) with the "Internet address" line from the multiplayer page.
 
 ### Default controls (PC)
 
@@ -242,8 +326,10 @@ Never commit game data: disc images, assets extracted from them, or build output
   HD textures are decoded with [bcdec](https://github.com/iOrange/bcdec) (MIT) and
   [stb_image](https://github.com/nothings/stb) (public domain).
 - The Animal Crossing HD Texture Pack is the work of TechieAndroid and its contributors
-  ([Dolphin forums](https://forums.dolphin-emu.org/Thread-animal-crossing-hd-texture-pack-version-25-october-11th-2026));
-  it is not included here.
+  ([Dolphin forums](https://forums.dolphin-emu.org/Thread-animal-crossing-hd-texture-pack-version-25-october-11th-2026)).
+  The maintainer of this repository is not its original author and did not take part in making it; the pack is
+  not included in this repository or its releases and is not redistributed here. The port only reads a pack you
+  download yourself.
 - The Korean fan patch is the work of an independent author (역전맞고). This project and its
   maintainers did not take part in making it, and no patch files, translations or fonts are included
   here. Questions about the patch itself should go to its distribution page.
