@@ -68,8 +68,15 @@ void MultiplayerPage(bool* back);
 void MultiplayerPopups();
 bool MultiplayerBack();
 const char* MultiplayerStatus(); /* one line for the main page, or NULL */
-void MultiplayerOverlay();      /* name tags and the room bar while playing */
+void MultiplayerOverlay();      /* name tags, the chat box, button and lines while playing */
 bool MultiplayerOverlayWanted();
+/* The chat box while playing (in a room, the menus closed) */
+bool ChatIsOpen();
+void ChatOpen();
+void ChatClose();
+bool ChatAllowed();                    /* in a room, playing, no game text editor taking keys */
+bool ChatWindowContains(float x, float y); /* ImGui (window) coordinates */
+bool ChatButtonHit(float x, float y);      /* the touch screen's chat button */
 
 /* Messages at the top while playing */
 void DrawNotifications();

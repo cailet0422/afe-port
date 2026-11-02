@@ -102,6 +102,7 @@ static u32 s_said_ms[PC_MP_MAX_PLAYERS];
 #define CHAT_LINES 8
 static char s_chat[CHAT_LINES][192];
 static int s_nchat = 0;
+static unsigned s_chat_serial = 0; /* lines added so far */
 
 /* --- Little helpers --- */
 
@@ -386,6 +387,11 @@ static void chat_add(const char* who, const char* text) {
         s_nchat--;
     }
     snprintf(s_chat[s_nchat++], sizeof(s_chat[0]), "%s: %s", who, text);
+    s_chat_serial++;
+}
+
+unsigned pc_mp_game_chat_serial(void) {
+    return s_chat_serial;
 }
 
 void pc_mp_game_chat(const char* text) {
@@ -885,8 +891,8 @@ static void events(void) {
                     snprintf(s_said[ev.slot], sizeof(s_said[0]), "%s", ev.text);
                     s_said_ms[ev.slot] = pc_net_ms();
                 }
-                snprintf(text, sizeof(text), "%s: %s", p ? p->name : "?", ev.text);
-                pc_gui_notify(text);
+                /* (the menus show it: the chat lines at the top, pc_gui_mp.cpp) */
+                printf("[MP] chat %s: %s\n", p ? p->name : "?", ev.text);
                 break;
             }
             case PC_MP_EV_TOWN:

@@ -52,6 +52,7 @@ enum {
     PC_BIND_DPAD_LEFT,
     PC_BIND_DPAD_RIGHT,
     PC_BIND_MAP, /* opens and closes the game's map (pc_minimap.c) */
+    PC_BIND_CHAT, /* opens the multiplayer chat box while playing (pc_gui_mp.cpp) */
     PC_BIND_COUNT
 };
 

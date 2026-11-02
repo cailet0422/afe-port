@@ -6,6 +6,7 @@
 #include "pc_touch.h"
 #include "pc_ko.h"
 #include "pc_minimap.h"
+#include "pc_gui.h"
 #include <dolphin/pad.h>
 
 /* analog stick constants */
@@ -84,6 +85,7 @@ u32 PADRead(PADStatus* status) {
     u16 buttons = 0;
     u32 held = 0; /* 1 << PC_BIND_* */
     u32 map_held = 0;
+    u32 chat_held = 0; /* a gamepad button bound to Chat */
     s8 stickX = 0, stickY = 0;
     s8 cstickX = 0, cstickY = 0;
 
@@ -103,9 +105,14 @@ u32 PADRead(PADStatus* status) {
 
     #undef INPUT_PRESSED
 
-    /* Keys type into the in-game text editor while it takes input; once it
-     * finishes or waits under another menu they are the controller again */
-    if (pc_typing_takes_keys()) {
+    /* the Chat key opens the chat box from its key press (pc_gui.cpp), so
+     * the letter it types is not typed into the box */
+    held &= ~(1u << PC_BIND_CHAT);
+
+    /* Keys type into the in-game text editor while it takes input, or into
+     * the chat box while it is open; once they finish the keys still held
+     * are ignored until let go (the Enter that sent a line is not Start) */
+    if (pc_typing_takes_keys() || pc_gui_chat_active()) {
         s_typed_held = held;
         held = 0;
     } else {
@@ -139,6 +146,7 @@ u32 PADRead(PADStatus* status) {
         }
 
         map_held |= held & (1u << PC_BIND_MAP);
+        chat_held |= held & (1u << PC_BIND_CHAT);
         apply_held(held, &buttons, &stickX, &stickY, &cstickX, &cstickY);
         held = 0;
 
@@ -175,6 +183,14 @@ u32 PADRead(PADStatus* status) {
     }
 
     map_held |= held & (1u << PC_BIND_MAP);
+    /* a gamepad button bound to Chat */
+    {
+        static int s_chat_pad_held = 0;
+        int chat = chat_held != 0;
+
+        if (chat && !s_chat_pad_held) pc_gui_chat_request();
+        s_chat_pad_held = chat;
+    }
     apply_held(held, &buttons, &stickX, &stickY, &cstickX, &cstickY);
 
     pc_touch_read(&buttons, &stickX, &stickY);
@@ -182,6 +198,12 @@ u32 PADRead(PADStatus* status) {
     pc_minimap_pad(map_held != 0, &buttons);
     pc_ko_osk_pad(&buttons, &stickX, &stickY);
 
+    if (pc_gui_chat_active()) {
+        /* typing in the chat box: the game gets a pad nobody touches */
+        buttons = 0;
+        stickX = stickY = cstickX = cstickY = 0;
+        status[0].triggerLeft = status[0].triggerRight = 0;
+    }
     status[0].button = buttons;
     status[0].stickX = stickX;
     status[0].stickY = stickY;

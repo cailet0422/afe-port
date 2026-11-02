@@ -562,8 +562,8 @@ extern void pc_gx_restore_after_nes(void); /* rebinds the game's GL state after 
 void pc_touch_draw(void) {
     static int gl_state = 0; /* 0 not built, 1 ready, -1 failed */
 
-    if (!enabled() || s_hidden || g_pc_skip_draw || g_pc_paused) {
-        return; /* (the menus take the fingers while paused) */
+    if (!enabled() || s_hidden || g_pc_skip_draw || g_pc_paused || pc_gui_chat_active()) {
+        return; /* (the menus take the fingers while paused, the chat box while it is open) */
     }
     if (gl_state == 0) {
         gl_state = init_gl() ? 1 : -1;

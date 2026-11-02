@@ -48,6 +48,13 @@ void pc_gui_notify(const char* text);
 /* 1 if the UI is in Korean */
 int pc_gui_korean(void);
 
+/* The multiplayer chat box while playing (in a room): opened with the Chat
+ * control (T by default; a gamepad button bound to it calls
+ * pc_gui_chat_request) or, on a touch screen, the chat button. While it is
+ * open the game gets no input (pc_pad.c) and keeps running. */
+int pc_gui_chat_active(void);
+void pc_gui_chat_request(void);
+
 #ifdef __cplusplus
 }
 #endif
