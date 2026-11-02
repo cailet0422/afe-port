@@ -17,16 +17,16 @@
 ## Download
 
 <!-- When a new release is published, update the version in these links (here and in README.ko.md). -->
-Latest release: **[v1.1.2](https://github.com/cailet0422/afe-port/releases/tag/v1.1.2)**
+Latest release: **[v1.2.0](https://github.com/cailet0422/afe-port/releases/tag/v1.2.0)**
 
 | Platform | Download | Requirements |
 |---|---|---|
-| Windows 64-bit | [DobutsuNoMoriEPlus-v1.1.2-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.1.2/DobutsuNoMoriEPlus-v1.1.2-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
-| Windows 32-bit | [DobutsuNoMoriEPlus-v1.1.2-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.1.2/DobutsuNoMoriEPlus-v1.1.2-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.1.2-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.1.2/DobutsuNoMoriEPlus-v1.1.2-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.1.2-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.1.2/DobutsuNoMoriEPlus-v1.1.2-Android.apk) | Android 5.0+, ARM 32/64-bit |
+| Windows 64-bit | [DobutsuNoMoriEPlus-v1.2.0-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.2.0/DobutsuNoMoriEPlus-v1.2.0-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
+| Windows 32-bit | [DobutsuNoMoriEPlus-v1.2.0-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.2.0/DobutsuNoMoriEPlus-v1.2.0-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.2.0-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.2.0/DobutsuNoMoriEPlus-v1.2.0-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.2.0-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.2.0/DobutsuNoMoriEPlus-v1.2.0-Android.apk) | Android 5.0+, ARM 32/64-bit |
 
-Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.1.2/SHA256SUMS.txt) ·
+Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.2.0/SHA256SUMS.txt) ·
 Older versions and release notes: [all releases](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -206,11 +206,16 @@ Hangul is typed with your computer's Korean input method (Han/Eng key).
 
 - **Everyone should use the same version** of the game; with different versions joining may fail.
 - Guests also need **a saved town of their own**, with **a different name** from the host's town.
-- Only the host's town is shared. Villagers, insects and fish move on each machine by themselves, and talking
-  to a villager is your own conversation.
-- The host's house shows the host's furniture as it was when the guest received the town (unsaved changes included).
-  Furniture moved or placed inside houses after that is not shared either way. To see the latest arrangement, go home,
-  join the room again and receive the town anew.
+- Only the host's town is shared.
+- **Villagers follow the host's.** Villagers wandering near the host walk or run to the same places on guests'
+  screens, and villagers away from the host are in the same acres too. Talking to or greeting a villager is still your
+  own: during a conversation that villager stands still on your screen and follows again afterwards. They go home,
+  come out and sleep when the host's do. Villagers inside
+  houses, the island villager, insects and fish move on each machine by themselves.
+- **The host's furniture is shared live.** When the host places, moves, turns or removes furniture, or changes the
+  wallpaper or carpet, guests see it at once. A guest standing in that room sees the furniture rebuilt when it is not
+  in a menu or a conversation and is standing or walking. What is inside storage furniture, and lamps on or off, are
+  not shared. As in the original game, nobody can move furniture in someone else's house.
 - Custom designs worn as clothes show as the plain shirt to others.
 - Two players picking up the same item in the same instant can both get it.
 - While a guest is in the host's town, the guest's game clock follows the host's.
