@@ -10,6 +10,7 @@ extern "C" {
 #include "pc_pause_menu.h"
 #include "pc_ko.h"
 #include "pc_texture_pack.h"
+#include "pc_keybindings.h"
 extern void pc_gx_restore_after_nes(void);
 /* pc/res/gui_font.ttf, embedded by pc/tools/bin2c.py */
 extern unsigned char pc_gui_font_ttf[];
@@ -457,6 +458,33 @@ static bool menu_open() {
     return g_pc_paused != 0;
 }
 
+/* The chat box while playing (pc_gui_mp.cpp) */
+static bool chat_open() {
+    return !menu_open() && ChatIsOpen();
+}
+
+/* The key (or mouse button) bound to Chat */
+static bool chat_key_event(const SDL_Event* e) {
+    PCInputCode code = g_pc_keybindings.key[PC_BIND_CHAT];
+
+    if (code < 0) {
+        return false;
+    }
+    if (e->type == SDL_KEYDOWN) {
+        return !(code & PC_INPUT_MOUSE_BIT) && e->key.keysym.scancode == (SDL_Scancode)code &&
+               (e->key.keysym.mod & (KMOD_CTRL | KMOD_ALT | KMOD_GUI)) == 0;
+    }
+    if (e->type == SDL_MOUSEBUTTONDOWN) {
+        return (code & PC_INPUT_MOUSE_BIT) && e->button.which != SDL_TOUCH_MOUSEID &&
+               e->button.button == (Uint8)(code & 0xFF);
+    }
+    return false;
+}
+
+/* The letter the Chat key types right after its press is not for the box */
+static bool s_chat_drop_text = false;
+static bool s_chat_key_held = false;
+
 extern "C" int pc_gui_handle_event(const SDL_Event* e) {
     if (!init()) {
         return 0;
@@ -481,10 +509,44 @@ extern "C" int pc_gui_handle_event(const SDL_Event* e) {
         }
     }
 
+    bool chat = chat_open();
+
+    /* the Chat key (T) opens the chat box in a room */
+    if (!menu && !chat && chat_key_event(e) && ChatAllowed()) {
+        if (e->type == SDL_KEYDOWN && e->key.repeat) {
+            return 0;
+        }
+        ChatOpen();
+        s_chat_drop_text = e->type == SDL_KEYDOWN;
+        s_chat_key_held = e->type == SDL_KEYDOWN;
+        return 1;
+    }
+
     switch (e->type) {
         case SDL_KEYDOWN:
         case SDL_KEYUP:
+            if (!menu && chat) {
+                if (e->type == SDL_KEYDOWN && !e->key.repeat &&
+                    (e->key.keysym.sym == SDLK_ESCAPE || e->key.keysym.sym == SDLK_AC_BACK)) {
+                    ChatClose();
+                    return 1;
+                }
+                if (s_chat_key_held && e->key.keysym.scancode == (SDL_Scancode)g_pc_keybindings.key[PC_BIND_CHAT]) {
+                    /* the press that opened the box, still held: not typed */
+                    if (e->type == SDL_KEYUP) {
+                        s_chat_key_held = false;
+                    } else {
+                        s_chat_drop_text = true;
+                        return 1;
+                    }
+                }
+                ImGui_ImplSDL2_ProcessEvent(e);
+                return 1;
+            }
             if (!menu) {
+                if (e->type == SDL_KEYUP) {
+                    ImGui_ImplSDL2_ProcessEvent(e); /* no key stays down in the menus */
+                }
                 return 0;
             }
             if (e->type == SDL_KEYDOWN && !e->key.repeat &&
@@ -498,7 +560,13 @@ extern "C" int pc_gui_handle_event(const SDL_Event* e) {
             return 1;
         case SDL_TEXTINPUT:
         case SDL_TEXTEDITING:
-            if (!menu) {
+            if (!menu && chat && s_chat_drop_text) {
+                if (e->type == SDL_TEXTINPUT) {
+                    s_chat_drop_text = false;
+                }
+                return 1;
+            }
+            if (!menu && !chat) {
                 return 0;
             }
             ImGui_ImplSDL2_ProcessEvent(e);
@@ -511,15 +579,24 @@ extern "C" int pc_gui_handle_event(const SDL_Event* e) {
                          : e->type == SDL_MOUSEWHEEL  ? e->wheel.which
                                                       : e->button.which;
             if (which == SDL_TOUCH_MOUSEID) {
-                return menu ? 1 : 0; /* fingers come as fingers (pc_gui_touch) */
+                return menu || chat ? 1 : 0; /* fingers come as fingers (pc_gui_touch) */
             }
             if (e->type != SDL_MOUSEWHEEL) {
                 g_touch = false;
             }
             ImGui_ImplSDL2_ProcessEvent(e);
-            return menu ? 1 : 0;
+            if (!menu && chat && e->type == SDL_MOUSEBUTTONDOWN && !ChatWindowContains((float)e->button.x, (float)e->button.y)) {
+                ChatClose(); /* a click outside the box */
+            }
+            return menu || chat ? 1 : 0;
         }
         case SDL_CONTROLLERBUTTONDOWN:
+            if (!menu && chat) {
+                if (e->cbutton.button == SDL_CONTROLLER_BUTTON_B) {
+                    ChatClose();
+                }
+                return 1;
+            }
             if (!menu) {
                 return 0;
             }
@@ -550,7 +627,7 @@ extern "C" int pc_gui_handle_event(const SDL_Event* e) {
             return 1;
         case SDL_CONTROLLERBUTTONUP:
         case SDL_CONTROLLERAXISMOTION:
-            return menu ? 1 : 0;
+            return menu || chat ? 1 : 0;
         case SDL_CONTROLLERDEVICEADDED:
         case SDL_CONTROLLERDEVICEREMOVED:
         case SDL_WINDOWEVENT:
@@ -569,9 +646,23 @@ extern "C" int pc_gui_touch(int kind, s64 id, float x, float y) {
     int ww = 0, wh = 0;
 
     SDL_GetWindowSize(g_pc_window, &ww, &wh);
+    bool takes = menu_open() || chat_open();
+
     if (kind == 0) {
-        if (!menu_open() || s_finger_down) {
-            return menu_open() ? 1 : 0;
+        if (!takes) {
+            /* the chat button (touch screens, in a room) */
+            if (!menu_open() && ChatAllowed() && ChatButtonHit(x * ww, y * wh)) {
+                ChatOpen();
+                return 1;
+            }
+            return 0;
+        }
+        if (s_finger_down) {
+            return 1;
+        }
+        if (!menu_open() && !ChatWindowContains(x * ww, y * wh)) {
+            ChatClose(); /* a tap outside the box */
+            return 1;
         }
         s_finger = (SDL_FingerID)id;
         s_finger_down = true;
@@ -582,7 +673,7 @@ extern "C" int pc_gui_touch(int kind, s64 id, float x, float y) {
         return 1;
     }
     if (!s_finger_down || (SDL_FingerID)id != s_finger) {
-        return menu_open() ? 1 : 0;
+        return takes ? 1 : 0;
     }
     io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
     if (kind == 1) {
@@ -600,7 +691,17 @@ extern "C" int pc_gui_touch(int kind, s64 id, float x, float y) {
 }
 
 extern "C" int pc_gui_wants_keyboard(void) {
-    return s_ready && menu_open() && MenuWantsKeyboard();
+    return s_ready && ((menu_open() && MenuWantsKeyboard()) || chat_open());
+}
+
+extern "C" int pc_gui_chat_active(void) {
+    return s_ready && chat_open() ? 1 : 0;
+}
+
+extern "C" void pc_gui_chat_request(void) {
+    if (s_ready && !menu_open() && ChatAllowed()) {
+        ChatOpen();
+    }
 }
 
 extern "C" void pc_gui_notify(const char* text) {
@@ -639,6 +740,10 @@ extern "C" void pc_gui_frame(void) {
     bool notes = NotificationsWanted();
     bool mp = MultiplayerOverlayWanted();
 
+    if ((menu || !mp) && ChatIsOpen()) {
+        ChatClose(); /* the room ended or the menu opened (it has the chat too) */
+    }
+
     if (!menu && !notes && !mp && !s_drew_last_frame) {
         return;
     }
@@ -670,4 +775,5 @@ extern "C" void pc_gui_frame(void) {
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         pc_gx_restore_after_nes();
     }
+    s_chat_drop_text = false; /* (only the events of the Chat key's frame) */
 }

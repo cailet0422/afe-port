@@ -4,6 +4,7 @@
 #include "pc_touch.h"
 #include "pc_typing.h"
 #include "pc_minimap.h"
+#include "pc_gui.h"
 
 #include "game.h"
 #include "m_common_data.h"
@@ -758,6 +759,26 @@ static void mp_command(const char* cmd) {
 static int s_click_pending = 0;
 
 /* A left click at x, y (0-1 of the window) */
+/* Text for a field of the menus or the chat box: as the system's input
+ * method sends it (SDL_TEXTINPUT, at most 31 bytes, whole UTF-8 letters) */
+static void push_text(const char* text) {
+    while (*text != '\0') {
+        SDL_Event e;
+        size_t n = strlen(text);
+
+        if (n > sizeof(e.text.text) - 1) {
+            n = sizeof(e.text.text) - 1;
+            while (n > 0 && ((unsigned char)text[n] & 0xC0) == 0x80) n--;
+        }
+        memset(&e, 0, sizeof(e));
+        e.type = SDL_TEXTINPUT;
+        e.text.windowID = SDL_GetWindowID(g_pc_window);
+        memcpy(e.text.text, text, n);
+        SDL_PushEvent(&e);
+        text += n;
+    }
+}
+
 static void push_click(float fx, float fy) {
     SDL_Event e;
     int w = 0, h = 0;
@@ -1148,7 +1169,11 @@ int pc_input_script_frame(u32 real_frame) {
         } else if (ev->kind == SCRIPT_EDIT) {
             pc_typing_system_editing(ev->name);
         } else if (ev->kind == SCRIPT_TEXT) {
-            pc_typing_system_text(ev->name);
+            if (pc_gui_wants_keyboard()) {
+                push_text(ev->name); /* a field of the menus or the chat box */
+            } else {
+                pc_typing_system_text(ev->name);
+            }
         } else if (ev->kind == SCRIPT_KEY || ev->kind == SCRIPT_PAD) {
             push_key_or_pad(ev);
         } else if (ev->kind == SCRIPT_CLICK) {

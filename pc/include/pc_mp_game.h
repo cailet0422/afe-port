@@ -58,6 +58,8 @@ void pc_mp_game_my_names(char* name, size_t n, char* town, size_t tn);
 
 /* The last chat lines, oldest first */
 int pc_mp_game_chat_lines(char lines[][192], int max);
+/* Grows by one with every chat line (sent or received) */
+unsigned pc_mp_game_chat_serial(void);
 
 /* Names over the other players' heads, in window pixels */
 typedef struct {

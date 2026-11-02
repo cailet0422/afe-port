@@ -17,16 +17,16 @@
 ## 다운로드
 
 <!-- 새 릴리즈를 내면 아래 링크의 버전을 바꾼다(README.md도 함께). -->
-최신 릴리즈: **[v1.1.1](https://github.com/cailet0422/afe-port/releases/tag/v1.1.1)**
+최신 릴리즈: **[v1.1.2](https://github.com/cailet0422/afe-port/releases/tag/v1.1.2)**
 
 | 플랫폼 | 다운로드 | 필요 사항 |
 |---|---|---|
-| Windows 64비트 | [DobutsuNoMoriEPlus-v1.1.1-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.1.1/DobutsuNoMoriEPlus-v1.1.1-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` 포함) |
-| Windows 32비트 | [DobutsuNoMoriEPlus-v1.1.1-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.1.1/DobutsuNoMoriEPlus-v1.1.1-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.1.1-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.1.1/DobutsuNoMoriEPlus-v1.1.1-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.1.1-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.1.1/DobutsuNoMoriEPlus-v1.1.1-Android.apk) | Android 5.0 이상, ARM 32·64비트 |
+| Windows 64비트 | [DobutsuNoMoriEPlus-v1.1.2-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.1.2/DobutsuNoMoriEPlus-v1.1.2-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` 포함) |
+| Windows 32비트 | [DobutsuNoMoriEPlus-v1.1.2-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.1.2/DobutsuNoMoriEPlus-v1.1.2-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.1.2-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.1.2/DobutsuNoMoriEPlus-v1.1.2-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.1.2-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.1.2/DobutsuNoMoriEPlus-v1.1.2-Android.apk) | Android 5.0 이상, ARM 32·64비트 |
 
-체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.1.1/SHA256SUMS.txt) ·
+체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.1.2/SHA256SUMS.txt) ·
 이전 버전과 릴리즈 노트: [전체 릴리즈](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -181,6 +181,12 @@ v0.1.6 이하는 스스로 업데이트하지 못하니 v1.0.0은 한 번 직접
 바뀝니다: 버리기, 줍기, 놓기, 구멍 파기·메우기, 묻기, 심기, 열매 흔들기, 나무 베기, 잡초 뽑기. 다른 사람에게
 보일 이름은 **내 이름**에서 정합니다(비우면 내 캐릭터 이름).
 
+**채팅**: 방에 있는 동안 PC는 **T** 키, Android는 화면 위쪽의 **말풍선 버튼**을 누르면 채팅창이 열립니다. 입력하고
+**Enter**(Android는 **보내기**)로 보내고, **Esc**(Android는 **닫기**나 창 밖을 누르기)로 닫습니다. 채팅창이 열린
+동안 게임은 멈추지 않지만 내 캐릭터는 움직이지 않습니다. 새 채팅은 화면 위쪽에 몇 초 동안 나오고, Android에서는
+읽지 않은 채팅이 있으면 버튼에 빨간 점이 뜹니다. 키는 설정 → 조작 → **채팅 (멀티플레이)**에서 바꿀 수 있습니다
+(게임패드 버튼도 됩니다). PC에서 한글은 컴퓨터의 한글 입력기(한/영)로 칩니다.
+
 **유의사항**
 
 - **모두 같은 버전**의 게임을 써 주세요. 버전이 다르면 들어가지 못할 수 있습니다.
@@ -226,6 +232,7 @@ v0.1.6 이하는 스스로 업데이트하지 못하니 v1.0.0은 한 번 직접
 | L / R | Q / E |
 | Start | Enter |
 | 마을 지도 (열기 / 닫기) | M |
+| 채팅 (멀티플레이 중) | T |
 | 일시정지 메뉴 | Esc |
 
 메뉴는 마우스(클릭, 휠), 방향키와 Enter·Esc, 또는 게임패드(십자키, A, B)로 씁니다. 조작은 일시정지 메뉴 → **설정**

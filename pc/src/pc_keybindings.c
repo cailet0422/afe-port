@@ -31,6 +31,7 @@ static const PCInputCode s_default_keys[PC_BIND_COUNT] = {
     [PC_BIND_DPAD_RIGHT] = SDL_SCANCODE_L,
 
     [PC_BIND_MAP] = SDL_SCANCODE_M,
+    [PC_BIND_CHAT] = SDL_SCANCODE_T,
 };
 
 /* Positions as on an Xbox pad (SDL's GameController layout) */
@@ -60,6 +61,7 @@ static const PCPadInput s_default_pad[PC_BIND_COUNT][PC_PAD_BINDS] = {
     [PC_BIND_DPAD_RIGHT] = { SDL_CONTROLLER_BUTTON_DPAD_RIGHT, PC_PAD_NONE },
 
     [PC_BIND_MAP] = { PC_PAD_NONE, PC_PAD_NONE },
+    [PC_BIND_CHAT] = { PC_PAD_NONE, PC_PAD_NONE },
 };
 
 PCKeybindings g_pc_keybindings;
@@ -73,7 +75,7 @@ static const char* const s_ini_keys[PC_BIND_COUNT] = {
     "Stick_Up", "Stick_Down", "Stick_Left", "Stick_Right",
     "CStick_Up", "CStick_Down", "CStick_Left", "CStick_Right",
     "DPad_Up", "DPad_Down", "DPad_Left", "DPad_Right",
-    "Map",
+    "Map", "Chat",
 };
 
 static const char* const s_menu_names[PC_BIND_COUNT] = {
@@ -81,7 +83,7 @@ static const char* const s_menu_names[PC_BIND_COUNT] = {
     "Stick Up", "Stick Down", "Stick Left", "Stick Right",
     "C-Stick Up", "C-Stick Down", "C-Stick Left", "C-Stick Right",
     "D-Pad Up", "D-Pad Down", "D-Pad Left", "D-Pad Right",
-    "Map",
+    "Map", "Chat",
 };
 
 /* mouse button name table */
@@ -256,7 +258,7 @@ static void apply_padbind(const char* key, char* value) {
    default, which that file may already give to another control (M to A):
    then the new one starts unbound instead of pressing both */
 static void unbind_taken_defaults(void) {
-    static const int added[] = { PC_BIND_MAP };
+    static const int added[] = { PC_BIND_MAP, PC_BIND_CHAT };
 
     for (int a = 0; a < (int)(sizeof(added) / sizeof(added[0])); a++) {
         int action = added[a];

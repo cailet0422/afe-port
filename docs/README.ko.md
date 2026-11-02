@@ -410,7 +410,8 @@ ninja -C pc/build32strip
   조합을 "백스페이스 + 새 글자"로 보내므로 그 경로로도 같은 결과가 된다. 게임패드 명령으로 조합이
   확정되면 `SDL_ClearComposition`으로 입력기 쪽 조합도 비워 같은 글자가 두 번 들어가지 않게 한다.
 - 자동 테스트: `--input-script`의 `TYPE`(내장 입력기 키), `EDIT`/`TEXT`(시스템 입력기의 조합 중·확정
-  텍스트) 명령(`pc/src/pc_input_script.c`), `make_opening_script.py --korean`. 화면 키보드는 스크립트의
+  텍스트. 메뉴의 입력 칸이나 멀티플레이 채팅창이 키보드를 받고 있으면 `TEXT`는 `SDL_TEXTINPUT`으로 그쪽에 간다)
+  명령(`pc/src/pc_input_script.c`), `make_opening_script.py --korean`. 화면 키보드는 스크립트의
   버튼(`DOWN`, `RIGHT`, `A`, `X`, `Y`, `B`, `Z`)과 `TOUCH`로 시험한다: 이름 입력에서 패드로 "한국"을 치고
   Shift·한/영·지우기, 터치로 `?`를 넣어 "한국?"이 되는 것을 확인했다. `make_opening_script.py --korean`은
   편집기가 열려 있는 동안 A를 누르지 않는다(화면 키보드의 키가 눌리므로). 편지·말버릇·도루묵씨·신청곡은

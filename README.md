@@ -17,16 +17,16 @@
 ## Download
 
 <!-- When a new release is published, update the version in these links (here and in README.ko.md). -->
-Latest release: **[v1.1.1](https://github.com/cailet0422/afe-port/releases/tag/v1.1.1)**
+Latest release: **[v1.1.2](https://github.com/cailet0422/afe-port/releases/tag/v1.1.2)**
 
 | Platform | Download | Requirements |
 |---|---|---|
-| Windows 64-bit | [DobutsuNoMoriEPlus-v1.1.1-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.1.1/DobutsuNoMoriEPlus-v1.1.1-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
-| Windows 32-bit | [DobutsuNoMoriEPlus-v1.1.1-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.1.1/DobutsuNoMoriEPlus-v1.1.1-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.1.1-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.1.1/DobutsuNoMoriEPlus-v1.1.1-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.1.1-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.1.1/DobutsuNoMoriEPlus-v1.1.1-Android.apk) | Android 5.0+, ARM 32/64-bit |
+| Windows 64-bit | [DobutsuNoMoriEPlus-v1.1.2-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.1.2/DobutsuNoMoriEPlus-v1.1.2-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
+| Windows 32-bit | [DobutsuNoMoriEPlus-v1.1.2-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.1.2/DobutsuNoMoriEPlus-v1.1.2-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.1.2-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.1.2/DobutsuNoMoriEPlus-v1.1.2-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.1.2-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.1.2/DobutsuNoMoriEPlus-v1.1.2-Android.apk) | Android 5.0+, ARM 32/64-bit |
 
-Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.1.1/SHA256SUMS.txt) ·
+Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.1.2/SHA256SUMS.txt) ·
 Older versions and release notes: [all releases](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -195,6 +195,13 @@ outside change the same way for everyone: dropping, picking up, placing, digging
 planting, shaking fruit down, chopping trees, pulling weeds. The name others see is set under **Your name**
 (empty = your character's name).
 
+**Chat**: while in a room, press **T** on PC, or the **speech bubble button** at the top of the screen on Android, to
+open the chat box. Type and press **Enter** (**Send** on Android) to send, **Esc** (**Close**, or a tap outside the
+box, on Android) to close it. The game does not stop while the box is open, but your character stands still. New
+lines show at the top of the screen for a few seconds, and on Android the button gets a red dot while there are
+unread ones. The key can be changed in Settings → Controls → **Chat (multiplayer)** (a gamepad button too). On PC,
+Hangul is typed with your computer's Korean input method (Han/Eng key).
+
 **Things to keep in mind**
 
 - **Everyone should use the same version** of the game; with different versions joining may fail.
@@ -244,6 +251,7 @@ planting, shaking fruit down, chopping trees, pulling weeds. The name others see
 | L / R | Q / E |
 | Start | Enter |
 | Town map (open / close) | M |
+| Chat (in multiplayer) | T |
 | Pause menu | Esc |
 
 In the menus, use the mouse (click, wheel), the arrow keys with Enter and Esc, or a gamepad (D-pad, A,

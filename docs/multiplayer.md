@@ -30,7 +30,11 @@ master for a trip**: the game saves your town to slot A and takes you by train t
 town on a memory card in slot B. In the host's town:
 
 - the others walk around as themselves (their boy or girl model, face, tan and clothes) with their names over their
-  heads; what someone types in the chat shows over their head for a few seconds;
+  heads; what someone types in the chat shows over their head for a few seconds. The chat box opens while playing
+  with the Chat control (**T**, Settings > Controls; a gamepad button can be bound too) or, on touch screens, the
+  speech bubble button at the top (between the pad's Start and R). Enter sends and closes it, Esc closes it; while it
+  is open the game keeps running but gets no input (`pc_pad.c`), and the touch pad hides. New lines show at the top for
+  8 seconds (`pc/src/gui/pc_gui_mp.cpp`);
 - every change to the outdoor items is shared: dropping and picking up items, placing them, digging and filling holes,
   burying, planting saplings and flowers, shaking fruit down, chopping trees, pulling weeds, collecting shells...;
 - guests follow the host's clock.

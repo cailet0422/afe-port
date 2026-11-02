@@ -504,7 +504,9 @@ static void tab_controls() {
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
             ImGui::AlignTextToFramePadding();
-            ImGui::TextUnformatted(a == PC_BIND_MAP ? T("Map", "지도") : pc_keybindings_action_name(a));
+            ImGui::TextUnformatted(a == PC_BIND_MAP    ? T("Map", "지도")
+                                   : a == PC_BIND_CHAT ? T("Chat (multiplayer)", "채팅 (멀티플레이)")
+                                                       : pc_keybindings_action_name(a));
             for (int col = 0; col < 2; col++) {
                 ImGui::TableNextColumn();
                 bool waiting = s_capture == a && s_capture_col == col;

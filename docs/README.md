@@ -457,7 +457,8 @@ drops you into the Reset Center).
   character", and that path gives the same result too. When a gamepad command commits the composition,
   `SDL_ClearComposition` also clears the composition on the IME side so the same character does not go in twice.
 - Automated tests: the `--input-script` commands `TYPE` (built-in input method keys) and `EDIT`/`TEXT` (system IME
-  composing/committed text) (`pc/src/pc_input_script.c`), `make_opening_script.py --korean`. The on-screen keyboard is
+  composing/committed text; while a field of the menus or the multiplayer chat box has the keyboard, `TEXT` goes to
+  it as `SDL_TEXTINPUT`) (`pc/src/pc_input_script.c`), `make_opening_script.py --korean`. The on-screen keyboard is
   tested with script buttons (`DOWN`, `RIGHT`, `A`, `X`, `Y`, `B`, `Z`) and `TOUCH`: verified that in name entry,
   typing "한국" (Korea) with the pad, then Shift, 한/영 and delete, and `?` by touch gives "한국?".
   `make_opening_script.py --korean` does not press A while the editor is open (it would press keys of the on-screen

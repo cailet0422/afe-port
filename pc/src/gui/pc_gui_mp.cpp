@@ -6,6 +6,8 @@ extern "C" {
 #include "pc_mp.h"
 #include "pc_mp_game.h"
 #include "pc_settings.h"
+#include "pc_typing.h"
+#include "pc_keybindings.h"
 }
 
 #include <string.h>
@@ -256,6 +258,20 @@ static void room_view(PcMp* mp) {
             s_chat_line[0] = '\0';
             if (enter) ImGui::SetKeyboardFocusHere(-1);
         }
+        char key[32], help[200];
+
+        pc_keybindings_key_label(PC_BIND_CHAT, key, sizeof(key));
+        if (strcmp(key, "-") != 0) {
+            snprintf(help, sizeof(help),
+                     T("While playing: the %s key (Settings > Controls > Chat) or, on a touch screen, the chat button.",
+                       "게임 중에는 %s 키(설정 > 조작 > 채팅)나 터치 화면의 채팅 버튼으로 바로 칠 수 있어요."),
+                     key);
+        } else {
+            snprintf(help, sizeof(help), "%s",
+                     T("While playing: the chat button on a touch screen, or bind a key to Chat in Settings > Controls.",
+                       "게임 중에는 터치 화면의 채팅 버튼으로 칠 수 있어요. 설정 > 조작 > 채팅에 키를 정할 수도 있어요."));
+        }
+        Help(help);
     }
     ImGui::Spacing();
     if (BigButton(host ? T("Close the room", "방 닫기") : T("Leave the room", "방 나가기"))) {
@@ -474,6 +490,246 @@ const char* MultiplayerStatus() {
     return buf;
 }
 
+/* --- Chat while playing ------------------------------------------------ */
+
+static bool s_qc_open = false;
+static bool s_qc_focus = false;
+static char s_qc_line[160] = "";
+static ImVec2 s_qc_min(0, 0), s_qc_max(0, 0); /* the box, as last drawn */
+static unsigned s_qc_seen = 0;               /* chat lines seen (in the box or as they came) */
+static int s_qc_recent = 0;                  /* lines to show at the top for a while */
+static Uint32 s_qc_recent_until = 0;
+static int s_qc_own = 0;                     /* lines we sent that have not come round yet */
+static Uint32 s_qc_unread_until = 0;         /* someone else said something: the button's dot */
+
+#define QC_RECENT_MS 8000
+
+bool ChatIsOpen() {
+    return s_qc_open;
+}
+
+void ChatOpen() {
+    if (!s_qc_open) {
+        s_qc_open = true;
+        s_qc_focus = true;
+        s_qc_min = s_qc_max = ImVec2(0, 0);
+        printf("[GUI] chat box opened\n");
+    }
+}
+
+void ChatClose() {
+    if (s_qc_open) {
+        s_qc_open = false;
+        s_qc_seen = pc_mp_game_chat_serial();
+        s_qc_recent = 0;
+        s_qc_unread_until = 0; /* read in the box */
+        printf("[GUI] chat box closed\n");
+    }
+}
+
+bool ChatAllowed() {
+    return MultiplayerOverlayWanted() && !pc_typing_takes_keys() && !pc_typing_editor_taking_input();
+}
+
+bool ChatWindowContains(float x, float y) {
+    if (s_qc_max.x <= s_qc_min.x) {
+        return true; /* not drawn yet */
+    }
+    return x >= s_qc_min.x && x <= s_qc_max.x && y >= s_qc_min.y && y <= s_qc_max.y;
+}
+
+/* On touch screens (the on-screen pad, or Android): a round button at the
+ * top, between the pad's Start and R */
+static bool chat_button_wanted() {
+#ifdef __ANDROID__
+    return true;
+#else
+    return g_pc_settings.touch_controls != 0;
+#endif
+}
+
+static void chat_button_geometry(ImVec2* c, float* r) {
+    ImGuiIO& io = ImGui::GetIO();
+    float w = io.DisplaySize.x, h = io.DisplaySize.y;
+    float u = w < h ? w : h;
+
+    *c = ImVec2(w * 0.5f + 0.27f * u, 0.075f * u);
+    *r = 0.05f * u;
+}
+
+bool ChatButtonHit(float x, float y) {
+    ImVec2 c;
+    float r;
+
+    if (!chat_button_wanted()) {
+        return false;
+    }
+    chat_button_geometry(&c, &r);
+    r *= 1.3f; /* a finger is not a pointer */
+    return (x - c.x) * (x - c.x) + (y - c.y) * (y - c.y) <= r * r;
+}
+
+static void draw_chat_button(ImDrawList* dl, bool unread) {
+    ImVec2 c;
+    float r;
+
+    chat_button_geometry(&c, &r);
+    dl->AddCircleFilled(c, r, IM_COL32(0xFF, 0xFF, 0xFF, 0x70));
+    dl->AddCircle(c, r, IM_COL32(0xFF, 0xFF, 0xFF, 0xC0), 0, 2.0f * g_scale);
+    /* a speech bubble with three dots */
+    float bw = r * 1.15f, bh = r * 0.78f;
+    ImVec2 a(c.x - bw * 0.5f, c.y - bh * 0.5f - r * 0.08f), b(c.x + bw * 0.5f, c.y + bh * 0.5f - r * 0.08f);
+    ImU32 green = IM_COL32(0x3E, 0x9A, 0x4F, 0xF0);
+
+    dl->AddRectFilled(a, b, green, bh * 0.45f);
+    dl->AddTriangleFilled(ImVec2(a.x + bw * 0.22f, b.y - 1.0f), ImVec2(a.x + bw * 0.46f, b.y - 1.0f),
+                          ImVec2(a.x + bw * 0.16f, b.y + bh * 0.38f), green);
+    for (int i = -1; i <= 1; i++) {
+        dl->AddCircleFilled(ImVec2(c.x + i * bw * 0.25f, (a.y + b.y) * 0.5f), bh * 0.09f, IM_COL32(0xFF, 0xFF, 0xFF, 0xFF));
+    }
+    if (unread) {
+        dl->AddCircleFilled(ImVec2(c.x + r * 0.72f, c.y - r * 0.72f), r * 0.22f, IM_COL32(0xE0, 0x4B, 0x3A, 0xFF));
+    }
+}
+
+/* The lines that just came, for a few seconds at the top (box closed) */
+static void draw_recent(ImDrawList* dl) {
+    char lines[3][192];
+    int n = pc_mp_game_chat_lines(lines, s_qc_recent < 3 ? s_qc_recent : 3);
+    ImGuiIO& io = ImGui::GetIO();
+    float u = io.DisplaySize.x < io.DisplaySize.y ? io.DisplaySize.x : io.DisplaySize.y;
+    float pad = 8.0f * g_scale;
+    float wrap = 420.0f * g_scale;
+    Uint32 now = SDL_GetTicks();
+    Uint32 left = s_qc_recent_until - now;
+    int alpha = left < 600 ? (int)(left * 255 / 600) : 255;
+    float fs = ImGui::GetFontSize() * 0.9f;
+    float h = 0.0f, w = 0.0f;
+
+    for (int i = 0; i < n; i++) {
+        ImVec2 ts = ImGui::GetFont()->CalcTextSizeA(fs, FLT_MAX, wrap, lines[i]);
+        h += ts.y + (i > 0 ? pad * 0.4f : 0.0f);
+        if (ts.x > w) w = ts.x;
+    }
+    /* under the pad's top buttons on a touch screen, else in the top left corner */
+    ImVec2 p = chat_button_wanted() ? ImVec2((io.DisplaySize.x - w) * 0.5f, 0.15f * u) : ImVec2(14.0f * g_scale + pad, 14.0f * g_scale + pad);
+    dl->AddRectFilled(ImVec2(p.x - pad, p.y - pad), ImVec2(p.x + w + pad, p.y + h + pad),
+                      IM_COL32(0x2A, 0x24, 0x1C, alpha * 0xB0 / 255), 10.0f * g_scale);
+    for (int i = 0; i < n; i++) {
+        ImVec2 ts = ImGui::GetFont()->CalcTextSizeA(fs, FLT_MAX, wrap, lines[i]);
+        dl->AddText(ImGui::GetFont(), fs, p, IM_COL32(0xFF, 0xF8, 0xE7, alpha), lines[i], NULL, wrap);
+        p.y += ts.y + pad * 0.4f;
+    }
+}
+
+static void chat_box() {
+    ImGuiIO& io = ImGui::GetIO();
+    float u = io.DisplaySize.x < io.DisplaySize.y ? io.DisplaySize.x : io.DisplaySize.y;
+    float w = 560.0f * g_scale;
+    bool touch = chat_button_wanted() || g_touch;
+
+    if (w > io.DisplaySize.x - 24.0f * g_scale) {
+        w = io.DisplaySize.x - 24.0f * g_scale;
+    }
+    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, touch ? 0.02f * u : 14.0f * g_scale), ImGuiCond_Always,
+                            ImVec2(0.5f, 0.0f));
+    ImGui::SetNextWindowSize(ImVec2(w, 0.0f), ImGuiCond_Always);
+    if (s_qc_focus) {
+        ImGui::SetNextWindowFocus();
+    }
+    ImGui::SetNextWindowBgAlpha(0.94f);
+    ImGui::Begin("##chatbox", NULL,
+                 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar);
+
+    ImGui::PushStyleColor(ImGuiCol_Text, Vec(IM_COL32(0x2E, 0x7D, 0x3E, 0xFF)));
+    ImGui::TextUnformatted(T("Chat", "채팅"));
+    ImGui::PopStyleColor();
+    if (!touch) {
+        const char* hint = T("Enter: send   Esc: close", "Enter: 보내기   Esc: 닫기");
+
+        ImGui::SameLine(ImGui::GetContentRegionMax().x - ImGui::CalcTextSize(hint).x);
+        ImGui::PushStyleColor(ImGuiCol_Text, Vec(ColMuted()));
+        ImGui::TextUnformatted(hint);
+        ImGui::PopStyleColor();
+    }
+
+    char lines[5][192];
+    int n = pc_mp_game_chat_lines(lines, 5);
+
+    for (int i = 0; i < n; i++) {
+        ImGui::PushTextWrapPos(0.0f);
+        ImGui::TextUnformatted(lines[i]);
+        ImGui::PopTextWrapPos();
+    }
+    if (n == 0) {
+        Help(T("Nothing said yet.", "아직 아무 말도 없어요."));
+    }
+
+    float send_w = ImGui::CalcTextSize(T("Send", "보내기")).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+    float close_w = touch ? ImGui::CalcTextSize(T("Close", "닫기")).x + ImGui::GetStyle().FramePadding.x * 2.0f +
+                                ImGui::GetStyle().ItemSpacing.x
+                          : 0.0f;
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - send_w - close_w - ImGui::GetStyle().ItemSpacing.x);
+    if (s_qc_focus) {
+        ImGui::SetKeyboardFocusHere();
+        s_qc_focus = false;
+    }
+    bool enter = ImGui::InputText("##quickchat", s_qc_line, sizeof(s_qc_line), ImGuiInputTextFlags_EnterReturnsTrue);
+    ImGui::SameLine();
+    bool send = SmallButton(T("Send", "보내기"));
+    bool close = false;
+    if (touch) {
+        ImGui::SameLine();
+        close = SmallButton(T("Close", "닫기"));
+    }
+    s_qc_min = ImGui::GetWindowPos();
+    s_qc_max = ImVec2(s_qc_min.x + ImGui::GetWindowSize().x, s_qc_min.y + ImGui::GetWindowSize().y);
+    ImGui::End();
+
+    if (close || enter || send) {
+        ChatClose(); /* (an empty Enter closes too) */
+    }
+    if ((enter || send) && s_qc_line[0] != '\0') {
+        /* after closing: the line shows at the top for a moment */
+        s_qc_own++;
+        pc_mp_game_chat(s_qc_line);
+        s_qc_line[0] = '\0';
+    }
+}
+
+static void QuickChat() {
+    ImDrawList* dl = ImGui::GetForegroundDrawList();
+    unsigned serial = pc_mp_game_chat_serial();
+
+    if (s_qc_open) {
+        s_qc_seen = serial;
+        chat_box();
+        return;
+    }
+    if (serial != s_qc_seen) {
+        int added = (int)(serial - s_qc_seen);
+        int own = s_qc_own < added ? s_qc_own : added;
+
+        s_qc_recent = s_qc_recent_until != 0 && SDL_TICKS_PASSED(s_qc_recent_until, SDL_GetTicks()) ? s_qc_recent + added : added;
+        s_qc_recent_until = SDL_GetTicks() + QC_RECENT_MS;
+        if (added > own) {
+            s_qc_unread_until = s_qc_recent_until;
+        }
+        s_qc_own -= own;
+        s_qc_seen = serial;
+    }
+    bool recent = s_qc_recent > 0 && !SDL_TICKS_PASSED(SDL_GetTicks(), s_qc_recent_until);
+    if (recent) {
+        draw_recent(dl);
+    } else {
+        s_qc_recent = 0;
+    }
+    if (chat_button_wanted() && ChatAllowed()) {
+        draw_chat_button(dl, s_qc_unread_until != 0 && !SDL_TICKS_PASSED(SDL_GetTicks(), s_qc_unread_until));
+    }
+}
+
 bool MultiplayerOverlayWanted() {
     PcMp* mp = pc_mp_game_session();
 
@@ -514,6 +770,7 @@ void MultiplayerOverlay() {
                         wrap);
         }
     }
+    QuickChat();
 }
 
 } // namespace gui
