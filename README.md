@@ -208,7 +208,9 @@ Hangul is typed with your computer's Korean input method (Han/Eng key).
 - Guests also need **a saved town of their own**, with **a different name** from the host's town.
 - Only the host's town is shared. Villagers, insects and fish move on each machine by themselves, and talking
   to a villager is your own conversation.
-- Furniture moved inside houses is not shared, and the host's house shows the furniture as it was saved.
+- The host's house shows the host's furniture as it was when the guest received the town (unsaved changes included).
+  Furniture moved or placed inside houses after that is not shared either way. To see the latest arrangement, go home,
+  join the room again and receive the town anew.
 - Custom designs worn as clothes show as the plain shirt to others.
 - Two players picking up the same item in the same instant can both get it.
 - While a guest is in the host's town, the guest's game clock follows the host's.

@@ -118,7 +118,8 @@ be made; then one side needs the port forwarded (UPnP or by hand).
 - One town is shared: the host's. Guests' towns are not visited (switch hosts for that).
 - Villagers, insects and fish move on each machine by themselves; talking to a villager is your own conversation.
 - Houses: everyone can go into buildings, and players in the same building see each other, but furniture moved inside a
-  house is not shared, and the host's house shows the furniture as it was saved.
+  house is not shared: the host's house shows the furniture as it was when the guest received the town (the game's
+  memory at that moment, `mCD_PC_SnapshotSave`, so unsaved changes too), and later changes on either side stay there.
 - Custom designs worn as clothes show as the plain shirt to others.
 - Two players picking up the same item in the same instant can both get it (the host corrects the ground, not the
   pocket).
