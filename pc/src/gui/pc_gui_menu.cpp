@@ -515,6 +515,7 @@ static void tab_controls() {
 
                     snprintf(buf, sizeof(buf), T("Press... %d###c%d", "누르세요... %d###c%d"), secs, col);
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.98f, 0.80f, 0.45f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.98f, 0.80f, 0.45f, 1.0f));
                 } else {
                     char label[48];
 
@@ -534,7 +535,7 @@ static void tab_controls() {
                     s_capture_deadline = SDL_GetTicks() + CAPTURE_MS;
                 }
                 if (waiting) {
-                    ImGui::PopStyleColor();
+                    ImGui::PopStyleColor(2);
                 }
             }
             ImGui::PopID();
