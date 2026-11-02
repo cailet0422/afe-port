@@ -35,6 +35,7 @@ typedef struct {
     int running;
     int announce;
     int announced;
+    uint16_t port; /* announce this port, not the one nodes see; 0: theirs */
     uint8_t key[20];
     uint8_t nonce;
     uint32_t started;
@@ -246,11 +247,11 @@ static void send_announce(PcDht* d, int slot, int ci) {
     b_cstr(&b, "id");
     b_str(&b, d->id, 20);
     b_cstr(&b, "implied_port");
-    b_int(&b, 1);
+    b_int(&b, L->port != 0 ? 0 : 1);
     b_cstr(&b, "info_hash");
     b_str(&b, L->key, 20);
     b_cstr(&b, "port");
-    b_int(&b, pc_net_port(d->sock));
+    b_int(&b, L->port != 0 ? L->port : pc_net_port(d->sock));
     b_cstr(&b, "token");
     b_str(&b, c->token, (size_t)c->token_len);
     b_raw(&b, "e", 1);
@@ -317,6 +318,10 @@ void pc_dht_lookup(PcDht* d, int slot, const uint8_t key[20], int announce) {
     L->started = pc_net_ms();
     memcpy(L->key, key, 20);
     for (int i = 0; i < d->nboot; i++) add_cand(L, NULL, &d->boot[i]);
+}
+
+void pc_dht_lookup_port(PcDht* d, int slot, uint16_t port) {
+    if (slot >= 0 && slot < PC_DHT_MAX_LOOKUPS) d->look[slot].port = port;
 }
 
 int pc_dht_lookup_running(PcDht* d, int slot) {

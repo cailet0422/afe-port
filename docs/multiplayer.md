@@ -57,9 +57,17 @@ passes positions and messages on (a star: the host decides). A peer silent for 1
 ### Over the internet without a server
 
 - **STUN** (`stun.l.google.com:19302`, `stun.cloudflare.com:3478`) tells the host its outside address and port; the
-  room code packs that address, the port and 16 bits of the room id (64 bits in Crockford base32).
+  room code packs the outside address, a port and 16 bits of the room id (64 bits in Crockford base32).
 - **UPnP IGD** (`pc_upnp.c`): the host asks the home router to forward its UDP port (SSDP, then SOAP AddPortMapping;
-  taken away when the room closes). Routers without UPnP simply do not answer.
+  taken away when the room closes) and asks for the router's outside address. Routers without UPnP simply do not
+  answer.
+- **Which port the code holds**: the forwarded port when the router forwarded one and its outside address is the one
+  STUN (or the DHT) sees, otherwise the port STUN saw. Some routers give the game's packets another outside port than
+  the one they forward, so STUN's port alone can be the wrong one to give out. A router whose outside address is not
+  the one the internet sees (behind another router, or behind the carrier's NAT, `100.64.0.0/10`) forwards a port
+  nobody outside can reach: then the code keeps STUN's port, and the multiplayer page says so. Public rooms announce
+  the same forwarded port to the DHT (`implied_port` 0), and the room looks for guests punching with a code of either
+  port.
 - **BitTorrent Mainline DHT** (BEP 5, read-only node of BEP 43, on the game's own socket so `implied_port` gives the
   address the game is reached at; bootstrap `router.bittorrent.com`, `dht.transmissionbt.com`, `router.utorrent.com`,
   `dht.libtorrent.org`):
@@ -117,7 +125,8 @@ be made; then one side needs the port forwarded (UPnP or by hand).
 STUN parsers, finding a public room by broadcast, a wrong password refused, joining with 15% of all packets lost,
 players and looks, positions, 50 messages in order, chat, a 200 KB town, sending out and not letting back in; and the
 internet path against a fake DHT node: the host announcing itself, the room list finding it through the DHT, a join by
-room code that announces itself for punching.
+room code that announces itself for punching; with a forwarded port, the code and the DHT announce carrying it, and a
+router behind another router being ignored.
 
 In the game, with two folders that each have a saved town (different town names) and `--deterministic --days 1` (not a
 Sunday: the fishing tourney talks over the station), the input-script commands `MPHOST [private]`, `MPJOIN
