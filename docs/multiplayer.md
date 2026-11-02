@@ -112,14 +112,41 @@ be made; then one side needs the port forwarded (UPnP or by hand).
   a little smoothed, blinks, and casts the player's shadow. A design of their own as clothing is drawn as the plain
   shirt (the picture is not sent).
 - The menu draws the names (and chat balloons) at the head's projected position (`Game_play_Projection_Trans`).
+- **Building placeholders**: while the actor of a building exists (a player's house, a villager's house, a mailbox, the
+  shop...), the game keeps a placeholder in its unit (`DUMMY_HOUSE0`, `DUMMY_NPC_HOUSE_xxx`...) and puts the name back
+  when the actor goes (`m_actor.c` `restore_fgdata`). Placeholders are each game's own: never sent or taken, and a town
+  given whole (`mCD_PC_SnapshotSave`) or an item layer sent whole has the actor's name in their place. (Before, the
+  host's placeholders reached guests, and guests saw no house where the host's stands.)
+- **House furniture** (`homes[]`): in a house the save data is the room itself (its furniture actors are built from it
+  when the room loads). Every 10 frames the host compares, for every floor, the items of layers 1 and 2
+  (`layer_main`, `layer_secondary`) and the wallpaper and carpet (`wall_floor`, `floor_bit_info`) with what it sent, and
+  sends what changed (`G_HOME`; an `RSV_NO` of an item in the air is left out). A guest gets all of it on arriving
+  (`G_HOME_REQ`). Outside that room it writes it into its save at once; standing in it, it waits until the room is quiet
+  (no menu, talk, held or reserved furniture, not sitting), then afe-decomp `ac_my_room.c` `aMR_PC_SyncRoom` takes the
+  furniture away as the destructor does, writes what came, and builds the furniture again as the constructor does
+  (`indoor_dma_again_proc` if the wallpaper or carpet changed). Only the owner can move the furniture of a house (the
+  game's `aMR_CheckRoomOwner`), so nothing goes from guests.
+- **Villagers** (afe-decomp `ac_npc_pc_mp.c_inc`): after each move the host reports every ordinary field villager
+  (`mAc_PROFILE_NORMAL_NPC`) — position, facing, standing/walking/running, hidden (in its house), `is_home`, whether it
+  is wandering (`pc_mp_npc_report`) — and sends all of them every 6 frames (`G_NPC`, unreliable): exactly those it has as
+  actors, the others at their `npclist` position, each with its schedule of the moment (out, home, asleep...), which a
+  guest holds its own to with the game's override (`mNPS_schedule_c` `forced_type`, renewed with every message). On a guest, after a villager's think (`aNPC_schedule_proc`) and before
+  its action, it is asked to walk, run or stand toward the host's at priority 3 (`aNPC_set_request_act`: above
+  wandering, below talking and greeting); only while it wanders, and it jumps there out of sight when more than 160
+  away. A guest also keeps its villagers that are not actors at the host's positions and `is_home`, does not let the
+  manager send them travelling or home by itself (`aSNMgr_walk_npc`, `aSNMgr_force_go_home`), brings out one the host
+  has in its acre and it does not (`setupActor_proc`), and removes, out of sight, one it has that the host has in
+  another acre.
 
 ## Limits
 
 - One town is shared: the host's. Guests' towns are not visited (switch hosts for that).
-- Villagers, insects and fish move on each machine by themselves; talking to a villager is your own conversation.
-- Houses: everyone can go into buildings, and players in the same building see each other, but furniture moved inside a
-  house is not shared: the host's house shows the furniture as it was when the guest received the town (the game's
-  memory at that moment, `mCD_PC_SnapshotSave`, so unsaved changes too), and later changes on either side stay there.
+- Villagers follow the host, but not exactly: only those the host has as actors (in the host's acre) have an exact
+  position; for the others only the rough one the game keeps (the acre) is shared. Talking and greeting, going in and
+  out of houses, sleeping and catching insects are each game's own. Villagers inside houses (indoor NPC2), the island
+  villager, insects and fish are not shared.
+- In houses, the furniture and items on the floor and on tables and the wallpaper and carpet are shared; what is inside
+  storage furniture (held by the furniture actors of whoever is in the room), lamps on or off and gyroid steps are not.
 - Custom designs worn as clothes show as the plain shirt to others.
 - Two players picking up the same item in the same instant can both get it (the host corrects the ground, not the
   pocket).
