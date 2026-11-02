@@ -56,6 +56,7 @@
  *                                     e.g. Escape, Return, Down, Left_Shift): menus
  *     <frame> PAD <name>              a gamepad button or trigger event (SDL names: a,
  *                                     dpdown, leftshoulder, lefttrigger ...)
+ *     <frame> CLICK x,y               a left mouse click (percent of the window): the menus
  *     <frame> MAP                     open the town map, or close it, as the Map control
  *                                     (M) does (pc_minimap.c)
  *

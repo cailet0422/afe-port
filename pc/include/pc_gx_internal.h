@@ -270,6 +270,10 @@ GLuint pc_gx_texture_upload(void* data, int width, int height, int format, int c
 void   pc_gx_texture_init(void);
 void   pc_gx_texture_shutdown(void);
 void   pc_gx_texture_cache_invalidate(void);
+/* The texture pack (pc_texture_pack.c): a replacement that was loading is
+ * there / one of its textures was freed */
+void   pc_gx_texture_hd_ready(unsigned long long key);
+void   pc_gx_texture_forget(GLuint tex);
 
 #ifdef PC_ENHANCEMENTS
 /* EFB capture: store full-res GL texture from GXCopyTex, retrieve on texture load */

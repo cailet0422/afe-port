@@ -440,6 +440,16 @@ add_custom_command(
     COMMENT "Embedding system font"
 )
 
+# The menus' font (a subset of NanumGothic, SIL OFL: pc/res/gui_font_OFL.txt)
+set(GUI_FONT_C "${CMAKE_BINARY_DIR}/gen/pc_gui_font.c")
+add_custom_command(
+    OUTPUT "${GUI_FONT_C}"
+    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin2c.py" --own --size
+            "${CMAKE_CURRENT_SOURCE_DIR}/res/gui_font.ttf" "${GUI_FONT_C}" pc_gui_font_ttf 4
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/res/gui_font.ttf" "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin2c.py"
+    COMMENT "Embedding the menu font"
+)
+
 # =============================================================================
 # PC port source files
 # =============================================================================
@@ -479,8 +489,10 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_texture_pack.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_settings.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_pause_menu.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_settings_menu.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_text_draw.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_menu.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_textures.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_mp.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_keybindings.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_nes_fixnes.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_stubs.c
@@ -495,6 +507,20 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_ko_patch.c
     ${SYSTEM_FONT_C}
     ${WINDOW_ICON_C}
+    ${GUI_FONT_C}
+)
+
+# =============================================================================
+# Dear ImGui (MIT, pc/lib/imgui) for the port's menus (pc/src/gui)
+# =============================================================================
+set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/imgui)
+set(IMGUI_SOURCES
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_sdl2.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_impl_opengl3.cpp
 )
 
 # =============================================================================
@@ -571,6 +597,20 @@ set_source_files_properties(${PC_CXX_SOURCES}
     PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;${PC_WARN_SUPPRESS};-fpermissive"
 )
 
+# The port's own code that does heavy work (no decomp code: optimizing is safe):
+# HD textures (hashes, inflating, BC7 decoding) and the menus
+set_property(SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_texture_pack.c ${CMAKE_CURRENT_SOURCE_DIR}/src/ko/ko_patch.c
+    APPEND PROPERTY COMPILE_OPTIONS "-O2")
+set_source_files_properties(${IMGUI_SOURCES} PROPERTIES COMPILE_OPTIONS "-O2;-w")
+set_property(SOURCE ${IMGUI_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_menu.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_textures.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_mp.cpp
+    APPEND PROPERTY INCLUDE_DIRECTORIES ${IMGUI_DIR})
+set_property(SOURCE ${IMGUI_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_menu.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_textures.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_mp.cpp
+    APPEND PROPERTY COMPILE_DEFINITIONS IMGUI_DISABLE_DEMO_WINDOWS IMGUI_DISABLE_DEBUG_TOOLS)
+
 # Padclamp.c defines a plain `inline` helper; MWCC emits it like GNU89 does.
 set_property(SOURCE "${DECOMP_ROOT}/src/static/GAEJ01_01/dolphin/pad/Padclamp.c"
     APPEND PROPERTY COMPILE_OPTIONS "-fgnu89-inline")
@@ -586,6 +626,7 @@ if(ANDROID)
     # libmain.so, loaded by SDLActivity (pc/android)
     add_library(afe_pc SHARED
         ${PC_SOURCES}
+        ${IMGUI_SOURCES}
         ${FIXNES_SOURCES}
         ${DECOMP_C_SOURCES}
         ${DECOMP_CXX_SOURCES}
@@ -598,6 +639,7 @@ if(ANDROID)
 else()
     add_executable(afe_pc
         ${PC_SOURCES}
+        ${IMGUI_SOURCES}
         ${FIXNES_SOURCES}
         ${DECOMP_C_SOURCES}
         ${DECOMP_CXX_SOURCES}

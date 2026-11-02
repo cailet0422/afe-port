@@ -1,15 +1,49 @@
-/* pc_texture_pack.c - Dolphin-compatible HD texture pack loader
+/* pc_texture_pack.c - Dolphin-style HD texture packs, see pc_texture_pack.h
  *
- * Filename: tex1_{W}x{H}_{hash}[_{tlut_hash}]_{fmt}.dds
- * Hashes match Dolphin's XXHash64 (seed=0). CI textures use min/max palette
- * index scan for TLUT hash (only used entries, in BE byte order).
- * DDS: BC7, BC1/DXT1, BC3/DXT5, or uncompressed RGBA. */
+ * Names: tex1_{W}x{H}[_m]_{hash}[_{tlut hash}|_$]_{format}.dds|.png. The
+ * hashes are Dolphin's XXH64 (seed 0) of the texture's data as the GameCube
+ * has it (big-endian, in tiles); for paletted textures the palette hash covers
+ * only the entries the texture uses (min..max index), big-endian.
+ *
+ * texture_pack/ holds zips (read in place: each texture's local header and
+ * deflated bytes are read when it is needed) and folders of files. The index
+ * of every name is built on the first frame (once the Korean patch is known,
+ * see pc_texture_pack.h), a thread reads and decodes what the game asks for,
+ * and the game thread uploads it between frames. */
 #include "pc_texture_pack.h"
 #include "pc_gx_internal.h"
 #include "pc_settings.h"
+#include "pc_rom_dir.h"
+#include "pc_ko.h"
+#include "ko_patch.h" /* ko_inflate */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
+
+#define BCDEC_IMPLEMENTATION
+#include "../lib/bcdec/bcdec.h"
+#define STB_IMAGE_IMPLEMENTATION
+#define STBI_ONLY_PNG
+#define STBI_NO_STDIO
+#define STBI_NO_LINEAR
+#define STBI_NO_HDR
+#include "../lib/stb/stb_image.h"
+
+#ifdef _WIN32
+#include <windows.h>
+#undef near
+#undef far
+#else
+#include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
+
+extern int g_pc_deterministic;
+extern SDL_Window* g_pc_window;
+int pc_input_script_active(void);
 
 /* --- XXHash64 (seed=0, matches Dolphin's GetHash64) --- */
 
@@ -65,14 +99,13 @@ static xxh_u64 xxhash64(const void* input, int len) {
         xxh_u64 v4 = 0 - XXH_PRIME64_1;
 
         do {
-            v1 = xxh_round(v1, xxh_read64(p));      p += 8;
-            v2 = xxh_round(v2, xxh_read64(p));      p += 8;
-            v3 = xxh_round(v3, xxh_read64(p));      p += 8;
-            v4 = xxh_round(v4, xxh_read64(p));      p += 8;
+            v1 = xxh_round(v1, xxh_read64(p)); p += 8;
+            v2 = xxh_round(v2, xxh_read64(p)); p += 8;
+            v3 = xxh_round(v3, xxh_read64(p)); p += 8;
+            v4 = xxh_round(v4, xxh_read64(p)); p += 8;
         } while (p <= limit);
 
-        h64 = xxh_rotl64(v1, 1) + xxh_rotl64(v2, 7) +
-              xxh_rotl64(v3, 12) + xxh_rotl64(v4, 18);
+        h64 = xxh_rotl64(v1, 1) + xxh_rotl64(v2, 7) + xxh_rotl64(v3, 12) + xxh_rotl64(v4, 18);
         h64 = xxh_merge_round(h64, v1);
         h64 = xxh_merge_round(h64, v2);
         h64 = xxh_merge_round(h64, v3);
@@ -82,1158 +115,1395 @@ static xxh_u64 xxhash64(const void* input, int len) {
     }
 
     h64 += (xxh_u64)len;
-
-    /* Remaining 8-byte chunks */
     while (p + 8 <= end) {
         xxh_u64 k1 = xxh_round(0, xxh_read64(p));
         h64 ^= k1;
         h64 = xxh_rotl64(h64, 27) * XXH_PRIME64_1 + XXH_PRIME64_4;
         p += 8;
     }
-
-    /* Remaining 4-byte chunk */
     if (p + 4 <= end) {
         h64 ^= (xxh_u64)xxh_read32(p) * XXH_PRIME64_1;
         h64 = xxh_rotl64(h64, 23) * XXH_PRIME64_2 + XXH_PRIME64_3;
         p += 4;
     }
-
-    /* Remaining bytes */
     while (p < end) {
         h64 ^= (xxh_u64)(*p) * XXH_PRIME64_5;
         h64 = xxh_rotl64(h64, 11) * XXH_PRIME64_1;
         p++;
     }
-
-    /* Avalanche */
     h64 ^= h64 >> 33;
     h64 *= XXH_PRIME64_2;
     h64 ^= h64 >> 29;
     h64 *= XXH_PRIME64_3;
     h64 ^= h64 >> 32;
-
     return h64;
 }
 
-/* --- DDS format constants --- */
-
-#define DDS_MAGIC          0x20534444  /* "DDS " */
-#define DDS_HEADER_SIZE    124
-#define DDS_DX10_SIZE      20
-#define DDPF_FOURCC        0x04
-
-#define DXGI_FORMAT_R8G8B8A8_UNORM   28
-#define DXGI_FORMAT_B8G8R8A8_UNORM   87
-#define DXGI_FORMAT_BC1_UNORM        71
-#define DXGI_FORMAT_BC3_UNORM        77
-#define DXGI_FORMAT_BC7_UNORM        98
+/* --- GL formats --- */
 
 #ifndef GL_COMPRESSED_RGBA_S3TC_DXT1_EXT
-#define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT  0x83F1
+#define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT 0x83F1
 #endif
 #ifndef GL_COMPRESSED_RGBA_S3TC_DXT5_EXT
-#define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT  0x83F3
+#define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83F3
 #endif
 #ifndef GL_COMPRESSED_RGBA_BPTC_UNORM
-#define GL_COMPRESSED_RGBA_BPTC_UNORM     0x8E8C
+#define GL_COMPRESSED_RGBA_BPTC_UNORM 0x8E8C
 #endif
 
 static int g_has_bc7 = 0;
 static int g_has_s3tc = 0;
 
-static int g_stat_lookups = 0;
-static int g_stat_hits = 0;
-static int g_stat_loaded = 0;
-static int g_stat_cache_hits = 0;
-static int g_stat_neg_hits = 0;
+/* --- The index --- */
 
-/* --- Texture pack file lookup table --- */
-#define TEXPACK_MAP_BITS  15
-#define TEXPACK_MAP_SIZE  (1 << TEXPACK_MAP_BITS)  /* 32768 */
-#define TEXPACK_MAP_MASK  (TEXPACK_MAP_SIZE - 1)
+enum {
+    ST_NONE,
+    ST_QUEUED,
+    ST_LOADED,
+    ST_FAILED,
+};
 
 typedef struct {
     xxh_u64 data_hash;
     xxh_u64 tlut_hash;
-    xxh_u32 gc_fmt;
-    xxh_u32 orig_w, orig_h;
-    char    filepath[260];
-    int     occupied;
-} TexPackEntry;
-
-static TexPackEntry* g_texpack_map = NULL;
-static int g_texpack_count = 0;
-static int g_texpack_active = 0;
-
-/* Wildcard TLUT entries: tex1_WxH_DATAHASH_$_FMT.dds (matches any palette) */
-#define TEXPACK_WC_BITS  14
-#define TEXPACK_WC_SIZE  (1 << TEXPACK_WC_BITS)
-#define TEXPACK_WC_MASK  (TEXPACK_WC_SIZE - 1)
+    xxh_u32 fmt;
+    unsigned short w, h;
+    unsigned char wildcard; /* tlut hash "$": any palette */
+    unsigned char state;    /* ST_* (game thread only) */
+    unsigned char is_png;
+    signed char source;     /* index into s_sources */
+    xxh_u32 path_off;       /* loose file: path in the string pool */
+    xxh_u32 local_off;      /* zip: local header */
+    xxh_u32 comp_size;
+    xxh_u32 size;
+    unsigned short method;  /* zip: 0 stored, 8 deflated */
+    GLuint gl;
+    unsigned short tex_w, tex_h;
+    xxh_u32 bytes;
+    xxh_u32 last_used;      /* frame */
+} Entry;
 
 typedef struct {
-    xxh_u64 data_hash;
-    xxh_u32 gc_fmt;
-    xxh_u32 orig_w, orig_h;
-    char    filepath[260];
-    int     occupied;
-} TexPackWildcardEntry;
+    PCTexPackSource info;
+    char path[512]; /* zip file, or "" for folders */
+} Source;
 
-static TexPackWildcardEntry* g_texpack_wc_map = NULL;
+static Entry* s_entries = NULL;
+static int s_count = 0, s_cap = 0;
+static int* s_map = NULL; /* open addressing, -1 = empty */
+static int s_map_mask = 0;
+static char* s_pool = NULL;
+static size_t s_pool_len = 0, s_pool_cap = 0;
+static Source s_sources[PC_TEXPACK_MAX_SOURCES];
+static int s_source_count = 0;
+static int s_skipped_korean = 0;
 
-/* --- Hash map operations --- */
+static int s_indexed = 0;    /* the index is built (first frame) */
+static int s_enabled = 0;    /* hd_textures */
+static int s_async = 0;      /* load on the thread */
+static int s_preloaded = 0;
+static int s_replaced = 0;
+static int s_loaded = 0;
+static long long s_gpu_bytes = 0;
+static long long s_budget = 0;
+static xxh_u32 s_frame = 1;
 
-static xxh_u32 texpack_slot(xxh_u64 data_hash, xxh_u64 tlut_hash, xxh_u32 fmt,
-                            xxh_u32 w, xxh_u32 h) {
-    xxh_u64 combined = data_hash ^ (tlut_hash * 0x9E3779B97F4A7C15ULL);
-    combined ^= ((xxh_u64)fmt * 0x517CC1B727220A95ULL);
-    combined ^= ((xxh_u64)w * 0x6C62272E07BB0142ULL);
-    combined ^= ((xxh_u64)h * 0x165667B19E3779F9ULL);
-    return (xxh_u32)(combined & TEXPACK_MAP_MASK);
-}
+/* --- String pool, entries, map --- */
 
-static xxh_u32 texpack_wc_slot(xxh_u64 data_hash, xxh_u32 fmt, xxh_u32 w, xxh_u32 h) {
-    xxh_u64 combined = data_hash;
-    combined ^= ((xxh_u64)fmt * 0x517CC1B727220A95ULL);
-    combined ^= ((xxh_u64)w * 0x6C62272E07BB0142ULL);
-    combined ^= ((xxh_u64)h * 0x165667B19E3779F9ULL);
-    return (xxh_u32)(combined & TEXPACK_WC_MASK);
-}
+static xxh_u32 pool_add(const char* s) {
+    size_t n = strlen(s) + 1;
+    xxh_u32 off;
 
-static void texpack_insert(xxh_u64 data_hash, xxh_u64 tlut_hash, xxh_u32 fmt,
-                           xxh_u32 w, xxh_u32 h, const char* filepath) {
-    if (!g_texpack_map) return;
+    if (s_pool_len + n > s_pool_cap) {
+        size_t cap = s_pool_cap ? s_pool_cap * 2 : 65536;
 
-    xxh_u32 slot = texpack_slot(data_hash, tlut_hash, fmt, w, h);
-    for (int i = 0; i < TEXPACK_MAP_SIZE; i++) {
-        xxh_u32 idx = (slot + i) & TEXPACK_MAP_MASK;
-        if (!g_texpack_map[idx].occupied) {
-            g_texpack_map[idx].data_hash = data_hash;
-            g_texpack_map[idx].tlut_hash = tlut_hash;
-            g_texpack_map[idx].gc_fmt = fmt;
-            g_texpack_map[idx].orig_w = w;
-            g_texpack_map[idx].orig_h = h;
-            strncpy(g_texpack_map[idx].filepath, filepath, 259);
-            g_texpack_map[idx].filepath[259] = '\0';
-            g_texpack_map[idx].occupied = 1;
-            g_texpack_count++;
-            break;
-        }
+        while (cap < s_pool_len + n) cap *= 2;
+        char* p = (char*)realloc(s_pool, cap);
+        if (p == NULL) return 0;
+        s_pool = p;
+        s_pool_cap = cap;
     }
-
+    off = (xxh_u32)s_pool_len;
+    memcpy(s_pool + s_pool_len, s, n);
+    s_pool_len += n;
+    return off;
 }
 
-static TexPackEntry* texpack_find(xxh_u64 data_hash, xxh_u64 tlut_hash, xxh_u32 fmt,
-                                  xxh_u32 w, xxh_u32 h) {
-    if (!g_texpack_map || g_texpack_count == 0) return NULL;
-    xxh_u32 slot = texpack_slot(data_hash, tlut_hash, fmt, w, h);
-    for (int i = 0; i < TEXPACK_MAP_SIZE; i++) {
-        xxh_u32 idx = (slot + i) & TEXPACK_MAP_MASK;
-        if (!g_texpack_map[idx].occupied) return NULL;
-        if (g_texpack_map[idx].data_hash == data_hash &&
-            g_texpack_map[idx].tlut_hash == tlut_hash &&
-            g_texpack_map[idx].gc_fmt == fmt &&
-            g_texpack_map[idx].orig_w == w &&
-            g_texpack_map[idx].orig_h == h) {
-            return &g_texpack_map[idx];
-        }
-    }
-    return NULL;
+static xxh_u32 key_slot(xxh_u64 data_hash, xxh_u64 tlut_hash, xxh_u32 fmt, xxh_u32 w, xxh_u32 h, int wildcard) {
+    xxh_u64 k = data_hash ^ (tlut_hash * 0x9E3779B97F4A7C15ULL);
+
+    k ^= (xxh_u64)fmt * 0x517CC1B727220A95ULL;
+    k ^= (xxh_u64)w * 0x6C62272E07BB0142ULL;
+    k ^= (xxh_u64)h * 0x165667B19E3779F9ULL;
+    k ^= (xxh_u64)wildcard * 0x85EBCA77C2B2AE63ULL;
+    k ^= k >> 29;
+    return (xxh_u32)k;
 }
 
-static void texpack_insert_wildcard(xxh_u64 data_hash, xxh_u32 fmt,
-                                    xxh_u32 w, xxh_u32 h, const char* filepath) {
-    if (!g_texpack_wc_map) return;
-    xxh_u32 slot = texpack_wc_slot(data_hash, fmt, w, h);
-    for (int i = 0; i < TEXPACK_WC_SIZE; i++) {
-        xxh_u32 idx = (slot + i) & TEXPACK_WC_MASK;
-        if (!g_texpack_wc_map[idx].occupied) {
-            g_texpack_wc_map[idx].data_hash = data_hash;
-            g_texpack_wc_map[idx].gc_fmt = fmt;
-            g_texpack_wc_map[idx].orig_w = w;
-            g_texpack_wc_map[idx].orig_h = h;
-            strncpy(g_texpack_wc_map[idx].filepath, filepath, 259);
-            g_texpack_wc_map[idx].filepath[259] = '\0';
-            g_texpack_wc_map[idx].occupied = 1;
-            g_texpack_count++;
-            break;
+static int map_find(xxh_u64 data_hash, xxh_u64 tlut_hash, xxh_u32 fmt, xxh_u32 w, xxh_u32 h, int wildcard) {
+    if (s_map == NULL) return -1;
+    xxh_u32 i = key_slot(data_hash, tlut_hash, fmt, w, h, wildcard) & s_map_mask;
+    for (;;) {
+        int e = s_map[i];
+
+        if (e < 0) return -1;
+        const Entry* en = &s_entries[e];
+        if (en->data_hash == data_hash && en->tlut_hash == tlut_hash && en->fmt == fmt && en->w == w &&
+            en->h == h && en->wildcard == wildcard) {
+            return e;
         }
+        i = (i + 1) & s_map_mask;
     }
 }
 
-static TexPackWildcardEntry* texpack_find_wildcard(xxh_u64 data_hash, xxh_u32 fmt,
-                                                   xxh_u32 w, xxh_u32 h) {
-    if (!g_texpack_wc_map || g_texpack_count == 0) return NULL;
-    xxh_u32 slot = texpack_wc_slot(data_hash, fmt, w, h);
-    for (int i = 0; i < TEXPACK_WC_SIZE; i++) {
-        xxh_u32 idx = (slot + i) & TEXPACK_WC_MASK;
-        if (!g_texpack_wc_map[idx].occupied) return NULL;
-        if (g_texpack_wc_map[idx].data_hash == data_hash &&
-            g_texpack_wc_map[idx].gc_fmt == fmt &&
-            g_texpack_wc_map[idx].orig_w == w &&
-            g_texpack_wc_map[idx].orig_h == h) {
-            return &g_texpack_wc_map[idx];
+static void map_build(void) {
+    int size = 1024;
+
+    while (size < s_count * 2) size *= 2;
+    free(s_map);
+    s_map = (int*)malloc(sizeof(int) * size);
+    if (s_map == NULL) return;
+    memset(s_map, 0xFF, sizeof(int) * size);
+    s_map_mask = size - 1;
+    for (int e = 0; e < s_count; e++) {
+        const Entry* en = &s_entries[e];
+        xxh_u32 i;
+
+        if (map_find(en->data_hash, en->tlut_hash, en->fmt, en->w, en->h, en->wildcard) >= 0) {
+            continue; /* the same texture again: the first one (folders before zips) stays */
         }
+        i = key_slot(en->data_hash, en->tlut_hash, en->fmt, en->w, en->h, en->wildcard) & s_map_mask;
+        while (s_map[i] >= 0) i = (i + 1) & s_map_mask;
+        s_map[i] = e;
     }
-    return NULL;
 }
 
-/* --- Filename parser --- */
+static Entry* entry_new(void) {
+    if (s_count == s_cap) {
+        int cap = s_cap ? s_cap * 2 : 4096;
+        Entry* p = (Entry*)realloc(s_entries, sizeof(Entry) * cap);
+
+        if (p == NULL) return NULL;
+        s_entries = p;
+        s_cap = cap;
+    }
+    Entry* e = &s_entries[s_count];
+    memset(e, 0, sizeof(*e));
+    return e;
+}
+
+/* --- Names --- */
 
 static int parse_hex64(const char* s, xxh_u64* out) {
     *out = 0;
     for (int i = 0; i < 16; i++) {
         char c = s[i];
         xxh_u64 nibble;
-        if (c >= '0' && c <= '9')      nibble = c - '0';
-        else if (c >= 'a' && c <= 'f')  nibble = 10 + c - 'a';
-        else if (c >= 'A' && c <= 'F')  nibble = 10 + c - 'A';
+
+        if (c >= '0' && c <= '9') nibble = c - '0';
+        else if (c >= 'a' && c <= 'f') nibble = 10 + c - 'a';
+        else if (c >= 'A' && c <= 'F') nibble = 10 + c - 'A';
         else return 0;
         *out = (*out << 4) | nibble;
     }
     return 1;
 }
 
-static int parse_texpack_filename(const char* name, xxh_u32* w, xxh_u32* h,
-                                  xxh_u64* data_hash, xxh_u64* tlut_hash, int* tlut_wildcard,
-                                  xxh_u32* fmt) {
-    if (strncmp(name, "tex1_", 5) != 0) return 0;
-    const char* p = name + 5;
+/* tex1_WxH[_m]_HASH[_TLUT|_$]_FMT.dds|png (strict: "_8(1).dds" or "-export" are not Dolphin's) */
+static int parse_name(const char* base, Entry* e) {
+    const char* p;
+    char* end;
+    unsigned long w, h, fmt;
 
-    char* end_w;
-    unsigned long pw = strtoul(p, &end_w, 10);
-    if (*end_w != 'x') return 0;
-    char* end_h;
-    unsigned long ph = strtoul(end_w + 1, &end_h, 10);
-    if (*end_h != '_') return 0;
-    *w = (xxh_u32)pw;
-    *h = (xxh_u32)ph;
-    p = end_h + 1;
-
-    const char* parts[4];
-    int part_count = 0;
-    parts[part_count++] = p;
-    while (*p && part_count < 4) {
-        if (*p == '_') {
-            parts[part_count++] = p + 1;
-        }
-        if (*p == '.') break;
-        p++;
+    if (strncmp(base, "tex1_", 5) != 0) return 0;
+    p = base + 5;
+    w = strtoul(p, &end, 10);
+    if (end == p || *end != 'x') return 0;
+    p = end + 1;
+    h = strtoul(p, &end, 10);
+    if (end == p || *end != '_') return 0;
+    p = end + 1;
+    if (p[0] == 'm' && p[1] == '_') p += 2;
+    if (!parse_hex64(p, &e->data_hash) || p[16] != '_') return 0;
+    p += 17;
+    e->tlut_hash = 0;
+    e->wildcard = 0;
+    if (p[0] == '$' && p[1] == '_') {
+        e->wildcard = 1;
+        p += 2;
+    } else if (strlen(p) > 17 && p[16] == '_' && parse_hex64(p, &e->tlut_hash)) {
+        p += 17;
     }
-
-    if (part_count == 2) {
-        if (!parse_hex64(parts[0], data_hash)) return 0;
-        *tlut_hash = 0;
-        *tlut_wildcard = 0;
-        *fmt = (xxh_u32)strtoul(parts[1], NULL, 10);
-    } else if (part_count == 3) {
-        if (!parse_hex64(parts[0], data_hash)) return 0;
-        if (parts[1][0] == '$') {
-            *tlut_hash = 0;
-            *tlut_wildcard = 1;
-        } else {
-            if (!parse_hex64(parts[1], tlut_hash)) return 0;
-            *tlut_wildcard = 0;
-        }
-        *fmt = (xxh_u32)strtoul(parts[2], NULL, 10);
-    } else {
-        return 0;
-    }
-
+    fmt = strtoul(p, &end, 10);
+    if (end == p) return 0;
+#ifdef _WIN32
+    if (_stricmp(end, ".dds") == 0) e->is_png = 0;
+    else if (_stricmp(end, ".png") == 0) e->is_png = 1;
+#else
+    if (strcasecmp(end, ".dds") == 0) e->is_png = 0;
+    else if (strcasecmp(end, ".png") == 0) e->is_png = 1;
+#endif
+    else return 0;
+    if (w == 0 || h == 0 || w > 1024 || h > 1024) return 0;
+    e->w = (unsigned short)w;
+    e->h = (unsigned short)h;
+    e->fmt = (xxh_u32)fmt;
     return 1;
 }
 
-/* --- Directory scanner --- */
+static int path_has_localisation(const char* path) {
+    char low[512];
+    size_t i;
 
-#ifdef _WIN32
-#include <windows.h>
-#undef near
-#undef far
-
-static void scan_directory(const char* dir_path) {
-    char search_path[300];
-    snprintf(search_path, sizeof(search_path), "%s\\*", dir_path);
-
-    WIN32_FIND_DATAA fd;
-    HANDLE h = FindFirstFileA(search_path, &fd);
-    if (h == INVALID_HANDLE_VALUE) return;
-
-    do {
-        if (fd.cFileName[0] == '.') continue;
-
-        char full_path[300];
-        snprintf(full_path, sizeof(full_path), "%s\\%s", dir_path, fd.cFileName);
-
-        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-            scan_directory(full_path);
-        } else {
-            int len = (int)strlen(fd.cFileName);
-            if (len > 4 && strcmp(fd.cFileName + len - 4, ".dds") == 0) {
-                xxh_u32 w, h_val, fmt;
-                xxh_u64 data_hash, tlut_hash;
-                int tlut_wildcard = 0;
-                if (parse_texpack_filename(fd.cFileName, &w, &h_val, &data_hash, &tlut_hash,
-                                           &tlut_wildcard, &fmt)) {
-                    if (tlut_wildcard) {
-                        texpack_insert_wildcard(data_hash, fmt, w, h_val, full_path);
-                    } else {
-                        texpack_insert(data_hash, tlut_hash, fmt, w, h_val, full_path);
-                    }
-                }
-            }
-        }
-    } while (FindNextFileA(h, &fd));
-
-    FindClose(h);
+    for (i = 0; path[i] && i < sizeof(low) - 1; i++) low[i] = (char)tolower((unsigned char)path[i]);
+    low[i] = '\0';
+    return strstr(low, "localisation/") != NULL || strstr(low, "localization/") != NULL ||
+           strstr(low, "localisation\\") != NULL;
 }
 
+/* Adds a file of a pack; 1 if it is a texture */
+static int add_name(const char* path, int source, xxh_u32 local_off, xxh_u32 comp, xxh_u32 size, int method) {
+    const char* base = path + strlen(path);
+    Entry tmp;
+
+    while (base > path && base[-1] != '/' && base[-1] != '\\') base--;
+    memset(&tmp, 0, sizeof(tmp));
+    if (!parse_name(base, &tmp)) return 0;
+    if (g_pc_ko_mode && path_has_localisation(path)) {
+        s_skipped_korean++; /* other languages' text, never over the Korean patch */
+        return 0;
+    }
+    Entry* e = entry_new();
+    if (e == NULL) return 0;
+    *e = tmp;
+    e->source = (signed char)source;
+    e->local_off = local_off;
+    e->comp_size = comp;
+    e->size = size;
+    e->method = (unsigned short)method;
+    e->path_off = source < 0 || s_sources[source].path[0] == '\0' ? pool_add(path) : 0;
+    s_count++;
+    return 1;
+}
+
+/* --- Zip --- */
+
+static unsigned rd16(const unsigned char* p) { return p[0] | (p[1] << 8); }
+static xxh_u32 rd32(const unsigned char* p) { return p[0] | (p[1] << 8) | (p[2] << 16) | ((xxh_u32)p[3] << 24); }
+
+/* Reads the zip's central directory: calls fn for each file. 0 if it is not a zip */
+typedef void (*ZipFn)(void* user, const char* name, xxh_u32 local_off, xxh_u32 comp, xxh_u32 size, int method);
+
+static int zip_walk(FILE* f, ZipFn fn, void* user) {
+    unsigned char tail[65557];
+    long size, start;
+    size_t got;
+    long eocd = -1;
+
+    if (fseek(f, 0, SEEK_END) != 0) return 0;
+    size = ftell(f);
+    if (size < 22) return 0;
+    start = size > (long)sizeof(tail) ? size - (long)sizeof(tail) : 0;
+    fseek(f, start, SEEK_SET);
+    got = fread(tail, 1, (size_t)(size - start), f);
+    for (long i = (long)got - 22; i >= 0; i--) {
+        if (rd32(tail + i) == 0x06054b50) {
+            eocd = i;
+            break;
+        }
+    }
+    if (eocd < 0) return 0;
+    xxh_u32 cd_count = rd16(tail + eocd + 10);
+    xxh_u32 cd_size = rd32(tail + eocd + 12);
+    xxh_u32 cd_off = rd32(tail + eocd + 16);
+    if ((long)cd_off + (long)cd_size > size) return 0;
+
+    unsigned char* cd = (unsigned char*)malloc(cd_size ? cd_size : 1);
+    if (cd == NULL) return 0;
+    fseek(f, (long)cd_off, SEEK_SET);
+    if (fread(cd, 1, cd_size, f) != cd_size) {
+        free(cd);
+        return 0;
+    }
+    xxh_u32 pos = 0;
+    for (xxh_u32 i = 0; i < cd_count && pos + 46 <= cd_size; i++) {
+        const unsigned char* h = cd + pos;
+        char name[512];
+
+        if (rd32(h) != 0x02014b50) break;
+        unsigned method = rd16(h + 10);
+        xxh_u32 comp = rd32(h + 20);
+        xxh_u32 usize = rd32(h + 24);
+        unsigned nlen = rd16(h + 28), xlen = rd16(h + 30), clen = rd16(h + 32);
+        xxh_u32 local = rd32(h + 42);
+        if (pos + 46 + nlen > cd_size) break;
+        size_t n = nlen < sizeof(name) - 1 ? nlen : sizeof(name) - 1;
+        memcpy(name, h + 46, n);
+        name[n] = '\0';
+        fn(user, name, local, comp, usize, (int)method);
+        pos += 46 + nlen + xlen + clen;
+    }
+    free(cd);
+    return 1;
+}
+
+typedef struct {
+    int source;
+    int textures;
+    xxh_u32 readme_off, readme_comp, readme_size;
+    int readme_method;
+} ZipScan;
+
+static void zip_index_fn(void* user, const char* name, xxh_u32 local_off, xxh_u32 comp, xxh_u32 size, int method) {
+    ZipScan* z = (ZipScan*)user;
+    const char* base = name + strlen(name);
+
+    while (base > name && base[-1] != '/') base--;
+#ifdef _WIN32
+    if (_stricmp(base, "readme.txt") == 0 && z->readme_size == 0) {
 #else
-#include <dirent.h>
-#include <sys/stat.h>
+    if (strcasecmp(base, "readme.txt") == 0 && z->readme_size == 0) {
+#endif
+        z->readme_off = local_off;
+        z->readme_comp = comp;
+        z->readme_size = size;
+        z->readme_method = method;
+        return;
+    }
+    if ((method == 0 || method == 8) && add_name(name, z->source, local_off, comp, size, method)) {
+        z->textures++;
+    }
+}
 
-static void scan_directory(const char* dir_path) {
-    DIR* d = opendir(dir_path);
-    if (!d) return;
+/* The bytes of one file in a zip (malloc'd) */
+static unsigned char* zip_read(FILE* f, xxh_u32 local_off, xxh_u32 comp, xxh_u32 size, int method) {
+    unsigned char lh[30];
+    unsigned char* src;
+    unsigned char* out;
 
-    struct dirent* ent;
-    while ((ent = readdir(d)) != NULL) {
-        if (ent->d_name[0] == '.') continue;
+    if (fseek(f, (long)local_off, SEEK_SET) != 0 || fread(lh, 1, 30, f) != 30 || rd32(lh) != 0x04034b50) {
+        return NULL;
+    }
+    if (fseek(f, (long)(local_off + 30 + rd16(lh + 26) + rd16(lh + 28)), SEEK_SET) != 0) return NULL;
+    src = (unsigned char*)malloc(comp ? comp : 1);
+    if (src == NULL) return NULL;
+    if (fread(src, 1, comp, f) != comp) {
+        free(src);
+        return NULL;
+    }
+    if (method == 0) {
+        return src;
+    }
+    out = (unsigned char*)malloc(size ? size : 1);
+    if (out == NULL || !ko_inflate(src, comp, out, size)) {
+        free(out);
+        out = NULL;
+    }
+    free(src);
+    return out;
+}
 
-        char full_path[300];
-        snprintf(full_path, sizeof(full_path), "%s/%s", dir_path, ent->d_name);
+/* "--Animal Crossing HD Texture Pack--" / "Version 25 (Oct 11th 2026)" */
+static void read_readme(FILE* f, const ZipScan* z, PCTexPackSource* info) {
+    unsigned char* text;
+    char line[128];
+    int n = 0;
 
-        struct stat st;
-        if (stat(full_path, &st) != 0) continue;
+    if (z->readme_size == 0 || z->readme_size > 1 << 20) return;
+    text = zip_read(f, z->readme_off, z->readme_comp, z->readme_size, z->readme_method);
+    if (text == NULL) return;
+    const char* p = (const char*)text;
+    const char* end = p + z->readme_size;
+    while (p < end && n < 2) {
+        size_t len = 0;
 
-        if (S_ISDIR(st.st_mode)) {
-            scan_directory(full_path);
-        } else {
-            int len = (int)strlen(ent->d_name);
-            if (len > 4 && strcmp(ent->d_name + len - 4, ".dds") == 0) {
-                xxh_u32 w, h_val, fmt;
-                xxh_u64 data_hash, tlut_hash;
-                int tlut_wildcard = 0;
-                if (parse_texpack_filename(ent->d_name, &w, &h_val, &data_hash, &tlut_hash,
-                                           &tlut_wildcard, &fmt)) {
-                    if (tlut_wildcard) {
-                        texpack_insert_wildcard(data_hash, fmt, w, h_val, full_path);
-                    } else {
-                        texpack_insert(data_hash, tlut_hash, fmt, w, h_val, full_path);
-                    }
-                }
+        while (p + len < end && p[len] != '\n' && p[len] != '\r') len++;
+        if (len > 0) {
+            size_t k = len < sizeof(line) - 1 ? len : sizeof(line) - 1;
+            char* s = line;
+
+            memcpy(line, p, k);
+            line[k] = '\0';
+            while (*s == '-' || *s == ' ') s++;
+            for (char* t = s + strlen(s); t > s && (t[-1] == '-' || t[-1] == ' ');) *--t = '\0';
+            if (n == 0) snprintf(info->title, sizeof(info->title), "%s", s);
+            else snprintf(info->version, sizeof(info->version), "%s", s);
+            n++;
+        }
+        p += len;
+        while (p < end && (*p == '\n' || *p == '\r')) p++;
+    }
+    free(text);
+}
+
+static void index_zip(const char* path, const char* name, long long bytes) {
+    FILE* f;
+    ZipScan z;
+    int src = s_source_count;
+
+    if (src >= PC_TEXPACK_MAX_SOURCES) return;
+    f = pc_fopen_utf8(path, "rb");
+    if (f == NULL) return;
+    memset(&s_sources[src], 0, sizeof(Source));
+    snprintf(s_sources[src].path, sizeof(s_sources[src].path), "%s", path);
+    snprintf(s_sources[src].info.name, sizeof(s_sources[src].info.name), "%s", name);
+    s_sources[src].info.is_zip = 1;
+    s_sources[src].info.bytes = bytes;
+    s_source_count++;
+    memset(&z, 0, sizeof(z));
+    z.source = src;
+    if (zip_walk(f, zip_index_fn, &z)) {
+        read_readme(f, &z, &s_sources[src].info);
+    }
+    fclose(f);
+    s_sources[src].info.entries = z.textures;
+    if (z.textures == 0) {
+        s_source_count--; /* not a texture pack */
+    }
+}
+
+/* --- Folders --- */
+
+static int s_folder_textures;
+
+static int ends_with_zip(const char* name) {
+    size_t n = strlen(name);
+#ifdef _WIN32
+    return n > 4 && _stricmp(name + n - 4, ".zip") == 0;
+#else
+    return n > 4 && strcasecmp(name + n - 4, ".zip") == 0;
+#endif
+}
+
+#ifdef _WIN32
+static void scan_dir(const char* dir, int depth, int zips) {
+    char pattern[600];
+    WIN32_FIND_DATAA fd;
+    HANDLE h;
+
+    snprintf(pattern, sizeof(pattern), "%s\\*", dir);
+    h = FindFirstFileA(pattern, &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        char full[600];
+
+        if (fd.cFileName[0] == '.') continue;
+        snprintf(full, sizeof(full), "%s\\%s", dir, fd.cFileName);
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            if (!zips && depth < 8) scan_dir(full, depth + 1, 0);
+        } else if (zips) {
+            if (depth == 0 && ends_with_zip(fd.cFileName)) {
+                index_zip(full, fd.cFileName, ((long long)fd.nFileSizeHigh << 32) | fd.nFileSizeLow);
             }
+        } else if (add_name(full, -1, 0, 0, 0, 0)) {
+            s_folder_textures++;
+        }
+    } while (FindNextFileA(h, &fd));
+    FindClose(h);
+}
+#else
+static void scan_dir(const char* dir, int depth, int zips) {
+    DIR* d = opendir(dir);
+    struct dirent* ent;
+
+    if (d == NULL) return;
+    while ((ent = readdir(d)) != NULL) {
+        char full[600];
+        struct stat st;
+
+        if (ent->d_name[0] == '.') continue;
+        snprintf(full, sizeof(full), "%s/%s", dir, ent->d_name);
+        if (stat(full, &st) != 0) continue;
+        if (S_ISDIR(st.st_mode)) {
+            if (!zips && depth < 8) scan_dir(full, depth + 1, 0);
+        } else if (zips) {
+            if (depth == 0 && ends_with_zip(ent->d_name)) {
+                index_zip(full, ent->d_name, (long long)st.st_size);
+            }
+        } else if (add_name(full, -1, 0, 0, 0, 0)) {
+            s_folder_textures++;
         }
     }
     closedir(d);
 }
 #endif
 
-/* --- DDS file loader --- */
+/* --- Decoding --- */
 
-static GLuint load_dds_file(const char* filepath, int* out_w, int* out_h) {
-    FILE* f = fopen(filepath, "rb");
-    if (!f) return 0;
-
-    unsigned char header[148];
-    if (fread(header, 1, 128, f) != 128) { fclose(f); return 0; }
-
-    xxh_u32 magic;
-    memcpy(&magic, header, 4);
-    if (magic != DDS_MAGIC) { fclose(f); return 0; }
-
-    xxh_u32 dds_height, dds_width;
-    memcpy(&dds_height, header + 12, 4);
-    memcpy(&dds_width, header + 16, 4);
-
-    xxh_u32 pf_flags, pf_fourcc;
-    memcpy(&pf_flags, header + 80, 4);
-    memcpy(&pf_fourcc, header + 84, 4);
-
-    xxh_u32 dxgi_format = 0;
-    GLenum gl_internal = 0;
-    int compressed = 0;
-    int block_size = 0;
-
-    if ((pf_flags & DDPF_FOURCC) && pf_fourcc == 0x30315844) {
-        /* "DX10" FourCC — read extended header */
-        if (fread(header + 128, 1, 20, f) != 20) { fclose(f); return 0; }
-        memcpy(&dxgi_format, header + 128, 4);
-
-        switch (dxgi_format) {
-            case DXGI_FORMAT_BC7_UNORM:
-                if (!g_has_bc7) { fclose(f); return 0; }
-                gl_internal = GL_COMPRESSED_RGBA_BPTC_UNORM;
-                compressed = 1;
-                block_size = 16;
-                break;
-            case DXGI_FORMAT_BC1_UNORM:
-                if (!g_has_s3tc) { fclose(f); return 0; }
-                gl_internal = GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
-                compressed = 1;
-                block_size = 8;
-                break;
-            case DXGI_FORMAT_BC3_UNORM:
-                if (!g_has_s3tc) { fclose(f); return 0; }
-                gl_internal = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
-                compressed = 1;
-                block_size = 16;
-                break;
-            case DXGI_FORMAT_R8G8B8A8_UNORM:
-            case DXGI_FORMAT_B8G8R8A8_UNORM:
-                gl_internal = GL_RGBA;
-                compressed = 0;
-                break;
-            default:
-                fclose(f);
-                return 0;
-        }
-    } else if ((pf_flags & DDPF_FOURCC)) {
-        /* Legacy FourCC (DXT1, DXT3, DXT5) */
-        if (pf_fourcc == 0x31545844) { /* "DXT1" */
-            if (!g_has_s3tc) { fclose(f); return 0; }
-            gl_internal = GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
-            compressed = 1;
-            block_size = 8;
-        } else if (pf_fourcc == 0x35545844) { /* "DXT5" */
-            if (!g_has_s3tc) { fclose(f); return 0; }
-            gl_internal = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
-            compressed = 1;
-            block_size = 16;
-        } else {
-            fclose(f);
-            return 0;
-        }
-    } else {
-        /* Uncompressed — check for 32-bit RGBA by bit counts */
-        xxh_u32 rgb_bit_count;
-        memcpy(&rgb_bit_count, header + 88, 4);
-        if (rgb_bit_count == 32) {
-            gl_internal = GL_RGBA;
-            compressed = 0;
-        } else {
-            fclose(f);
-            return 0;
-        }
-    }
-
+typedef struct {
+    int w, h;
+    GLenum gl_internal; /* 0: RGBA8 */
     int data_size;
-    if (compressed) {
-        int blocks_x = ((int)dds_width + 3) / 4;
-        int blocks_y = ((int)dds_height + 3) / 4;
-        data_size = blocks_x * blocks_y * block_size;
-    } else {
-        data_size = (int)(dds_width * dds_height * 4);
-    }
+    unsigned char* data;
+} Image;
 
-    unsigned char* pixels = (unsigned char*)malloc(data_size);
-    if (!pixels) { fclose(f); return 0; }
-    if ((int)fread(pixels, 1, data_size, f) != data_size) {
-        free(pixels);
-        fclose(f);
+static void image_free(Image* im) {
+    free(im->data);
+    im->data = NULL;
+}
+
+/* RGBA to half size (box filter) */
+static void image_halve(Image* im) {
+    int w = im->w / 2, h = im->h / 2;
+    unsigned char* out;
+
+    if (im->gl_internal != 0 || w < 1 || h < 1) return;
+    out = (unsigned char*)malloc((size_t)w * h * 4);
+    if (out == NULL) return;
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            const unsigned char* a = im->data + ((size_t)(y * 2) * im->w + x * 2) * 4;
+            const unsigned char* b = a + (size_t)im->w * 4;
+            for (int c = 0; c < 4; c++) {
+                out[((size_t)y * w + x) * 4 + c] = (unsigned char)((a[c] + a[4 + c] + b[c] + b[4 + c] + 2) / 4);
+            }
+        }
+    }
+    free(im->data);
+    im->data = out;
+    im->w = w;
+    im->h = h;
+    im->data_size = w * h * 4;
+}
+
+enum { BC_NONE, BC1, BC3, BC7 };
+
+/* Decodes a block-compressed image to RGBA */
+static int bc_to_rgba(Image* im, int kind, const unsigned char* src) {
+    int bw = (im->w + 3) / 4, bh = (im->h + 3) / 4;
+    unsigned char* out = (unsigned char*)malloc((size_t)im->w * im->h * 4);
+    unsigned char block[4 * 4 * 4];
+
+    if (out == NULL) return 0;
+    for (int by = 0; by < bh; by++) {
+        for (int bx = 0; bx < bw; bx++) {
+            switch (kind) {
+                case BC1: bcdec_bc1(src, block, 16); src += 8; break;
+                case BC3: bcdec_bc3(src, block, 16); src += 16; break;
+                default: bcdec_bc7(src, block, 16); src += 16; break;
+            }
+            for (int y = 0; y < 4 && by * 4 + y < im->h; y++) {
+                int n = im->w - bx * 4 < 4 ? im->w - bx * 4 : 4;
+                memcpy(out + ((size_t)(by * 4 + y) * im->w + bx * 4) * 4, block + y * 16, (size_t)n * 4);
+            }
+        }
+    }
+    im->data = out;
+    im->gl_internal = 0;
+    im->data_size = im->w * im->h * 4;
+    return 1;
+}
+
+static int decode_dds(const unsigned char* buf, size_t len, Image* im, int half) {
+    xxh_u32 flags, fourcc, dxgi = 0;
+    size_t off = 128;
+    int kind = BC_NONE, bgra = 0, block = 0;
+
+    if (len < 128 || rd32(buf) != 0x20534444) return 0;
+    im->h = (int)rd32(buf + 12);
+    im->w = (int)rd32(buf + 16);
+    if (im->w <= 0 || im->h <= 0 || im->w > 8192 || im->h > 8192) return 0;
+    flags = rd32(buf + 80);
+    fourcc = rd32(buf + 84);
+    if ((flags & 4) && fourcc == 0x30315844) { /* "DX10" */
+        if (len < 148) return 0;
+        dxgi = rd32(buf + 128);
+        off = 148;
+        switch (dxgi) {
+            case 98: case 99: kind = BC7; break;
+            case 71: case 72: kind = BC1; break;
+            case 77: case 78: kind = BC3; break;
+            case 28: case 29: break;
+            case 87: case 91: bgra = 1; break;
+            default: return 0;
+        }
+    } else if (flags & 4) {
+        if (fourcc == 0x31545844) kind = BC1;      /* DXT1 */
+        else if (fourcc == 0x35545844) kind = BC3; /* DXT5 */
+        else return 0;
+    } else {
+        if (rd32(buf + 88) != 32) return 0;
+        bgra = rd32(buf + 92) == 0x00FF0000; /* red mask */
+    }
+    if (kind != BC_NONE) {
+        block = kind == BC1 ? 8 : 16;
+        size_t need = (size_t)((im->w + 3) / 4) * ((im->h + 3) / 4) * block;
+        int gpu = (kind == BC7 && g_has_bc7) || (kind != BC7 && g_has_s3tc);
+
+        if (off + need > len) return 0;
+        if (gpu && !half) {
+            im->data = (unsigned char*)malloc(need);
+            if (im->data == NULL) return 0;
+            memcpy(im->data, buf + off, need);
+            im->data_size = (int)need;
+            im->gl_internal = kind == BC7 ? GL_COMPRESSED_RGBA_BPTC_UNORM
+                            : kind == BC1 ? GL_COMPRESSED_RGBA_S3TC_DXT1_EXT
+                                          : GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
+            return 1;
+        }
+        if (!bc_to_rgba(im, kind, buf + off)) return 0;
+    } else {
+        size_t need = (size_t)im->w * im->h * 4;
+
+        if (off + need > len) return 0;
+        im->data = (unsigned char*)malloc(need);
+        if (im->data == NULL) return 0;
+        memcpy(im->data, buf + off, need);
+        if (bgra) {
+            for (size_t i = 0; i < need; i += 4) {
+                unsigned char t = im->data[i];
+                im->data[i] = im->data[i + 2];
+                im->data[i + 2] = t;
+            }
+        }
+        im->gl_internal = 0;
+        im->data_size = (int)need;
+    }
+    if (half) image_halve(im);
+    return 1;
+}
+
+static int decode_png(const unsigned char* buf, size_t len, Image* im, int half) {
+    int comp;
+    unsigned char* px = stbi_load_from_memory(buf, (int)len, &im->w, &im->h, &comp, 4);
+
+    if (px == NULL) return 0;
+    im->data = (unsigned char*)malloc((size_t)im->w * im->h * 4);
+    if (im->data == NULL) {
+        stbi_image_free(px);
         return 0;
+    }
+    memcpy(im->data, px, (size_t)im->w * im->h * 4);
+    stbi_image_free(px);
+    im->gl_internal = 0;
+    im->data_size = im->w * im->h * 4;
+    if (half) image_halve(im);
+    return 1;
+}
+
+static unsigned char* read_file(const char* path, size_t* len) {
+    FILE* f = pc_fopen_utf8(path, "rb");
+    unsigned char* buf;
+    long n;
+
+    if (f == NULL) return NULL;
+    fseek(f, 0, SEEK_END);
+    n = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (n <= 0 || n > (64 << 20)) {
+        fclose(f);
+        return NULL;
+    }
+    buf = (unsigned char*)malloc((size_t)n);
+    if (buf != NULL && fread(buf, 1, (size_t)n, f) != (size_t)n) {
+        free(buf);
+        buf = NULL;
     }
     fclose(f);
+    *len = (size_t)n;
+    return buf;
+}
 
-    /* BGRA→RGBA swap if needed */
-    if (!compressed && dxgi_format == DXGI_FORMAT_B8G8R8A8_UNORM) {
-        for (int i = 0; i < data_size; i += 4) {
-            unsigned char tmp = pixels[i];
-            pixels[i] = pixels[i + 2];
-            pixels[i + 2] = tmp;
-        }
+/* Reads and decodes one entry (any thread). zip_files: a FILE* per source
+ * kept open by the caller */
+static int load_entry(const Entry* e, FILE** zip_files, Image* im) {
+    unsigned char* buf = NULL;
+    size_t len = 0;
+    int ok, half = g_pc_settings.hd_quality == 1;
+
+    memset(im, 0, sizeof(*im));
+    if (e->source >= 0 && s_sources[e->source].path[0] != '\0') {
+        FILE** f = &zip_files[(int)e->source];
+
+        if (*f == NULL) *f = pc_fopen_utf8(s_sources[e->source].path, "rb");
+        if (*f == NULL) return 0;
+        buf = zip_read(*f, e->local_off, e->comp_size, e->size, e->method);
+        len = e->size;
+    } else {
+        buf = read_file(s_pool + e->path_off, &len);
     }
+    if (buf == NULL) return 0;
+    ok = e->is_png ? decode_png(buf, len, im, half) : decode_dds(buf, len, im, half);
+    free(buf);
+    return ok;
+}
 
+/* --- GL --- */
+
+static GLuint upload(Image* im) {
     GLuint tex;
+
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
-
-    if (compressed) {
-        glCompressedTexImage2D(GL_TEXTURE_2D, 0, gl_internal,
-                               (GLsizei)dds_width, (GLsizei)dds_height,
-                               0, data_size, pixels);
+    if (im->gl_internal != 0) {
+        glCompressedTexImage2D(GL_TEXTURE_2D, 0, im->gl_internal, im->w, im->h, 0, im->data_size, im->data);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     } else {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (GLsizei)dds_width, (GLsizei)dds_height,
-                     0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, im->w, im->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, im->data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     }
-
-    GLenum err = glGetError();
-    if (err != GL_NO_ERROR) {
-        glDeleteTextures(1, &tex);
-        free(pixels);
-        return 0;
-    }
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    free(pixels);
-
-    if (out_w) *out_w = (int)dds_width;
-    if (out_h) *out_h = (int)dds_height;
-
-    return tex;
-}
-
-/* --- GC texture block-aligned data size (for hash input) --- */
-
-static int gc_texture_data_size(int w, int h, unsigned int fmt) {
-    int bw, bh, block_bytes;
-    switch (fmt) {
-        case 0:  /* GX_TF_I4 */
-        case 8:  /* GX_TF_C4 */
-            bw = 8; bh = 8; block_bytes = 32; break;
-        case 14: /* GX_TF_CMPR */
-            bw = 8; bh = 8; block_bytes = 32; break;
-        case 1:  /* GX_TF_I8 */
-        case 2:  /* GX_TF_IA4 */
-        case 9:  /* GX_TF_C8 */
-            bw = 8; bh = 4; block_bytes = 32; break;
-        case 3:  /* GX_TF_IA8 */
-        case 4:  /* GX_TF_RGB565 */
-        case 5:  /* GX_TF_RGB5A3 */
-            bw = 4; bh = 4; block_bytes = 32; break;
-        case 6:  /* GX_TF_RGBA8 */
-            bw = 4; bh = 4; block_bytes = 64; break;
-        default:
-            bw = 8; bh = 4; block_bytes = 32; break;
-    }
-    int blocks_x = (w + bw - 1) / bw;
-    int blocks_y = (h + bh - 1) / bh;
-    return blocks_x * blocks_y * block_bytes;
-}
-
-/* --- Loaded texture cache (GL ID, avoids re-reading DDS from disk) --- */
-#define LOADED_CACHE_SIZE 32768
-#define LOADED_CACHE_MASK (LOADED_CACHE_SIZE - 1)
-
-typedef struct {
-    xxh_u64 key;
-    GLuint  gl_tex;
-    int     tex_w, tex_h;
-    int     occupied;
-} LoadedCacheEntry;
-
-static LoadedCacheEntry g_loaded_cache[LOADED_CACHE_SIZE];
-
-static xxh_u64 loaded_cache_key(xxh_u64 data_hash, xxh_u64 tlut_hash, xxh_u32 fmt,
-                                xxh_u32 w, xxh_u32 h) {
-    xxh_u64 k = data_hash;
-    k ^= tlut_hash * 0x517CC1B727220A95ULL;
-    k ^= (xxh_u64)fmt * 0x6C62272E07BB0142ULL;
-    k ^= (xxh_u64)w * 0x165667B19E3779F9ULL;
-    k ^= (xxh_u64)h * 0x85EBCA77C2B2AE63ULL;
-    return k;
-}
-
-static LoadedCacheEntry* loaded_cache_find(xxh_u64 key) {
-    xxh_u32 slot = (xxh_u32)(key & LOADED_CACHE_MASK);
-    for (int i = 0; i < LOADED_CACHE_SIZE; i++) {
-        xxh_u32 idx = (slot + i) & LOADED_CACHE_MASK;
-        if (!g_loaded_cache[idx].occupied) return NULL;
-        if (g_loaded_cache[idx].key == key) return &g_loaded_cache[idx];
-    }
-    return NULL;
-}
-
-static void loaded_cache_insert(xxh_u64 key, GLuint tex, int w, int h) {
-    xxh_u32 slot = (xxh_u32)(key & LOADED_CACHE_MASK);
-    for (int i = 0; i < LOADED_CACHE_SIZE; i++) {
-        xxh_u32 idx = (slot + i) & LOADED_CACHE_MASK;
-        if (!g_loaded_cache[idx].occupied) {
-            g_loaded_cache[idx].key = key;
-            g_loaded_cache[idx].gl_tex = tex;
-            g_loaded_cache[idx].tex_w = w;
-            g_loaded_cache[idx].tex_h = h;
-            g_loaded_cache[idx].occupied = 1;
-            return;
-        }
-    }
-}
-
-/* --- Negative lookup cache (skip re-hashing textures with no pack match) --- */
-
-#define NEG_CACHE_SIZE 2048
-#define NEG_CACHE_MASK (NEG_CACHE_SIZE - 1)
-
-static xxh_u64 g_neg_cache[NEG_CACHE_SIZE];
-static int     g_neg_cache_valid[NEG_CACHE_SIZE];
-
-static int neg_cache_check(xxh_u64 key) {
-    xxh_u32 slot = (xxh_u32)(key & NEG_CACHE_MASK);
-    return g_neg_cache_valid[slot] && g_neg_cache[slot] == key;
-}
-
-static void neg_cache_insert(xxh_u64 key) {
-    xxh_u32 slot = (xxh_u32)(key & NEG_CACHE_MASK);
-    g_neg_cache[slot] = key;
-    g_neg_cache_valid[slot] = 1;
-}
-
-/* --- Public API --- */
-
-static void check_compressed_texture_support(void) {
-    GLint num_ext = 0;
-    glGetIntegerv(GL_NUM_EXTENSIONS, &num_ext);
-    for (GLint i = 0; i < num_ext; i++) {
-        const char* ext = (const char*)glGetStringi(GL_EXTENSIONS, i);
-        if (!ext) continue;
-        if (strcmp(ext, "GL_ARB_texture_compression_bptc") == 0) g_has_bc7 = 1;
-        if (strcmp(ext, "GL_EXT_texture_compression_s3tc") == 0) g_has_s3tc = 1;
-    }
-}
-
-static void xxhash64_selftest(void) {
-    xxh_u64 h0 = xxhash64("", 0);
-    unsigned char b32[32];
-    for (int i = 0; i < 32; i++) b32[i] = (unsigned char)i;
-    xxh_u64 h32 = xxhash64(b32, 32);
-    int ok = (h0 == 0xEF46DB3751D8E999ULL) && (h32 == 0xCBF59C5116FF32B4ULL);
-    printf("[TexturePack] XXH64 selftest: %s\n", ok ? "PASS" : "FAIL");
-}
-
-void pc_texture_pack_init(void) {
-    g_texpack_count = 0;
-    g_texpack_active = 0;
-    g_stat_lookups = g_stat_hits = g_stat_loaded = g_stat_cache_hits = g_stat_neg_hits = 0;
-    memset(g_loaded_cache, 0, sizeof(g_loaded_cache));
-    memset(g_neg_cache_valid, 0, sizeof(g_neg_cache_valid));
-
-    xxhash64_selftest();
-
-    check_compressed_texture_support();
-
-    g_texpack_map = (TexPackEntry*)calloc(TEXPACK_MAP_SIZE, sizeof(TexPackEntry));
-    g_texpack_wc_map = (TexPackWildcardEntry*)calloc(TEXPACK_WC_SIZE, sizeof(TexPackWildcardEntry));
-    if (!g_texpack_map || !g_texpack_wc_map) {
-        printf("[TexturePack] Failed to allocate lookup table\n");
-        if (g_texpack_map) { free(g_texpack_map); g_texpack_map = NULL; }
-        if (g_texpack_wc_map) { free(g_texpack_wc_map); g_texpack_wc_map = NULL; }
-        return;
-    }
-
-    scan_directory("texture_pack");
-
-    if (g_texpack_count > 0) {
-        g_texpack_active = 1;
-        printf("[TexturePack] Loaded %d texture entries (BC7:%s S3TC:%s)\n",
-               g_texpack_count,
-               g_has_bc7 ? "yes" : "no",
-               g_has_s3tc ? "yes" : "no");
-    } else {
-        printf("[TexturePack] No texture pack found in texture_pack/\n");
-    }
-}
-
-/* --- Texture preload cache file ---
- * Packs all parsed DDS pixel data into one file so subsequent launches
- * only open a single file (avoids antivirus scanning 17K+ individual DDS files).
- *
- * Format:
- *   Header: magic(4) version(4) entry_count(4) texpack_count(4)
- *   Entry[]:  cache_key(8) gl_internal(4) compressed(4) width(4) height(4) data_size(4)
- *   Pixel data follows each entry header immediately.
- */
-#define TPC_MAGIC   0x43505431  /* "TPC1" */
-#define TPC_VERSION 1
-#define TPC_FILE    "texture_pack/texture_cache.bin"
-
-typedef struct {
-    xxh_u64 cache_key;
-    xxh_u32 gl_internal;
-    xxh_u32 compressed;
-    xxh_u32 width;
-    xxh_u32 height;
-    xxh_u32 data_size;
-} TPCEntryHeader;
-
-/* Upload a single cached texture entry to GL and insert into loaded_cache */
-static int tpc_upload_entry(const TPCEntryHeader* eh, const unsigned char* pixels) {
-    GLuint tex;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-
-    if (eh->compressed) {
-        glCompressedTexImage2D(GL_TEXTURE_2D, 0, (GLenum)eh->gl_internal,
-                               (GLsizei)eh->width, (GLsizei)eh->height,
-                               0, (GLsizei)eh->data_size, pixels);
-    } else {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
-                     (GLsizei)eh->width, (GLsizei)eh->height,
-                     0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-    }
-
     if (glGetError() != GL_NO_ERROR) {
         glDeleteTextures(1, &tex);
         return 0;
     }
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    loaded_cache_insert(eh->cache_key, tex, (int)eh->width, (int)eh->height);
-    return 1;
+    return tex;
 }
 
-/* Try loading from binary cache file. Returns 1 on success, 0 if cache missing/stale. */
-static int preload_from_cache(int expected_count) {
-    extern SDL_Window* g_pc_window;
-    FILE* f = fopen(TPC_FILE, "rb");
-    if (!f) return 0;
+static void entry_loaded(int idx, Image* im) {
+    Entry* e = &s_entries[idx];
 
-    xxh_u32 header[4];
-    if (fread(header, 4, 4, f) != 4) { fclose(f); return 0; }
-    if (header[0] != TPC_MAGIC || header[1] != TPC_VERSION) { fclose(f); return 0; }
-
-    int entry_count = (int)header[2];
-    int stored_texpack_count = (int)header[3];
-
-    /* Invalidate if texture pack file count changed */
-    if (stored_texpack_count != expected_count) {
-        printf("[TexturePack] Cache stale (pack has %d entries, cache has %d) — rebuilding\n",
-               expected_count, stored_texpack_count);
-        fclose(f);
-        return 0;
-    }
-
-    int loaded = 0;
-    unsigned char* buf = NULL;
-    int buf_cap = 0;
-
-    for (int i = 0; i < entry_count; i++) {
-        TPCEntryHeader eh;
-        if (fread(&eh, sizeof(eh), 1, f) != 1) break;
-
-        if ((int)eh.data_size > buf_cap) {
-            buf_cap = (int)eh.data_size + 4096;
-            buf = (unsigned char*)realloc(buf, buf_cap);
-            if (!buf) break;
-        }
-        if (fread(buf, 1, eh.data_size, f) != eh.data_size) break;
-
-        if (tpc_upload_entry(&eh, buf)) loaded++;
-
-        if (g_pc_window && (i % 500) == 0) {
-            char title[128];
-            snprintf(title, sizeof(title), "Animal Crossing - Loading textures... %d/%d (%d%%)",
-                     i, entry_count, i * 100 / entry_count);
-            SDL_SetWindowTitle(g_pc_window, title);
-            SDL_PumpEvents();
-        }
-    }
-
-    free(buf);
-    fclose(f);
-
-    if (g_pc_window) SDL_SetWindowTitle(g_pc_window, "Animal Crossing");
-
-    printf("[TexturePack] Loaded %d textures from cache\n", loaded);
-    return 1;
-}
-
-/* Load raw DDS file data without creating a GL texture (for cache building).
- * Returns malloc'd pixel data, fills out metadata. Caller must free(). */
-static unsigned char* load_dds_raw(const char* filepath, xxh_u32* out_w, xxh_u32* out_h,
-                                    xxh_u32* out_gl_internal, xxh_u32* out_compressed,
-                                    int* out_data_size) {
-    FILE* f = fopen(filepath, "rb");
-    if (!f) return NULL;
-
-    unsigned char header[148];
-    if (fread(header, 1, 128, f) != 128) { fclose(f); return NULL; }
-
-    xxh_u32 magic;
-    memcpy(&magic, header, 4);
-    if (magic != DDS_MAGIC) { fclose(f); return NULL; }
-
-    xxh_u32 dds_height, dds_width;
-    memcpy(&dds_height, header + 12, 4);
-    memcpy(&dds_width, header + 16, 4);
-
-    xxh_u32 pf_flags, pf_fourcc;
-    memcpy(&pf_flags, header + 80, 4);
-    memcpy(&pf_fourcc, header + 84, 4);
-
-    xxh_u32 dxgi_format = 0;
-    GLenum gl_internal = 0;
-    int compressed = 0;
-    int block_size = 0;
-
-    if ((pf_flags & DDPF_FOURCC) && pf_fourcc == 0x30315844) {
-        if (fread(header + 128, 1, 20, f) != 20) { fclose(f); return NULL; }
-        memcpy(&dxgi_format, header + 128, 4);
-        switch (dxgi_format) {
-            case DXGI_FORMAT_BC7_UNORM:
-                if (!g_has_bc7) { fclose(f); return NULL; }
-                gl_internal = GL_COMPRESSED_RGBA_BPTC_UNORM; compressed = 1; block_size = 16; break;
-            case DXGI_FORMAT_BC1_UNORM:
-                if (!g_has_s3tc) { fclose(f); return NULL; }
-                gl_internal = GL_COMPRESSED_RGBA_S3TC_DXT1_EXT; compressed = 1; block_size = 8; break;
-            case DXGI_FORMAT_BC3_UNORM:
-                if (!g_has_s3tc) { fclose(f); return NULL; }
-                gl_internal = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT; compressed = 1; block_size = 16; break;
-            case DXGI_FORMAT_R8G8B8A8_UNORM:
-            case DXGI_FORMAT_B8G8R8A8_UNORM:
-                gl_internal = GL_RGBA; compressed = 0; break;
-            default: fclose(f); return NULL;
-        }
-    } else if ((pf_flags & DDPF_FOURCC)) {
-        if (pf_fourcc == 0x31545844) {
-            if (!g_has_s3tc) { fclose(f); return NULL; }
-            gl_internal = GL_COMPRESSED_RGBA_S3TC_DXT1_EXT; compressed = 1; block_size = 8;
-        } else if (pf_fourcc == 0x35545844) {
-            if (!g_has_s3tc) { fclose(f); return NULL; }
-            gl_internal = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT; compressed = 1; block_size = 16;
-        } else { fclose(f); return NULL; }
-    } else {
-        xxh_u32 rgb_bit_count;
-        memcpy(&rgb_bit_count, header + 88, 4);
-        if (rgb_bit_count == 32) { gl_internal = GL_RGBA; compressed = 0; }
-        else { fclose(f); return NULL; }
-    }
-
-    int data_size;
-    if (compressed) {
-        int blocks_x = ((int)dds_width + 3) / 4;
-        int blocks_y = ((int)dds_height + 3) / 4;
-        data_size = blocks_x * blocks_y * block_size;
-    } else {
-        data_size = (int)(dds_width * dds_height * 4);
-    }
-
-    unsigned char* pixels = (unsigned char*)malloc(data_size);
-    if (!pixels) { fclose(f); return NULL; }
-    if ((int)fread(pixels, 1, data_size, f) != data_size) { free(pixels); fclose(f); return NULL; }
-    fclose(f);
-
-    if (!compressed && dxgi_format == DXGI_FORMAT_B8G8R8A8_UNORM) {
-        for (int i = 0; i < data_size; i += 4) {
-            unsigned char tmp = pixels[i]; pixels[i] = pixels[i + 2]; pixels[i + 2] = tmp;
-        }
-    }
-
-    *out_w = dds_width;
-    *out_h = dds_height;
-    *out_gl_internal = (xxh_u32)gl_internal;
-    *out_compressed = (xxh_u32)compressed;
-    *out_data_size = data_size;
-    return pixels;
-}
-
-/* Preload entry info for cache building */
-typedef struct {
-    xxh_u64 cache_key;
-    char filepath[260];
-} PreloadEntry;
-
-void pc_texture_pack_preload_all(void) {
-    if (!g_texpack_active) return;
-
-    extern SDL_Window* g_pc_window;
-    Uint64 t_start = SDL_GetPerformanceCounter();
-    Uint64 freq = SDL_GetPerformanceFrequency();
-
-    int use_cache = (g_pc_settings.preload_textures >= 2);
-
-    /* Try binary cache first (mode 2 only) */
-    if (use_cache && preload_from_cache(g_texpack_count)) {
-        Uint64 t_end = SDL_GetPerformanceCounter();
-        double elapsed = (double)(t_end - t_start) * 1000.0 / (double)freq;
-        printf("[TexturePack] Preload from cache took %.0fms\n", elapsed);
+    e->gl = upload(im);
+    if (e->gl == 0) {
+        e->state = ST_FAILED;
         return;
     }
+    e->state = ST_LOADED;
+    e->tex_w = (unsigned short)im->w;
+    e->tex_h = (unsigned short)im->h;
+    e->bytes = (xxh_u32)(im->gl_internal != 0 ? im->data_size : im->data_size + im->data_size / 3);
+    e->last_used = s_frame;
+    s_gpu_bytes += e->bytes;
+    s_loaded++;
+}
 
-    /* Load all DDS files individually */
-    int total = 0, processed = 0, loaded = 0, failed = 0;
-    for (int i = 0; i < TEXPACK_MAP_SIZE; i++)
-        if (g_texpack_map[i].occupied) total++;
-    for (int i = 0; i < TEXPACK_WC_SIZE; i++)
-        if (g_texpack_wc_map[i].occupied) total++;
+static void entry_unload(Entry* e) {
+    if (e->state == ST_LOADED && e->gl != 0) {
+        pc_gx_texture_forget(e->gl);
+        glDeleteTextures(1, &e->gl);
+        s_gpu_bytes -= e->bytes;
+        s_loaded--;
+    }
+    e->gl = 0;
+    e->state = ST_NONE;
+}
 
-    /* Collect entries and load DDS + upload to GL + write cache simultaneously */
-    FILE* cache_f = NULL;
-    if (use_cache) {
-        cache_f = fopen(TPC_FILE, "wb");
-        if (cache_f) {
-            xxh_u32 header[4] = { TPC_MAGIC, TPC_VERSION, 0, (xxh_u32)g_texpack_count };
-            fwrite(header, 4, 4, cache_f); /* entry_count placeholder, patched later */
+/* --- The loading thread --- */
+
+#define QUEUE_SIZE 8192
+
+typedef struct Done {
+    int idx;
+    Image im;
+    int ok;
+    struct Done* next;
+} Done;
+
+static SDL_Thread* s_thread = NULL;
+static SDL_mutex* s_mutex = NULL;
+static SDL_cond* s_cond = NULL;
+static int s_queue[QUEUE_SIZE];
+static int s_q_head = 0, s_q_tail = 0;
+static int s_stop = 0;
+static Done* s_done = NULL;
+static int s_pending = 0;
+
+static int worker(void* unused) {
+    FILE* zips[PC_TEXPACK_MAX_SOURCES] = { 0 };
+
+    (void)unused;
+    SDL_LockMutex(s_mutex);
+    while (!s_stop) {
+        if (s_q_head == s_q_tail) {
+            SDL_CondWait(s_cond, s_mutex);
+            continue;
+        }
+        int idx = s_queue[s_q_head];
+        s_q_head = (s_q_head + 1) % QUEUE_SIZE;
+        SDL_UnlockMutex(s_mutex);
+
+        Done* d = (Done*)calloc(1, sizeof(Done));
+        if (d != NULL) {
+            d->idx = idx;
+            d->ok = load_entry(&s_entries[idx], zips, &d->im);
+        }
+
+        SDL_LockMutex(s_mutex);
+        if (d != NULL) {
+            d->next = s_done;
+            s_done = d;
         }
     }
+    SDL_UnlockMutex(s_mutex);
+    for (int i = 0; i < PC_TEXPACK_MAX_SOURCES; i++) {
+        if (zips[i] != NULL) fclose(zips[i]);
+    }
+    return 0;
+}
 
-    int cache_entries = 0;
+static void thread_start(void) {
+    if (s_thread != NULL || !s_async) return;
+    if (s_mutex == NULL) s_mutex = SDL_CreateMutex();
+    if (s_cond == NULL) s_cond = SDL_CreateCond();
+    s_stop = 0;
+    s_q_head = s_q_tail = 0;
+    s_thread = SDL_CreateThread(worker, "texpack", NULL);
+}
 
-    /* Exact-match entries */
-    for (int i = 0; i < TEXPACK_MAP_SIZE; i++) {
-        if (!g_texpack_map[i].occupied) continue;
-        processed++;
+static void thread_stop(void) {
+    if (s_thread == NULL) return;
+    SDL_LockMutex(s_mutex);
+    s_stop = 1;
+    SDL_CondSignal(s_cond);
+    SDL_UnlockMutex(s_mutex);
+    SDL_WaitThread(s_thread, NULL);
+    s_thread = NULL;
+    while (s_done != NULL) {
+        Done* d = s_done;
 
-        xxh_u64 key = loaded_cache_key(g_texpack_map[i].data_hash,
-                                        g_texpack_map[i].tlut_hash,
-                                        g_texpack_map[i].gc_fmt,
-                                        g_texpack_map[i].orig_w,
-                                        g_texpack_map[i].orig_h);
-        if (loaded_cache_find(key)) continue;
+        s_done = d->next;
+        image_free(&d->im);
+        free(d);
+    }
+    s_pending = 0;
+}
 
-        xxh_u32 dds_w, dds_h, gl_int, comp;
-        int data_size;
-        unsigned char* pixels = load_dds_raw(g_texpack_map[i].filepath,
-                                              &dds_w, &dds_h, &gl_int, &comp, &data_size);
-        if (pixels) {
-            TPCEntryHeader eh = { key, gl_int, comp, dds_w, dds_h, (xxh_u32)data_size };
+static int enqueue(int idx) {
+    int next = (s_q_tail + 1) % QUEUE_SIZE;
 
-            /* Upload to GL */
-            GLuint tex;
-            glGenTextures(1, &tex);
-            glBindTexture(GL_TEXTURE_2D, tex);
-            if (comp)
-                glCompressedTexImage2D(GL_TEXTURE_2D, 0, (GLenum)gl_int,
-                                       (GLsizei)dds_w, (GLsizei)dds_h, 0, data_size, pixels);
-            else
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
-                             (GLsizei)dds_w, (GLsizei)dds_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    SDL_LockMutex(s_mutex);
+    if (next == s_q_head) {
+        SDL_UnlockMutex(s_mutex);
+        return 0;
+    }
+    s_queue[s_q_tail] = idx;
+    s_q_tail = next;
+    SDL_CondSignal(s_cond);
+    SDL_UnlockMutex(s_mutex);
+    s_pending++;
+    return 1;
+}
 
-            if (glGetError() == GL_NO_ERROR) {
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                loaded_cache_insert(key, tex, (int)dds_w, (int)dds_h);
-                loaded++;
+/* --- Index --- */
 
-                if (cache_f) {
-                    fwrite(&eh, sizeof(eh), 1, cache_f);
-                    fwrite(pixels, 1, data_size, cache_f);
-                    cache_entries++;
-                }
-            } else {
-                glDeleteTextures(1, &tex);
-                failed++;
-            }
-            free(pixels);
-        } else {
-            failed++;
+static void free_index(void) {
+    thread_stop();
+    for (int i = 0; i < s_count; i++) entry_unload(&s_entries[i]);
+    free(s_entries);
+    free(s_map);
+    free(s_pool);
+    s_entries = NULL;
+    s_map = NULL;
+    s_pool = NULL;
+    s_count = s_cap = 0;
+    s_pool_len = s_pool_cap = 0;
+    s_source_count = 0;
+    s_skipped_korean = 0;
+    s_loaded = 0;
+    s_gpu_bytes = 0;
+    s_indexed = 0;
+}
+
+static void check_gl(void) {
+    GLint n = 0;
+
+    g_has_bc7 = g_has_s3tc = 0;
+    glGetIntegerv(GL_NUM_EXTENSIONS, &n);
+    for (GLint i = 0; i < n; i++) {
+        const char* ext = (const char*)glGetStringi(GL_EXTENSIONS, i);
+
+        if (ext == NULL) continue;
+        if (strcmp(ext, "GL_ARB_texture_compression_bptc") == 0 || strcmp(ext, "GL_EXT_texture_compression_bptc") == 0)
+            g_has_bc7 = 1;
+        if (strcmp(ext, "GL_EXT_texture_compression_s3tc") == 0) g_has_s3tc = 1;
+    }
+}
+
+static void preload_all(void);
+
+static void build_index(void) {
+    Uint32 t0 = SDL_GetTicks();
+
+    s_indexed = 1;
+    s_folder_textures = 0;
+    /* folders first (their textures win over a zip's), then the zips */
+    scan_dir(PC_TEXPACK_DIR, 0, 0);
+    if (s_folder_textures > 0 && s_source_count < PC_TEXPACK_MAX_SOURCES) {
+        Source* s = &s_sources[s_source_count++];
+
+        memset(s, 0, sizeof(*s));
+        snprintf(s->info.name, sizeof(s->info.name), "%s/", PC_TEXPACK_DIR);
+        s->info.entries = s_folder_textures;
+    }
+    scan_dir(PC_TEXPACK_DIR, 0, 1);
+    map_build();
+
+    s_enabled = g_pc_settings.hd_textures && s_count > 0;
+    /* the same screens every run for tests: no thread */
+    s_async = !g_pc_deterministic && !pc_input_script_active() && !g_pc_settings.preload_textures;
+#ifdef __ANDROID__
+    s_budget = 320LL << 20;
+#else
+    s_budget = g_has_bc7 && g_pc_settings.hd_quality == 0 ? 1536LL << 20 : 1024LL << 20;
+#endif
+    printf("[TexturePack] %d textures in %d source(s), %d left out for Korean (BC7:%s S3TC:%s, %u ms)\n", s_count,
+           s_source_count, s_skipped_korean, g_has_bc7 ? "yes" : "no", g_has_s3tc ? "yes" : "no",
+           SDL_GetTicks() - t0);
+    if (s_count > 0) {
+        thread_start();
+        if (g_pc_settings.preload_textures && s_enabled) {
+            preload_all();
         }
+    }
+}
 
-        if (g_pc_window && (processed % 100) == 0) {
+static void ensure_index(void) {
+    if (!s_indexed) build_index();
+}
+
+/* --- Public --- */
+
+void pc_texture_pack_init(void) {
+    check_gl();
+    s_replaced = 0;
+}
+
+void pc_texture_pack_preload_all(void) {
+    /* done with the index, on the first frame (see build_index) */
+}
+
+static void preload_all(void) {
+    FILE* zips[PC_TEXPACK_MAX_SOURCES] = { 0 };
+    Uint32 t0 = SDL_GetTicks();
+    int done = 0;
+
+    for (int i = 0; i < s_count; i++) {
+        Entry* e = &s_entries[i];
+        Image im;
+
+        if (e->state != ST_NONE) continue;
+        if (load_entry(e, zips, &im)) {
+            entry_loaded(i, &im);
+            image_free(&im);
+        } else {
+            e->state = ST_FAILED;
+        }
+        if (g_pc_window != NULL && (++done % 200) == 0) {
             char title[128];
-            snprintf(title, sizeof(title), "Animal Crossing - Building texture cache... %d/%d (%d%%)",
-                     processed, total, processed * 100 / total);
+
+            snprintf(title, sizeof(title), "Loading HD textures... %d/%d", i, s_count);
             SDL_SetWindowTitle(g_pc_window, title);
             SDL_PumpEvents();
         }
     }
-
-    /* Wildcard entries */
-    for (int i = 0; i < TEXPACK_WC_SIZE; i++) {
-        if (!g_texpack_wc_map[i].occupied) continue;
-        processed++;
-
-        xxh_u64 key = loaded_cache_key(g_texpack_wc_map[i].data_hash, 0,
-                                        g_texpack_wc_map[i].gc_fmt,
-                                        g_texpack_wc_map[i].orig_w,
-                                        g_texpack_wc_map[i].orig_h);
-        if (loaded_cache_find(key)) continue;
-
-        xxh_u32 dds_w, dds_h, gl_int, comp;
-        int data_size;
-        unsigned char* pixels = load_dds_raw(g_texpack_wc_map[i].filepath,
-                                              &dds_w, &dds_h, &gl_int, &comp, &data_size);
-        if (pixels) {
-            TPCEntryHeader eh = { key, gl_int, comp, dds_w, dds_h, (xxh_u32)data_size };
-
-            GLuint tex;
-            glGenTextures(1, &tex);
-            glBindTexture(GL_TEXTURE_2D, tex);
-            if (comp)
-                glCompressedTexImage2D(GL_TEXTURE_2D, 0, (GLenum)gl_int,
-                                       (GLsizei)dds_w, (GLsizei)dds_h, 0, data_size, pixels);
-            else
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
-                             (GLsizei)dds_w, (GLsizei)dds_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-
-            if (glGetError() == GL_NO_ERROR) {
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                loaded_cache_insert(key, tex, (int)dds_w, (int)dds_h);
-                loaded++;
-
-                if (cache_f) {
-                    fwrite(&eh, sizeof(eh), 1, cache_f);
-                    fwrite(pixels, 1, data_size, cache_f);
-                    cache_entries++;
-                }
-            } else {
-                glDeleteTextures(1, &tex);
-                failed++;
-            }
-            free(pixels);
-        } else {
-            failed++;
-        }
-
-        if (g_pc_window && (processed % 100) == 0) {
-            char title[128];
-            snprintf(title, sizeof(title), "Animal Crossing - Building texture cache... %d/%d (%d%%)",
-                     processed, total, processed * 100 / total);
-            SDL_SetWindowTitle(g_pc_window, title);
-            SDL_PumpEvents();
-        }
+    for (int i = 0; i < PC_TEXPACK_MAX_SOURCES; i++) {
+        if (zips[i] != NULL) fclose(zips[i]);
     }
-
-    /* Patch entry count in cache header and close */
-    if (cache_f) {
-        fseek(cache_f, 8, SEEK_SET);
-        xxh_u32 count32 = (xxh_u32)cache_entries;
-        fwrite(&count32, 4, 1, cache_f);
-        fclose(cache_f);
-        printf("[TexturePack] Wrote cache: %d textures to %s\n", cache_entries, TPC_FILE);
-    }
-
-    if (g_pc_window) SDL_SetWindowTitle(g_pc_window, "Animal Crossing");
-
-    Uint64 t_end = SDL_GetPerformanceCounter();
-    double elapsed = (double)(t_end - t_start) * 1000.0 / (double)freq;
-    printf("[TexturePack] Preloaded %d/%d textures in %.0fms (%d failed)\n",
-           loaded, total, elapsed, failed);
+    s_preloaded = 1;
+    printf("[TexturePack] Preloaded %d textures (%lld MB) in %u ms\n", s_loaded, s_gpu_bytes >> 20,
+           SDL_GetTicks() - t0);
 }
 
 void pc_texture_pack_shutdown(void) {
-    if (g_texpack_active) {
-        printf("[TexturePack] Summary: %d/%d unique textures matched (%d loaded from disk, %d cache hits, %d neg-cache skips)\n",
-               g_stat_hits, g_stat_lookups, g_stat_loaded, g_stat_cache_hits, g_stat_neg_hits);
+    if (s_indexed) {
+        printf("[TexturePack] %d game textures replaced, %d on the GPU (%lld MB)\n", s_replaced, s_loaded,
+               s_gpu_bytes >> 20);
     }
-
-    for (int i = 0; i < LOADED_CACHE_SIZE; i++) {
-        if (g_loaded_cache[i].occupied && g_loaded_cache[i].gl_tex) {
-            glDeleteTextures(1, &g_loaded_cache[i].gl_tex);
-        }
-    }
-    memset(g_loaded_cache, 0, sizeof(g_loaded_cache));
-    memset(g_neg_cache_valid, 0, sizeof(g_neg_cache_valid));
-
-    if (g_texpack_map) {
-        free(g_texpack_map);
-        g_texpack_map = NULL;
-    }
-    if (g_texpack_wc_map) {
-        free(g_texpack_wc_map);
-        g_texpack_wc_map = NULL;
-    }
-    g_texpack_count = 0;
-    g_texpack_active = 0;
+    free_index();
 }
 
 int pc_texture_pack_active(void) {
-    return g_texpack_active;
+    ensure_index();
+    return s_enabled;
 }
 
-GLuint pc_texture_pack_lookup(const void* data, int data_size,
-                              int w, int h, unsigned int fmt,
-                              const void* tlut_data, int tlut_entries, int tlut_is_be,
-                              int* out_w, int* out_h) {
-    if (!g_texpack_active || !data || data_size <= 0) return 0;
+void pc_texture_pack_set_enabled(int on) {
+    ensure_index();
+    g_pc_settings.hd_textures = on ? 1 : 0;
+    s_enabled = on && s_count > 0;
+    /* every texture decides again: the originals or the pack's */
+    pc_gx_texture_cache_invalidate();
+}
 
-    int hash_size = gc_texture_data_size(w, h, fmt);
+void pc_texture_pack_reload(void) {
+    free_index();
+    pc_gx_texture_cache_invalidate();
+    s_replaced = 0;
+    build_index();
+}
+
+void pc_texture_pack_touch(int index) {
+    if (index >= 0 && index < s_count) s_entries[index].last_used = s_frame;
+}
+
+/* Frees the least recently used textures down to 85% of the budget */
+static void evict(void) {
+    int* order;
+    int n = 0;
+
+    if (s_preloaded || s_gpu_bytes <= s_budget) return;
+    order = (int*)malloc(sizeof(int) * (s_loaded > 0 ? s_loaded : 1));
+    if (order == NULL) return;
+    for (int i = 0; i < s_count && n < s_loaded; i++) {
+        if (s_entries[i].state == ST_LOADED) order[n++] = i;
+    }
+    /* oldest first (insertion sort on a mostly sorted list is fine for the
+     * few thousand there can be) */
+    for (int i = 1; i < n; i++) {
+        int v = order[i], j = i - 1;
+        xxh_u32 lv = s_entries[v].last_used;
+
+        while (j >= 0 && s_entries[order[j]].last_used > lv) {
+            order[j + 1] = order[j];
+            j--;
+        }
+        order[j + 1] = v;
+    }
+    for (int i = 0; i < n && s_gpu_bytes > s_budget * 85 / 100; i++) {
+        Entry* e = &s_entries[order[i]];
+
+        if (s_frame - e->last_used < 3) break; /* in use */
+        entry_unload(e);
+    }
+    free(order);
+}
+
+void pc_texture_pack_frame(void) {
+    Done* list;
+
+    s_frame++;
+    ensure_index();
+    if (s_thread == NULL) return;
+    SDL_LockMutex(s_mutex);
+    list = s_done;
+    s_done = NULL;
+    SDL_UnlockMutex(s_mutex);
+    while (list != NULL) {
+        Done* d = list;
+        Entry* e = &s_entries[d->idx];
+
+        list = d->next;
+        s_pending--;
+        if (e->state == ST_QUEUED) {
+            if (d->ok) {
+                entry_loaded(d->idx, &d->im);
+            } else {
+                e->state = ST_FAILED;
+            }
+            /* the original that stood in for it goes */
+            pc_gx_texture_hd_ready((unsigned long long)d->idx + 1);
+        }
+        image_free(&d->im);
+        free(d);
+    }
+    evict();
+}
+
+static int gc_texture_data_size(int w, int h, unsigned int fmt) {
+    int bw, bh, block_bytes;
+
+    switch (fmt) {
+        case 0: case 8: case 14: bw = 8; bh = 8; block_bytes = 32; break; /* I4, C4, CMPR */
+        case 1: case 2: case 9: bw = 8; bh = 4; block_bytes = 32; break;  /* I8, IA4, C8 */
+        case 3: case 4: case 5: bw = 4; bh = 4; block_bytes = 32; break;  /* IA8, RGB565, RGB5A3 */
+        case 6: bw = 4; bh = 4; block_bytes = 64; break;                  /* RGBA8 */
+        default: bw = 8; bh = 4; block_bytes = 32; break;
+    }
+    return ((w + bw - 1) / bw) * ((h + bh - 1) / bh) * block_bytes;
+}
+
+GLuint pc_texture_pack_lookup(const void* data, int data_size, int w, int h, unsigned int fmt, const void* tlut_data,
+                              int tlut_entries, int tlut_is_be, int* out_w, int* out_h, int* out_index,
+                              unsigned long long* pending_key) {
+    int hash_size, idx;
+    xxh_u64 data_hash, tlut_hash = 0;
+
+    if (out_index) *out_index = -1;
+    if (pending_key) *pending_key = 0;
+    if (!pc_texture_pack_active() || data == NULL || data_size <= 0) return 0;
+
+    hash_size = gc_texture_data_size(w, h, fmt);
     if (hash_size > data_size) hash_size = data_size;
+    data_hash = xxhash64(data, hash_size);
 
-    xxh_u64 data_hash = xxhash64(data, hash_size);
-
-    /* CI textures: Dolphin hashes only used palette entries (min..max index), in BE byte order */
-    xxh_u64 tlut_hash = 0;
-    if (tlut_data && tlut_entries > 0) {
-        const unsigned char* tex_bytes = (const unsigned char*)data;
-        unsigned int pal_min = 0xFFFF, pal_max = 0;
+    /* paletted: only the entries the texture uses, big-endian */
+    if (tlut_data != NULL && tlut_entries > 0) {
+        const unsigned char* tex = (const unsigned char*)data;
+        unsigned int lo = 0xFFFF, hi = 0;
 
         if (tlut_entries <= 16) {
-            /* CI4: each byte = 2 pixels, 4 bits each */
             for (int i = 0; i < hash_size; i++) {
-                unsigned int lo = tex_bytes[i] & 0xF;
-                unsigned int hi = tex_bytes[i] >> 4;
-                if (lo < pal_min) pal_min = lo;
-                if (hi < pal_min) pal_min = hi;
-                if (lo > pal_max) pal_max = lo;
-                if (hi > pal_max) pal_max = hi;
+                unsigned int a = tex[i] & 0xF, b = tex[i] >> 4;
+                if (a < lo) lo = a;
+                if (b < lo) lo = b;
+                if (a > hi) hi = a;
+                if (b > hi) hi = b;
             }
         } else if (tlut_entries <= 256) {
-            /* CI8: each byte = 1 pixel index */
             for (int i = 0; i < hash_size; i++) {
-                unsigned int idx = tex_bytes[i];
-                if (idx < pal_min) pal_min = idx;
-                if (idx > pal_max) pal_max = idx;
+                if (tex[i] < lo) lo = tex[i];
+                if (tex[i] > hi) hi = tex[i];
             }
         } else {
-            /* CI14x2: each u16 & 0x3FFF = index (big-endian) */
             for (int i = 0; i + 1 < hash_size; i += 2) {
-                unsigned int idx = ((unsigned int)tex_bytes[i] << 8 | tex_bytes[i+1]) & 0x3FFF;
-                if (idx < pal_min) pal_min = idx;
-                if (idx > pal_max) pal_max = idx;
+                unsigned int v = ((unsigned int)tex[i] << 8 | tex[i + 1]) & 0x3FFF;
+                if (v < lo) lo = v;
+                if (v > hi) hi = v;
             }
         }
-
-        if (pal_min > pal_max) { pal_min = 0; pal_max = 0; }
-
-        int used_entries = (int)(pal_max + 1 - pal_min);
-        int tlut_offset = (int)(pal_min * 2);
-        int tlut_bytes = used_entries * 2;
-
-        if (tlut_offset + tlut_bytes > tlut_entries * 2)
-            tlut_bytes = tlut_entries * 2 - tlut_offset;
-        if (tlut_bytes <= 0) tlut_bytes = tlut_entries * 2;
-
-        const unsigned char* tlut_src = (const unsigned char*)tlut_data + tlut_offset;
-
+        if (lo > hi) lo = hi = 0;
+        int off = (int)lo * 2, bytes = (int)(hi + 1 - lo) * 2;
+        if (off + bytes > tlut_entries * 2) bytes = tlut_entries * 2 - off;
+        if (bytes <= 0) {
+            off = 0;
+            bytes = tlut_entries * 2;
+        }
+        const unsigned char* src = (const unsigned char*)tlut_data + off;
         if (tlut_is_be) {
-            tlut_hash = xxhash64(tlut_src, tlut_bytes);
+            tlut_hash = xxhash64(src, bytes);
         } else {
-            /* Swap u16s to BE for Dolphin compatibility */
-            unsigned char* tmp = (unsigned char*)malloc(tlut_bytes);
-            if (!tmp) return 0;
-            for (int i = 0; i < tlut_bytes; i += 2) {
-                tmp[i] = tlut_src[i + 1];
-                tmp[i + 1] = tlut_src[i];
+            unsigned char tmp[16384 * 2];
+
+            if (bytes > (int)sizeof(tmp)) return 0;
+            for (int i = 0; i + 1 < bytes; i += 2) {
+                tmp[i] = src[i + 1];
+                tmp[i + 1] = src[i];
             }
-            tlut_hash = xxhash64(tmp, tlut_bytes);
-            free(tmp);
+            tlut_hash = xxhash64(tmp, bytes);
         }
     }
 
-    xxh_u64 cache_key = loaded_cache_key(data_hash, tlut_hash, (xxh_u32)fmt, (xxh_u32)w, (xxh_u32)h);
-    if (neg_cache_check(cache_key)) { g_stat_neg_hits++; return 0; }
-
-    LoadedCacheEntry* loaded = loaded_cache_find(cache_key);
-    if (loaded) {
-        g_stat_cache_hits++;
-        if (out_w) *out_w = loaded->tex_w;
-        if (out_h) *out_h = loaded->tex_h;
-        return loaded->gl_tex;
+    idx = map_find(data_hash, tlut_hash, fmt, (xxh_u32)w, (xxh_u32)h, 0);
+    if (idx < 0 && tlut_data != NULL) {
+        idx = map_find(data_hash, 0, fmt, (xxh_u32)w, (xxh_u32)h, 1);
     }
+    if (idx < 0) return 0;
 
-    g_stat_lookups++;
+    Entry* e = &s_entries[idx];
+    if (e->state == ST_NONE) {
+        s_replaced++;
+        if (s_async && enqueue(idx)) {
+            e->state = ST_QUEUED;
+        } else {
+            FILE* zips[PC_TEXPACK_MAX_SOURCES] = { 0 };
+            Image im;
 
-    TexPackEntry* entry = texpack_find(data_hash, tlut_hash, (xxh_u32)fmt, (xxh_u32)w, (xxh_u32)h);
-    TexPackWildcardEntry* wc_entry = NULL;
-    if (!entry && tlut_hash != 0) {
-        wc_entry = texpack_find_wildcard(data_hash, (xxh_u32)fmt, (xxh_u32)w, (xxh_u32)h);
+            if (load_entry(e, zips, &im)) {
+                entry_loaded(idx, &im);
+                image_free(&im);
+            } else {
+                e->state = ST_FAILED;
+            }
+            for (int i = 0; i < PC_TEXPACK_MAX_SOURCES; i++) {
+                if (zips[i] != NULL) fclose(zips[i]);
+            }
+            if (g_pc_verbose && e->state == ST_LOADED) {
+                printf("[TexturePack] %dx%d fmt %u -> %dx%d\n", w, h, fmt, e->tex_w, e->tex_h);
+            }
+        }
     }
-    if (!entry && !wc_entry) {
-        neg_cache_insert(cache_key);
+    if (e->state == ST_QUEUED) {
+        if (pending_key) *pending_key = (unsigned long long)idx + 1;
         return 0;
     }
-    g_stat_hits++;
+    if (e->state != ST_LOADED) return 0;
+    e->last_used = s_frame;
+    if (out_w) *out_w = e->tex_w;
+    if (out_h) *out_h = e->tex_h;
+    if (out_index) *out_index = idx;
+    return e->gl;
+}
 
-    int dds_w = 0, dds_h = 0;
-    const char* path = entry ? entry->filepath : wc_entry->filepath;
-    GLuint tex = load_dds_file(path, &dds_w, &dds_h);
-    if (!tex) {
-        printf("[TexturePack] Failed to load DDS: %s\n", path);
-        neg_cache_insert(cache_key);
+void pc_texture_pack_info(PCTexPackInfo* out) {
+    memset(out, 0, sizeof(*out));
+    ensure_index();
+    out->sources = s_source_count;
+    for (int i = 0; i < s_source_count; i++) out->source[i] = s_sources[i].info;
+    out->entries = s_count;
+    out->skipped_korean = s_skipped_korean;
+    out->loaded = s_loaded;
+    out->replaced = s_replaced;
+    out->loading = s_pending;
+    out->gpu_bytes = s_gpu_bytes;
+    out->budget = s_preloaded ? 0 : s_budget;
+    out->gpu_bc7 = g_has_bc7;
+}
+
+/* --- Installing --- */
+
+static SDL_Thread* s_inst_thread = NULL;
+static volatile int s_inst_state = PC_TEXPACK_INSTALL_IDLE;
+static volatile int s_inst_progress = 0;
+static volatile int s_inst_cancel = 0;
+static char s_inst_message[256];
+static FILE* s_inst_src = NULL;
+static char s_inst_name[160];
+static long long s_inst_size = 0;
+
+static void make_dir(const char* path) {
+#ifdef _WIN32
+    CreateDirectoryA(path, NULL);
+#else
+    mkdir(path, 0755);
+#endif
+}
+
+static int count_textures_fn_count;
+static void count_fn(void* user, const char* name, xxh_u32 a, xxh_u32 b, xxh_u32 c, int d) {
+    const char* base = name + strlen(name);
+    Entry tmp;
+
+    (void)user; (void)a; (void)b; (void)c; (void)d;
+    while (base > name && base[-1] != '/') base--;
+    if (parse_name(base, &tmp)) count_textures_fn_count++;
+}
+
+static int install_thread(void* unused) {
+    char part[700], final_path[700];
+    unsigned char* buf = (unsigned char*)malloc(1 << 20);
+    long long done = 0;
+    FILE* out;
+    int ok = 1;
+
+    (void)unused;
+    make_dir(PC_TEXPACK_DIR);
+    snprintf(final_path, sizeof(final_path), "%s/%s", PC_TEXPACK_DIR, s_inst_name);
+    snprintf(part, sizeof(part), "%s.part", final_path);
+    out = pc_fopen_utf8(part, "wb");
+    if (out == NULL || buf == NULL) {
+        snprintf(s_inst_message, sizeof(s_inst_message), "Cannot write %s", part);
+        s_inst_state = PC_TEXPACK_INSTALL_FAILED;
+        free(buf);
+        if (out) fclose(out);
+        fclose(s_inst_src);
         return 0;
     }
+    for (;;) {
+        size_t n = fread(buf, 1, 1 << 20, s_inst_src);
 
-    g_stat_loaded++;
-    printf("[TexturePack] Loaded HD %dx%d (was %dx%d): %s\n",
-           dds_w, dds_h, w, h, path);
+        if (n == 0) break;
+        if (fwrite(buf, 1, n, out) != n) {
+            ok = 0;
+            snprintf(s_inst_message, sizeof(s_inst_message), "Writing failed (disk full?)");
+            break;
+        }
+        done += (long long)n;
+        if (s_inst_size > 0) s_inst_progress = (int)(done * 950 / s_inst_size);
+        if (s_inst_cancel) {
+            ok = 0;
+            snprintf(s_inst_message, sizeof(s_inst_message), "Cancelled");
+            break;
+        }
+    }
+    free(buf);
+    fclose(s_inst_src);
+    s_inst_src = NULL;
+    fclose(out);
+    if (ok) {
+        FILE* f = pc_fopen_utf8(part, "rb");
 
-    loaded_cache_insert(cache_key, tex, dds_w, dds_h);
+        count_textures_fn_count = 0;
+        if (f == NULL || !zip_walk(f, count_fn, NULL)) {
+            ok = 0;
+            snprintf(s_inst_message, sizeof(s_inst_message), "This is not a zip file");
+        } else if (count_textures_fn_count == 0) {
+            ok = 0;
+            snprintf(s_inst_message, sizeof(s_inst_message), "No Dolphin textures (tex1_*.dds/.png) in this zip");
+        }
+        if (f) fclose(f);
+    }
+    if (!ok) {
+        remove(part);
+        s_inst_state = PC_TEXPACK_INSTALL_FAILED;
+        return 0;
+    }
+    remove(final_path);
+    if (rename(part, final_path) != 0) {
+        remove(part);
+        snprintf(s_inst_message, sizeof(s_inst_message), "Cannot rename to %s", final_path);
+        s_inst_state = PC_TEXPACK_INSTALL_FAILED;
+        return 0;
+    }
+    snprintf(s_inst_message, sizeof(s_inst_message), "%d textures", count_textures_fn_count);
+    s_inst_progress = 1000;
+    s_inst_state = PC_TEXPACK_INSTALL_DONE;
+    return 0;
+}
 
-    if (out_w) *out_w = dds_w;
-    if (out_h) *out_h = dds_h;
+int pc_texture_pack_install_start(void) {
+    char name[256];
+    FILE* f;
+    char* p;
 
-    return tex;
+    if (s_inst_state == PC_TEXPACK_INSTALL_RUNNING) return 1;
+    f = pc_pick_file(PC_PICK_TEXTURE_PACK, name, sizeof(name));
+    if (f == NULL) return 0;
+    /* a plain file name in texture_pack/ */
+    for (p = name; *p; p++) {
+        if (*p == '/' || *p == '\\' || *p == ':' || *p == '*' || *p == '?' || *p == '"' || *p == '<' || *p == '>' ||
+            *p == '|') {
+            *p = '_';
+        }
+    }
+    if (name[0] == '\0') snprintf(name, sizeof(name), "texture_pack.zip");
+    if (!ends_with_zip(name)) {
+        strncat(name, ".zip", sizeof(name) - strlen(name) - 1);
+    }
+    snprintf(s_inst_name, sizeof(s_inst_name), "%s", name);
+    fseek(f, 0, SEEK_END);
+    s_inst_size = (long long)ftell(f);
+    fseek(f, 0, SEEK_SET);
+    s_inst_src = f;
+    s_inst_cancel = 0;
+    s_inst_progress = 0;
+    snprintf(s_inst_message, sizeof(s_inst_message), "Copying %s", name);
+    s_inst_state = PC_TEXPACK_INSTALL_RUNNING;
+    thread_stop(); /* nothing reads texture_pack/ meanwhile */
+    s_inst_thread = SDL_CreateThread(install_thread, "texinstall", NULL);
+    if (s_inst_thread == NULL) {
+        fclose(f);
+        s_inst_state = PC_TEXPACK_INSTALL_FAILED;
+        snprintf(s_inst_message, sizeof(s_inst_message), "Cannot start the copy");
+    }
+    return 1;
+}
+
+void pc_texture_pack_install_poll(void) {
+    if (s_inst_thread != NULL && s_inst_state != PC_TEXPACK_INSTALL_RUNNING) {
+        SDL_WaitThread(s_inst_thread, NULL);
+        s_inst_thread = NULL;
+        if (s_inst_state == PC_TEXPACK_INSTALL_DONE) {
+            g_pc_settings.hd_textures = 1;
+            pc_settings_save();
+        }
+        pc_texture_pack_reload();
+    }
+}
+
+PCTexPackInstallState pc_texture_pack_install_state(void) {
+    return (PCTexPackInstallState)s_inst_state;
+}
+
+int pc_texture_pack_install_progress(void) {
+    return s_inst_progress;
+}
+
+const char* pc_texture_pack_install_message(void) {
+    return s_inst_message;
+}
+
+void pc_texture_pack_install_cancel(void) {
+    s_inst_cancel = 1;
+}
+
+void pc_texture_pack_install_reset(void) {
+    if (s_inst_state != PC_TEXPACK_INSTALL_RUNNING) s_inst_state = PC_TEXPACK_INSTALL_IDLE;
+}
+
+int pc_texture_pack_remove(const char* name) {
+    char path[700];
+    int ok;
+
+    if (name == NULL || name[0] == '\0' || strchr(name, '/') != NULL || strchr(name, '\\') != NULL ||
+        !ends_with_zip(name)) {
+        return 0;
+    }
+    free_index(); /* closes the zip */
+    snprintf(path, sizeof(path), "%s/%s", PC_TEXPACK_DIR, name);
+    ok = remove(path) == 0;
+    pc_gx_texture_cache_invalidate();
+    build_index();
+    return ok;
 }

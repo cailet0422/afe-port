@@ -72,6 +72,7 @@ typedef enum {
     SCRIPT_CLOCK,
     SCRIPT_BGM,
     SCRIPT_MAP,
+    SCRIPT_CLICK,
 } ScriptKind;
 
 typedef struct {
@@ -312,6 +313,16 @@ int pc_input_script_load(const char* path) {
                 t[i] /= 100.0f; /* percent of the window */
             }
             ev.duration = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : SCRIPT_DEFAULT_HOLD;
+        } else if (strcmp(word, "CLICK") == 0 && fields >= 3) {
+            /* a left click of the mouse (percent of the window): the menus */
+            if (sscanf(arg, "%f,%f", &ev.touch[0], &ev.touch[1]) != 2) {
+                fprintf(stderr, "[INPUT] %s:%d: expected 'CLICK x,y'\n", path, line_no);
+                fclose(f);
+                return 0;
+            }
+            ev.kind = SCRIPT_CLICK;
+            ev.touch[0] /= 100.0f;
+            ev.touch[1] /= 100.0f;
         } else if ((strcmp(word, "KEY") == 0 || strcmp(word, "PAD") == 0) && fields >= 3) {
             /* a key press (SDL key name, '_' for spaces) or a gamepad button (SDL name) as an event */
             ev.kind = word[0] == 'K' ? SCRIPT_KEY : SCRIPT_PAD;
@@ -661,6 +672,7 @@ static void push_key_or_pad(const ScriptEvent* ev) {
     if (ev->kind == SCRIPT_KEY) {
         e.type = SDL_KEYDOWN;
         e.key.state = SDL_PRESSED;
+        e.key.windowID = SDL_GetWindowID(g_pc_window); /* the menus take only their window's */
         e.key.keysym.sym = SDL_GetKeyFromName(ev->name);
         e.key.keysym.scancode = SDL_GetScancodeFromName(ev->name);
         if (e.key.keysym.sym == SDLK_UNKNOWN) {
@@ -684,6 +696,55 @@ static void push_key_or_pad(const ScriptEvent* ev) {
             return;
         }
     }
+    SDL_PushEvent(&e);
+    /* and let go (the menus keep keys held until then) */
+    if (e.type == SDL_KEYDOWN) {
+        e.type = SDL_KEYUP;
+        e.key.state = SDL_RELEASED;
+        SDL_PushEvent(&e);
+    } else if (e.type == SDL_CONTROLLERBUTTONDOWN) {
+        e.type = SDL_CONTROLLERBUTTONUP;
+        e.cbutton.state = SDL_RELEASED;
+        SDL_PushEvent(&e);
+    }
+}
+
+static int s_click_pending = 0;
+
+/* A left click at x, y (0-1 of the window) */
+static void push_click(float fx, float fy) {
+    SDL_Event e;
+    int w = 0, h = 0;
+
+    SDL_GetWindowSize(g_pc_window, &w, &h);
+    /* the menus also read the system's pointer */
+    SDL_WarpMouseInWindow(g_pc_window, (int)(fx * w), (int)(fy * h));
+    memset(&e, 0, sizeof(e));
+    e.type = SDL_MOUSEMOTION;
+    e.motion.x = (int)(fx * w);
+    e.motion.y = (int)(fy * h);
+    e.motion.windowID = SDL_GetWindowID(g_pc_window);
+    SDL_PushEvent(&e);
+    s_click_pending = 1; /* pressed on the next frame, as a real pointer moves before it clicks */
+}
+
+static void push_click_button(void) {
+    SDL_Event e;
+    int x = 0, y = 0;
+
+    s_click_pending = 0;
+    SDL_GetMouseState(&x, &y);
+    memset(&e, 0, sizeof(e));
+    e.type = SDL_MOUSEBUTTONDOWN;
+    e.button.button = SDL_BUTTON_LEFT;
+    e.button.state = SDL_PRESSED;
+    e.button.clicks = 1;
+    e.button.x = x;
+    e.button.y = y;
+    e.button.windowID = SDL_GetWindowID(g_pc_window);
+    SDL_PushEvent(&e);
+    e.type = SDL_MOUSEBUTTONUP;
+    e.button.state = SDL_RELEASED;
     SDL_PushEvent(&e);
 }
 
@@ -1008,6 +1069,9 @@ int pc_input_script_frame(u32 real_frame) {
     if (first_waiting() != NULL) {
         s_held++; /* the next real frame is the same script time */
     }
+    if (s_click_pending) {
+        push_click_button();
+    }
     for (i = 0; i < s_count; i++) {
         const ScriptEvent* ev = &s_events[i];
 
@@ -1041,6 +1105,8 @@ int pc_input_script_frame(u32 real_frame) {
             pc_typing_system_text(ev->name);
         } else if (ev->kind == SCRIPT_KEY || ev->kind == SCRIPT_PAD) {
             push_key_or_pad(ev);
+        } else if (ev->kind == SCRIPT_CLICK) {
+            push_click(ev->touch[0], ev->touch[1]);
         } else if (ev->kind == SCRIPT_POS) {
             log_positions(frame);
         } else if (ev->kind == SCRIPT_MAP) {

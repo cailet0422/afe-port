@@ -26,6 +26,16 @@ int pc_rom_dir_pick(void);
  * cancelled or there is no picker (pc_rom_dir_can_pick). Blocks meanwhile. */
 FILE* pc_pick_patch_file(char* name, size_t n);
 
+/* Any file with the system's file picker (the same as above, for other
+ * kinds of files); Linux uses zenity or kdialog when one is installed */
+enum {
+    PC_PICK_KO_PATCH,     /* .zip / .xdelta */
+    PC_PICK_TEXTURE_PACK, /* .zip */
+};
+FILE* pc_pick_file(int kind, char* name, size_t n);
+/* 1 if pc_pick_file can show a picker here */
+int pc_pick_file_available(void);
+
 /* 1 once a folder was picked in this run (the game reads the disc at startup) */
 int pc_rom_dir_changed(void);
 

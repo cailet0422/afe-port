@@ -33,6 +33,8 @@ typedef struct {
     u32 wrap_t;
     u32 min_filter;
     u8 external;     /* owned by texture pack, don't delete on eviction */
+    int hd_index;    /* external: the pack's entry (pc_texture_pack_touch), else -1 */
+    unsigned long long hd_pending; /* the original, while the pack's is loading (pc_gx_texture_hd_ready) */
 } TexCacheEntry;
 
 /* Bits-per-pixel for each GC texture format (8 for unknown as safe default) */
@@ -144,7 +146,51 @@ static TexCacheEntry* tex_cache_insert(uintptr_t data_ptr, int w, int h, u32 fmt
     e->wrap_t = 0xFFFFFFFF;
     e->min_filter = 0xFFFFFFFF;
     e->external = 0;
+    e->hd_index = -1;
+    e->hd_pending = 0;
     return e;
+}
+
+static void forget_slots(GLuint tex) {
+    for (int s = 0; s < 8; s++) {
+        if (g_gx.gl_textures[s] == tex)
+            g_gx.gl_textures[s] = 0;
+    }
+}
+
+/* The texture pack loaded the replacement for key: drop the original that
+ * stood in for it, so the next use looks the texture up again */
+void pc_gx_texture_hd_ready(unsigned long long key) {
+    int out = 0;
+
+    for (int i = 0; i < tex_cache_count; i++) {
+        TexCacheEntry* e = &tex_cache[i];
+
+        if (e->hd_pending == key && !e->external) {
+            forget_slots(e->gl_tex);
+            if (e->gl_tex)
+                glDeleteTextures(1, &e->gl_tex);
+            continue;
+        }
+        tex_cache[out++] = *e;
+    }
+    tex_cache_count = out;
+}
+
+/* The texture pack freed tex (one of its own) */
+void pc_gx_texture_forget(GLuint tex) {
+    int out = 0;
+
+    for (int i = 0; i < tex_cache_count; i++) {
+        TexCacheEntry* e = &tex_cache[i];
+
+        if (e->external && e->gl_tex == tex) {
+            forget_slots(tex);
+            continue;
+        }
+        tex_cache[out++] = *e;
+    }
+    tex_cache_count = out;
 }
 
 /* Drops cached GL textures made from `data`, for textures the game rewrites
@@ -175,6 +221,9 @@ void pc_gx_texture_cache_invalidate(void) {
         if (tex_cache[i].gl_tex && !tex_cache[i].external) {
             glDeleteTextures(1, &tex_cache[i].gl_tex);
         }
+    }
+    for (int s = 0; s < 8; s++) {
+        g_gx.gl_textures[s] = 0;
     }
     tex_cache_count = 0;
 }
@@ -686,6 +735,9 @@ void GXLoadTexObj(void* obj, u32 id) {
     if (cached) {
         tex_cache_hits++;
         GLuint tex = cached->gl_tex;
+        if (cached->hd_index >= 0) {
+            pc_texture_pack_touch(cached->hd_index);
+        }
         glBindTexture(GL_TEXTURE_2D, tex);
 
         /* update wrap/filter if changed */
@@ -719,6 +771,7 @@ void GXLoadTexObj(void* obj, u32 id) {
     tex_cache_misses++;
 
     /* try texture pack replacement before decoding */
+    unsigned long long hd_pending = 0;
     if (pc_texture_pack_active()) {
         const void* tp_tlut = NULL;
         int tp_tlut_entries = 0;
@@ -732,11 +785,11 @@ void GXLoadTexObj(void* obj, u32 id) {
             }
         }
         int data_size = (width * height * gc_format_bpp(format)) / 8;
-        int hd_w = 0, hd_h = 0;
+        int hd_w = 0, hd_h = 0, hd_index = -1;
         GLuint hd_tex = pc_texture_pack_lookup(image_ptr, data_size,
                                                width, height, format,
                                                tp_tlut, tp_tlut_entries, tp_tlut_is_be,
-                                               &hd_w, &hd_h);
+                                               &hd_w, &hd_h, &hd_index, &hd_pending);
         if (hd_tex) {
             glBindTexture(GL_TEXTURE_2D, hd_tex);
             GLenum gl_ws = (wrap_s == 2) ? GL_MIRRORED_REPEAT :
@@ -752,6 +805,7 @@ void GXLoadTexObj(void* obj, u32 id) {
             entry->wrap_t = wrap_t;
             entry->min_filter = filter_mode;
             entry->external = 1;
+            entry->hd_index = hd_index;
 
             o[TEXOBJ_GL_TEX] = hd_tex;
             g_gx.gl_textures[id] = hd_tex;
@@ -821,6 +875,7 @@ void GXLoadTexObj(void* obj, u32 id) {
     entry->wrap_s = wrap_s;
     entry->wrap_t = wrap_t;
     entry->min_filter = filter_mode;
+    entry->hd_pending = hd_pending;
 
     o[TEXOBJ_GL_TEX] = tex;
     g_gx.gl_textures[id] = tex;

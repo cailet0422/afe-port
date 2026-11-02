@@ -6,14 +6,16 @@ the assets, PC_STRIP_ASSETS, fills it from the disc at boot). --own marks
 the port's own data (the window icon): gen_rel_overlay.py then does not
 take it for an asset of the disc (it looks for "by pc/tools/bin2c.py").
 
-usage: bin2c.py [--zero] [--own] INPUT OUTPUT SYMBOL [ALIGN]
+--size also defines `unsigned int SYMBOL_size` (the number of bytes).
+
+usage: bin2c.py [--zero] [--own] [--size] INPUT OUTPUT SYMBOL [ALIGN]
 """
 import sys
 from pathlib import Path
 
 
 def main():
-    args = [a for a in sys.argv[1:] if a not in ("--zero", "--own")]
+    args = [a for a in sys.argv[1:] if a not in ("--zero", "--own", "--size")]
     src, dst, symbol = args[0], Path(args[1]), args[2]
     align = int(args[3]) if len(args) > 3 else 4
     data = Path(src).read_bytes()
@@ -31,7 +33,8 @@ def main():
         f"/* Generated from {Path(src).name} {origin}; do not edit. */\n"
         f"unsigned char {symbol}[{len(data)}] __attribute__((aligned({align}))) = {{\n"
         + "\n".join(lines)
-        + "\n};\n",
+        + "\n};\n"
+        + (f"unsigned int {symbol}_size = {len(data)};\n" if "--size" in sys.argv else ""),
         encoding="utf-8",
     )
 
