@@ -252,6 +252,13 @@ void pc_platform_init(void) {
             SDL_FreeSurface(icon);
         }
     }
+    /* SDL turns the system's text input on by default on a computer: then
+     * Windows' input method takes the letter keys when it is in Korean mode
+     * (after Hangul was typed somewhere), and the game never sees them as
+     * keys (the Chat key T, say). Off while playing: a menu's text field
+     * (pc_gui.cpp) and the game's text editor with the system's input
+     * method (pc_typing.c) turn it on while they take text. */
+    SDL_StopTextInput();
 #endif
 
 #ifndef PC_GLES

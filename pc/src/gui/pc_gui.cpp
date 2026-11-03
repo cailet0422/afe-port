@@ -11,6 +11,7 @@ extern "C" {
 #include "pc_ko.h"
 #include "pc_texture_pack.h"
 #include "pc_keybindings.h"
+#include "pc_typing.h"
 extern void pc_gx_restore_after_nes(void);
 /* pc/res/gui_font.ttf, embedded by pc/tools/bin2c.py */
 extern unsigned char pc_gui_font_ttf[];
@@ -240,10 +241,10 @@ static bool init() {
 }
 
 /* The system's text input (and the phone's keyboard) only while a field of
- * the menus has the focus, put back as it was after: the game's text editor
- * turns it off for the built-in Hangul input, or on for the system's */
+ * the menus has the focus: off after, as while playing (pc_main.c: Windows'
+ * input method would take the letter keys), unless the game's text editor
+ * uses the system's input method (pc_typing.c turns it on for that) */
 static bool s_ime_on = false;
-static bool s_ime_was_active = false;
 
 static void set_ime_data(ImGuiContext*, ImGuiViewport*, ImGuiPlatformImeData* data) {
     if (data->WantVisible) {
@@ -255,13 +256,12 @@ static void set_ime_data(ImGuiContext*, ImGuiViewport*, ImGuiPlatformImeData* da
         r.h = (int)data->InputLineHeight;
         SDL_SetTextInputRect(&r);
         if (!s_ime_on) {
-            s_ime_was_active = SDL_IsTextInputActive() == SDL_TRUE;
             SDL_StartTextInput();
             s_ime_on = true;
         }
     } else if (s_ime_on) {
         s_ime_on = false;
-        if (!s_ime_was_active) {
+        if (!(g_pc_editor_active && pc_typing_system_ime())) {
             SDL_StopTextInput();
         }
     }
