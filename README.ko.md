@@ -17,16 +17,16 @@
 ## 다운로드
 
 <!-- 새 릴리즈를 내면 아래 링크의 버전을 바꾼다(README.md도 함께). -->
-최신 릴리즈: **[v1.3.1](https://github.com/cailet0422/afe-port/releases/tag/v1.3.1)**
+최신 릴리즈: **[v1.4.0](https://github.com/cailet0422/afe-port/releases/tag/v1.4.0)**
 
 | 플랫폼 | 다운로드 | 필요 사항 |
 |---|---|---|
-| Windows 64비트 | [DobutsuNoMoriEPlus-v1.3.1-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/DobutsuNoMoriEPlus-v1.3.1-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` 포함) |
-| Windows 32비트 | [DobutsuNoMoriEPlus-v1.3.1-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/DobutsuNoMoriEPlus-v1.3.1-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.3.1-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/DobutsuNoMoriEPlus-v1.3.1-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.3.1-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/DobutsuNoMoriEPlus-v1.3.1-Android.apk) | Android 5.0 이상, ARM 32·64비트 |
+| Windows 64비트 | [DobutsuNoMoriEPlus-v1.4.0-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.0/DobutsuNoMoriEPlus-v1.4.0-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` 포함) |
+| Windows 32비트 | [DobutsuNoMoriEPlus-v1.4.0-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.0/DobutsuNoMoriEPlus-v1.4.0-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.4.0-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.0/DobutsuNoMoriEPlus-v1.4.0-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.4.0-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.4.0/DobutsuNoMoriEPlus-v1.4.0-Android.apk) | Android 5.0 이상, ARM 32·64비트 |
 
-체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/SHA256SUMS.txt) ·
+체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.4.0/SHA256SUMS.txt) ·
 이전 버전과 릴리즈 노트: [전체 릴리즈](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -226,8 +226,9 @@ v0.1.6 이하는 스스로 업데이트하지 못하니 v1.0.0은 한 번 직접
 - **그 밖에 호스트를 따라 함께 바뀌는 것**: 서로의 동작(줍기, 나무 흔들기, 낚시... 같은 애니메이션), 날씨, 마을
   멜로디, 박물관, 게시판, 파출소 분실물, 너굴 상점, 에이블 시스터즈 진열, 우체국, 무 시세, 방문객 이벤트, 눈사람.
   손님이 그 장소에서 바꾼 것(게시판 글, 분실물 가져가기, 사고팔기, 마을 멜로디)은 호스트에게 가서 모두에게 퍼집니다.
-  집 바깥 모습(크기, 지붕 색, 지하실, 우편함 깃발), 집 앞 하니와(손님이 사면 호스트에게 감), 주민들의 데이터(옷과
-  우산, 이사 오고 가기), 추가 다리, 등대, 낚시 대회, 블랑카, 마을 평가와 그 밖의 마을 이벤트도 따릅니다.
+  집 바깥 모습(크기, 지붕 색, 지하실, 우편함 깃발), 집 앞 하니와(손님이 사면 물건은 손님 주머니로 가고, 판 값은
+  호스트 쪽 하니와에도 집주인 몫으로 쌓임), 주민들의 데이터(옷과 우산, 이사 오고 가기), 추가 다리, 등대, 낚시 대회,
+  블랑카, 마을 평가와 그 밖의 마을 이벤트도 따릅니다.
 - 놀러 가 있는 동안에도 손님의 마을 파일에 손님의 주머니와 벨이 저장됩니다([저장](#저장) 참고).
 - 두 사람이 같은 아이템을 같은 순간에 주우면 먼저 주운 사람이 갖고, 다른 사람의 주머니에서는 다시 빠집니다.
 - 호스트 마을에 있는 동안 손님 게임의 시계는 호스트의 시계를 따릅니다.

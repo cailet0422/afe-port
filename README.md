@@ -17,16 +17,16 @@
 ## Download
 
 <!-- When a new release is published, update the version in these links (here and in README.ko.md). -->
-Latest release: **[v1.3.1](https://github.com/cailet0422/afe-port/releases/tag/v1.3.1)**
+Latest release: **[v1.4.0](https://github.com/cailet0422/afe-port/releases/tag/v1.4.0)**
 
 | Platform | Download | Requirements |
 |---|---|---|
-| Windows 64-bit | [DobutsuNoMoriEPlus-v1.3.1-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/DobutsuNoMoriEPlus-v1.3.1-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
-| Windows 32-bit | [DobutsuNoMoriEPlus-v1.3.1-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/DobutsuNoMoriEPlus-v1.3.1-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.3.1-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/DobutsuNoMoriEPlus-v1.3.1-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.3.1-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/DobutsuNoMoriEPlus-v1.3.1-Android.apk) | Android 5.0+, ARM 32/64-bit |
+| Windows 64-bit | [DobutsuNoMoriEPlus-v1.4.0-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.0/DobutsuNoMoriEPlus-v1.4.0-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
+| Windows 32-bit | [DobutsuNoMoriEPlus-v1.4.0-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.0/DobutsuNoMoriEPlus-v1.4.0-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.4.0-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.0/DobutsuNoMoriEPlus-v1.4.0-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.4.0-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.4.0/DobutsuNoMoriEPlus-v1.4.0-Android.apk) | Android 5.0+, ARM 32/64-bit |
 
-Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/SHA256SUMS.txt) ·
+Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.4.0/SHA256SUMS.txt) ·
 Older versions and release notes: [all releases](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -247,9 +247,10 @@ Hangul is typed with your computer's Korean input method (Han/Eng key).
   Nook's shop, the Able Sisters' display, the post office, the turnip prices, the visitors' events and the snowmen. A
   guest's change at one of these places (a post on the board, a lost item taken, something bought or sold, the town
   tune) goes to the host and from the host to everyone. Also the outside of the houses (size, roof colour, basement,
-  the mailbox's flag), the gyroid at a house's door (a visitor buying from it goes to the host), the villagers' own
-  data (their clothes and umbrellas, moving in or out), the extra bridge, the lighthouse, the fishing tourney,
-  Blanca, the town's assessment and the other town events.
+  the mailbox's flag), the gyroid at a house's door (what a guest buys from it goes into the guest's pockets, and the
+  gyroid keeps the bells for the house's owner, on the host's side too), the villagers' own data (their clothes and
+  umbrellas, moving in or out), the extra bridge, the lighthouse, the fishing tourney, Blanca, the town's assessment
+  and the other town events.
 - A guest's own town is saved with the guest's pockets and bells while visiting (see [Saving](#saving)).
 - Two players taking the same item at the same moment: the first one gets it, and the other's pocket gives it back.
 - While a guest is in the host's town, the guest's game clock follows the host's.

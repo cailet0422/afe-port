@@ -181,7 +181,7 @@ be made; then one side needs the port forwarded (UPnP or by hand).
   that floor with what storage furniture holds put back (`aMR_PC_StorageIntoCopy`: the constructor takes those items
   out of the save into the furniture actors).
 - **More of the town** (`G_REGION`): each house's outside (size, roof colour, flags: `homes[].haniwa_tempo` to
-  `door_original`), mailbox, door gyroid (a guest's purchase goes to the host while it is outdoors), cockroaches and
+  `door_original`), mailbox, door gyroid (the gyroid's stock and bells after a guest's purchase go to the host while the guest is outdoors), cockroaches and
   music collected; `animals[]`, `event_save_common`, the bridge, the lighthouse, the fishing records, Blanca, the
   returning villager, the town assessment, the rainbow, the insect and fish terms, the e+ villager additions,
   monuments, the sick villager and the town's flags.
