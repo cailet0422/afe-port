@@ -308,6 +308,27 @@ test `pc/tests/test_minimap.c`).
   (`content://<package>.update/update.apk` from `UpdateProvider` on Android 7+, a file before), which needs
   `REQUEST_INSTALL_PACKAGES`. "Skip this version" is kept in the app's preferences there and in `update_skip` on PC.
 
+### Autosave
+
+`pc/src/pc_autosave.c`, with afe-decomp `m_card.c` (`mCD_PC_AutoSaveSnapshot`, `mCD_PC_PatchTraveller`,
+`mCD_SetResetInfo`), `m_actor.c` (`Actor_info_PC_restore_fgdata_copy`) and `m_play.c` (`play_cleanup`).
+
+- What is written is what the gyroid's "save and continue" writes (play time, travel time, version, check data,
+  checksum), straight into the town file on the card (`save/card_X/DobutsunomoriE_MURA`: the main copy, then the
+  backup), found by the town's id and name and checked against its copy-protect code.
+- Between scenes (`play_cleanup`, after `mFM_Field_dt` and before `mCD_toNextLand`: every actor has put its data
+  back) at most every 20 s, not from the title demo, the player select or the opening.
+- Every `autosave_minutes` (default 5) while the player is outdoors in the town, nothing fading, no menu or message,
+  standing, walking or running for 3 s and no unit placeholder (`RSV_NO`) written for 3 s. Live actors keep
+  placeholders in the Save (a tree being shaken, a building...): the snapshot is a copy with their names put back
+  (`Actor_info_PC_restore_fgdata_copy`, like `restore_fgdata_all` but into the copy). A player's room is not saved
+  this way (its storage furniture keeps items out of the Save) and neither is the island.
+- On quitting from the menu or closing the window, when the moment is quiet in the same way.
+- A visitor (`player_no == mPr_FOREIGNER`, the multiplayer's trip) has its Private (pockets, bells, letters...,
+  keeping the home file's loan and museum contacts) copied over its player in its own town's file.
+- Not with `--deterministic` (scripted runs leave the saves alone). Mr. Resetti's visit is decided in
+  `mCD_SetResetInfo`, which returns at once while `resetti = 0` (the default) in `settings.ini`.
+
 ### Scripted test input
 
 `--input-script file` replays per-frame input, screenshots and exit
@@ -325,9 +346,10 @@ window; the pointer moves there one frame before the press, as a real one does).
 ([multiplayer.md](multiplayer.md)).
 Debug commands for scenes that come up only occasionally: `GIVE` (item into pockets), `LEDIT` (open the name-entry
 editor: villager catchphrase etc.), `RESETS` (number of times the game was turned off without saving — Mr. Resetti
-comes), `CATCH` (print the villager's catchphrase bytes), `ITEM` (print the item the menu selected), `JOBDONE` (finish
+comes, with `resetti = 1`), `CATCH` (print the villager's catchphrase bytes), `ITEM` (print the item the menu selected), `JOBDONE` (finish
 the part-time job the way the game does: clear the errand, make it wait for the HRA notice and restart the clock),
-`NOJOB` (turn off only the part-time job event), `CLOCK h[:m]` (advance the clock to that time: past midnight into the
+`NOJOB` (turn off only the part-time job event), `DESIGN slot pattern` (fill a custom design slot with test
+stripes and wear it), `CLOCK h[:m]` (advance the clock to that time: past midnight into the
 next day without relaunching), `FG x,z item` (place an item on that ground tile: walking into a `008D` Mr. Resetti hole
 drops you into the Reset Center).
 

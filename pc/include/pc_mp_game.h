@@ -56,6 +56,13 @@ void pc_mp_game_net_status(char* buf, size_t n);
 /* The town and the name as the game has them (UTF-8) */
 void pc_mp_game_my_names(char* name, size_t n, char* town, size_t tn);
 
+/* A look's cloth (PcMpLook.cloth) that is a design of the player's own:
+ * PC_MP_LOOK_DESIGN | its my_org slot (0-7) */
+#define PC_MP_LOOK_DESIGN 0xFD00
+/* A player's design (its pixels, 32x32 CI4, and palette index) as it came;
+ * gen grows with every design of that player that comes. 1 if known. */
+int pc_mp_game_design(int slot, int index, unsigned char* palette, const unsigned char** tex, unsigned int* gen);
+
 /* The last chat lines, oldest first */
 int pc_mp_game_chat_lines(char lines[][192], int max);
 /* Grows by one with every chat line (sent or received) */

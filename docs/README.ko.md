@@ -279,6 +279,26 @@ ninja -C pc/build32strip
   `UpdateProvider`의 `content://<패키지>.update/update.apk`, 그 전은 파일). `REQUEST_INSTALL_PACKAGES` 권한이
   필요하다. "이 버전 건너뛰기"는 Android에서는 앱 설정에, PC에서는 `update_skip`에 남는다.
 
+### 자동 저장
+
+`pc/src/pc_autosave.c`와 afe-decomp `m_card.c`(`mCD_PC_AutoSaveSnapshot`, `mCD_PC_PatchTraveller`,
+`mCD_SetResetInfo`), `m_actor.c`(`Actor_info_PC_restore_fgdata_copy`), `m_play.c`(`play_cleanup`).
+
+- 쓰는 것은 하니와의 "저장하고 계속하기"가 쓰는 것과 같다(플레이 시간, 여행 시간, 버전, 확인 데이터, 체크섬). 카드의
+  마을 파일(`save/card_X/DobutsunomoriE_MURA`)에 바로 쓰고(본 사본, 그다음 백업), 파일은 마을 id와 이름으로 찾아
+  복사 방지 코드로 확인한다.
+- 장면 사이(`play_cleanup`에서 `mFM_Field_dt` 뒤, `mCD_toNextLand` 전: 모든 액터가 데이터를 돌려놓은 때), 20초에 한
+  번까지. 타이틀 데모, 플레이어 선택, 오프닝에서는 하지 않는다.
+- `autosave_minutes`(기본 5)마다, 플레이어가 마을 야외에 있고 페이드·메뉴·메시지가 없으며 3초 동안 서 있거나 걷거나
+  뛰고 그동안 칸의 자리표시(`RSV_NO`)가 쓰이지 않았을 때. 살아 있는 액터는 Save에 자리표시를 둔다(흔들리는 나무,
+  건물...): 그래서 사본을 만들어 이름을 되돌린 뒤 쓴다(`Actor_info_PC_restore_fgdata_copy`, `restore_fgdata_all`과
+  같지만 사본에). 플레이어의 방(서랍 가구가 아이템을 Save 밖에 들고 있음)과 섬에서는 이렇게 저장하지 않는다.
+- 메뉴에서 끄거나 창을 닫을 때, 위와 같이 조용한 순간이면.
+- 방문객(`player_no == mPr_FOREIGNER`, 멀티플레이의 여행)은 Private(주머니, 벨, 편지...; 집 파일의 대출금과 박물관
+  연락은 그대로)를 자기 마을 파일의 자기 플레이어 위에 복사한다.
+- `--deterministic`에서는 하지 않는다(자동 테스트는 세이브를 건드리지 않음). 도루묵씨 방문은 `mCD_SetResetInfo`가
+  정하는데, `settings.ini`의 `resetti = 0`(기본)이면 바로 돌아간다.
+
 ### 자동 테스트 입력
 
 `--input-script 파일`로 프레임 단위 입력·스크린샷·종료를 재생할 수 있다
@@ -293,9 +313,9 @@ ninja -C pc/build32strip
 누르기 한 프레임 전에 포인터가 옮겨 감). `KEY`와 `PAD`는 떼는 이벤트도 보낸다. `MPHOST [private]`,
 `MPJOIN 코드|ip:포트`, `MPLEAVE`, `MPKICK 자리`, `MPCHAT 글`은 멀티플레이를 움직인다([multiplayer.ko.md](multiplayer.ko.md)).
 가끔만 나오는 장면을 위한 디버그 명령: `GIVE`(소지품에 아이템), `LEDIT`(이름 입력 편집기 열기: 주민의 말버릇
-등), `RESETS`(저장 없이 끈 횟수 — 도루묵씨가 온다), `CATCH`(주민의 말버릇 바이트 출력), `ITEM`(메뉴가 고른
+등), `RESETS`(저장 없이 끈 횟수 — `resetti = 1`이면 도루묵씨가 온다), `CATCH`(주민의 말버릇 바이트 출력), `ITEM`(메뉴가 고른
 아이템 출력), `JOBDONE`(아르바이트를 게임이 끝내는 것처럼 끝냄: 심부름을 지우고 HRA 안내를 기다리게 하고 시계를 다시 돌림),
-`NOJOB`(아르바이트 이벤트만 끔), `CLOCK h[:m]`(시계를 그 시각까지 앞으로: 새로 실행하지 않고 자정을 넘겨 다음 날로),
+`NOJOB`(아르바이트 이벤트만 끔), `DESIGN 칸 무늬`(마이디자인 칸을 시험용 줄무늬로 채우고 입음), `CLOCK h[:m]`(시계를 그 시각까지 앞으로: 새로 실행하지 않고 자정을 넘겨 다음 날로),
 `FG x,z 아이템`(땅의 그 칸에 아이템을 놓음: `008D` 도루묵씨 구멍에 걸어 들어가면
 리셋 센터로 떨어진다).
 

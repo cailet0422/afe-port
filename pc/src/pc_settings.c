@@ -15,7 +15,9 @@ PCSettings g_pc_settings = {
     .msaa          = 4,
 #endif
     .preload_textures = 0,
-    .disable_resetti = 0,
+    .disable_resetti = 1,
+    .autosave = 1,
+    .autosave_minutes = 5,
     .nes_aspect = 1,
     .master_volume = 100,
 #ifdef __ANDROID__
@@ -71,8 +73,15 @@ static void apply_setting(const char* key, const char* value) {
             g_pc_settings.msaa = val;
     } else if (strcmp(key, "preload_textures") == 0) {
         if (val >= 0 && val <= 2) g_pc_settings.preload_textures = val ? 1 : 0;
+    } else if (strcmp(key, "resetti") == 0) {
+        if (val == 0 || val == 1) g_pc_settings.disable_resetti = !val;
     } else if (strcmp(key, "disable_resetti") == 0) {
-        if (val == 0 || val == 1) g_pc_settings.disable_resetti = val;
+        /* (the key before 1.3.0, written as 0 by default: only a 1 means something) */
+        if (val == 1) g_pc_settings.disable_resetti = 1;
+    } else if (strcmp(key, "autosave") == 0) {
+        if (val == 0 || val == 1) g_pc_settings.autosave = val;
+    } else if (strcmp(key, "autosave_minutes") == 0) {
+        if (val >= 1 && val <= 60) g_pc_settings.autosave_minutes = val;
     } else if (strcmp(key, "nes_aspect") == 0) {
         if (val == 0 || val == 1) g_pc_settings.nes_aspect = val;
     } else if (strcmp(key, "master_volume") == 0) {
@@ -144,8 +153,12 @@ void pc_settings_save(void) {
     fprintf(f, "mp_name = %s\n", g_pc_settings.mp_name);
     fprintf(f, "\n");
     fprintf(f, "[Gameplay]\n");
-    fprintf(f, "# Disable Mr. Resetti: 0 = normal, 1 = disable\n");
-    fprintf(f, "disable_resetti = %d\n", g_pc_settings.disable_resetti);
+    fprintf(f, "# Save by itself: between scenes, every few minutes outside and on quitting: 0 = no, 1 = yes\n");
+    fprintf(f, "autosave = %d\n", g_pc_settings.autosave);
+    fprintf(f, "# How often outside, in minutes (1-60)\n");
+    fprintf(f, "autosave_minutes = %d\n", g_pc_settings.autosave_minutes);
+    fprintf(f, "# Mr. Resetti comes when the game was turned off without saving: 0 = no, 1 = yes\n");
+    fprintf(f, "resetti = %d\n", !g_pc_settings.disable_resetti);
     fprintf(f, "\n");
     fprintf(f, "# NES emulator aspect ratio: 0 = stretch to fullscreen, 1 = 4:3 pillarbox\n");
     fprintf(f, "nes_aspect = %d\n", g_pc_settings.nes_aspect);

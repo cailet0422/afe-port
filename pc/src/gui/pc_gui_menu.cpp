@@ -2,6 +2,7 @@
 #include "pc_gui_internal.h"
 
 extern "C" {
+#include "pc_autosave.h"
 #include "pc_platform.h"
 #include "pc_pause_menu.h"
 #include "pc_settings.h"
@@ -440,8 +441,14 @@ static void tab_audio() {
 static void tab_gameplay() {
     int resetti = !g_pc_settings.disable_resetti;
 
-    if (Switch(T("Mr. Resetti", "리셋씨 등장"), &resetti,
-               T("He comes when the game was turned off without saving", "저장하지 않고 끄면 리셋씨가 찾아옵니다"))) {
+    if (Switch(T("Autosave", "자동 저장"), &g_pc_settings.autosave,
+               T("Saves by itself when you go in or out of a building, every few minutes outside and when you quit",
+                 "건물에 드나들 때, 밖에서는 몇 분마다, 게임을 끌 때 저절로 저장합니다"))) {
+        save();
+    }
+    if (Switch(T("Mr. Resetti", "도루묵씨(리셋씨) 등장"), &resetti,
+               T("He comes when the game was turned off without saving (off by default: there is the autosave)",
+                 "저장하지 않고 끄면 찾아옵니다(자동 저장이 있어 기본은 꺼짐)"))) {
         g_pc_settings.disable_resetti = !resetti;
         save();
     }
@@ -757,6 +764,7 @@ static void popup_quit() {
         ImGui::CloseCurrentPopup();
     } else if (b == 1) {
         printf("[PAUSE] Quit confirmed\n");
+        pc_autosave_quit();
         g_pc_running = 0;
     }
     ImGui::EndPopup();

@@ -31,6 +31,8 @@
  *                                     (the errand cleared, Nook waits to tell of the HRA,
  *                                     the payment message); the town acts as on day two
  *     <frame> BELLS <n>               debug: n bells in the wallet
+ *     <frame> DESIGN <slot> <n>       debug: fill custom design slot (0-7) with test stripes
+ *                                     (pattern n, 0-255) and wear it
  *     <frame> WARP <x>,<z> [<dir>]    debug: the town again with the player at x,z (as on
  *                                     leaving a building), facing mSc_DIRECT_* (4 north)
  *     <frame> CLOCK <h>[:<m>[:<s>]]   debug: the clock forward to the next h:m:s (today if

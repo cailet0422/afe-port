@@ -109,8 +109,17 @@ be made; then one side needs the port forwarded (UPnP or by hand).
   the shop mannequin's part, not the player's — the game takes the first actor of the player part for "the" player):
   the boy's or girl's skeleton with the standing, walking, running and dashing animations, and its own copies of the
   face (`mPlib_PC_LoadFace`) and clothing (`mPlib_Load_PlayerTexAndPallet`) textures; it follows the received position
-  a little smoothed, blinks, and casts the player's shadow. A design of their own as clothing is drawn as the plain
-  shirt (the picture is not sent).
+  a little smoothed, blinks, and casts the player's shadow. With the position go the place (the field id and, in a
+  house, its owner: a puppet shows only to players in the same room), the animation the player plays
+  (`animation0_idx`, any of the player's animations: picking up, shaking, fishing...) and its frame, which the puppet
+  plays and catches up with when it is more than 4 frames off. A look changed in a room (other clothes) goes out at
+  once (`T_LOOK`).
+- **Designs** (`G_DESIGN`): every player sends its 8 designs (`my_org`: palette, name, 32x32 CI4 pixels) on joining
+  and any that changes (compared every second); the host passes the guests' on and gives everyone's to a newcomer. A
+  design worn as clothing goes in the look as `0xFD00 | slot`, and the puppet draws it with those pixels and palette
+  (again when they change). A guest in the host's town also writes the host's designs into its copy of the town, where
+  the house door, the wallpaper and carpet and design furniture read them; the room is built again if the guest stands
+  in it. The house doors (`door_original`, the design on a player's door) go with the furniture.
 - The menu draws the names (and chat balloons) at the head's projected position (`Game_play_Projection_Trans`).
 - **Building placeholders**: while the actor of a building exists (a player's house, a villager's house, a mailbox, the
   shop...), the game keeps a placeholder in its unit (`DUMMY_HOUSE0`, `DUMMY_NPC_HOUSE_xxx`...) and puts the name back
@@ -137,17 +146,35 @@ be made; then one side needs the port forwarded (UPnP or by hand).
   manager send them travelling or home by itself (`aSNMgr_walk_npc`, `aSNMgr_force_go_home`), brings out one the host
   has in its acre and it does not (`setupActor_proc`), and removes, out of sight, one it has that the host has in
   another acre.
+- **Villagers in their houses** (afe-decomp `ac_npc2.c`, the indoor controller): the same hooks report and follow in
+  room coordinates (`pc_mp_npc_room_report`, `pc_mp_npc_room_target`); the host sends the villagers of the house it
+  is in every 6 frames with the house's owner (`G_NPC_ROOM`), and a guest in the same house makes its copy walk where
+  the host's walks while it wanders the room. A villager that is out comes into its room on the host when the host
+  walks in from the door (the game's own rule); on a guest it comes in when the host's does.
+- **The rest of the town's data** (`G_REGION`): parts of the host's Save that everyone should see the same: the
+  weather, the town tune, the museum, the noticeboard, the police station's lost and found, Nook's shop, the Able
+  Sisters' display, the post office, the turnip prices, the visitors' events, the snowmen. The host compares them
+  with what it sent every second and sends what changed (in 1000-byte pieces); a guest arriving gets all of them
+  (`G_REGION_REQ`). What a visitor can change there (a post on the board, the town tune, a lost item taken, things
+  bought or sold, a design on display, a letter sent) goes from a guest to the host while the guest is at that place
+  (3 s after it last took the host's), and from the host to everyone.
+- **Every item outside, again**: besides the changes the hooks see, the host compares the whole item and buried layer
+  with what it sent every half second and sends the acres that differ (changes the game makes without the hooks: a
+  day's new weeds, things the villagers or events put down); a guest stepping outside asks for the whole layer again.
+- **Saving while visiting**: the port's autosave (`pc_autosave.c`) writes a visiting guest's pockets, bells and
+  letters into the guest's own town file (`mCD_PC_PatchTraveller`), as the trip home would, so a guest whose game
+  stops in the host's town keeps what it had.
 
 ## Limits
 
 - One town is shared: the host's. Guests' towns are not visited (switch hosts for that).
 - Villagers follow the host, but not exactly: only those the host has as actors (in the host's acre) have an exact
   position; for the others only the rough one the game keeps (the acre) is shared. Talking and greeting, going in and
-  out of houses, sleeping and catching insects are each game's own. Villagers inside houses (indoor NPC2), the island
-  villager, insects and fish are not shared.
+  out of houses, sleeping and catching insects are each game's own. Villagers inside houses follow only while the host
+  is in the same house. The island villager, insects and fish are not shared.
 - In houses, the furniture and items on the floor and on tables and the wallpaper and carpet are shared; what is inside
   storage furniture (held by the furniture actors of whoever is in the room), lamps on or off and gyroid steps are not.
-- Custom designs worn as clothes show as the plain shirt to others.
+- A puppet does not hold the tool or item in its hand (the arm moves as the player's does).
 - Two players picking up the same item in the same instant can both get it (the host corrects the ground, not the
   pocket).
 

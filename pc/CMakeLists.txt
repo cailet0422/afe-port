@@ -483,6 +483,7 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_ptr32.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_touch.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_minimap.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_autosave.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_minimap_core.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_update.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_update_core.c

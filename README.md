@@ -17,16 +17,16 @@
 ## Download
 
 <!-- When a new release is published, update the version in these links (here and in README.ko.md). -->
-Latest release: **[v1.2.0](https://github.com/cailet0422/afe-port/releases/tag/v1.2.0)**
+Latest release: **[v1.3.0](https://github.com/cailet0422/afe-port/releases/tag/v1.3.0)**
 
 | Platform | Download | Requirements |
 |---|---|---|
-| Windows 64-bit | [DobutsuNoMoriEPlus-v1.2.0-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.2.0/DobutsuNoMoriEPlus-v1.2.0-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
-| Windows 32-bit | [DobutsuNoMoriEPlus-v1.2.0-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.2.0/DobutsuNoMoriEPlus-v1.2.0-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.2.0-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.2.0/DobutsuNoMoriEPlus-v1.2.0-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.2.0-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.2.0/DobutsuNoMoriEPlus-v1.2.0-Android.apk) | Android 5.0+, ARM 32/64-bit |
+| Windows 64-bit | [DobutsuNoMoriEPlus-v1.3.0-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.0/DobutsuNoMoriEPlus-v1.3.0-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
+| Windows 32-bit | [DobutsuNoMoriEPlus-v1.3.0-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.0/DobutsuNoMoriEPlus-v1.3.0-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.3.0-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.0/DobutsuNoMoriEPlus-v1.3.0-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.3.0-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.3.0/DobutsuNoMoriEPlus-v1.3.0-Android.apk) | Android 5.0+, ARM 32/64-bit |
 
-Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.2.0/SHA256SUMS.txt) ·
+Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.3.0/SHA256SUMS.txt) ·
 Older versions and release notes: [all releases](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -54,8 +54,12 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
   ([HD textures](#hd-textures)).
 - **Multiplayer without a server**: host a room in your town (public, or private with a room code and
   password) and friends on the same network or over the internet take the train to visit; you see
-  each other, chat, and drop, pick up, plant and dig in the same town. The host can send players out
+  each other (with your own custom designs), chat, and drop, pick up, plant and dig in the same town, with
+  the host's villagers, furniture, weather, shops and museum. The host can send players out
   ([Multiplayer](#multiplayer)).
+- **Autosave**: the game saves by itself every few minutes outdoors, between scenes (going in or out of a
+  building) and when you quit, so closing it or a crash loses only a few minutes. Mr. Resetti therefore stays
+  away by default ([Saving](#saving)).
 - Korean fan patch support: install the patch zip from inside the game, switch between Korean and
   Japanese at any time, and type Hangul with a real keyboard (2-set layout) or an on-screen keyboard.
 - Android: on-screen touch gamepad, physical gamepads, and a crash report shown on the next launch.
@@ -111,6 +115,21 @@ with **Update now**, **Later** or **Skip this version**.
 Updates come only from this repository's releases, and a build made from source never updates itself.
 **Settings** → **Gameplay** → **Updates** turns the check off (`auto_update = 0` in `settings.ini`).
 Version v0.1.6 and earlier can't update themselves: download v1.0.0 once by hand.
+
+### Saving
+
+The game saves your town as the gyroid's "save and continue" would, without asking:
+
+- every few minutes while you are outdoors in your town and not doing anything special (not in a menu, a
+  conversation or holding up an item; it waits for such a moment);
+- when you go in or out of a building (at most once every 20 seconds);
+- when you quit from the menu or close the window.
+
+You can still save at the gyroid as usual. Turning the game off without saving no longer loses your play, so
+**Mr. Resetti does not come by default**. **Settings** → **Gameplay** → **Autosave** turns the autosave off, and
+**Mr. Resetti** brings him back (`autosave = 0`, `autosave_minutes = 5` (1-60) and `resetti = 1` in
+`settings.ini`). While you visit another town in multiplayer, your own town's file gets your pockets, bells and
+letters of the moment, as the train home would.
 
 ### Playing in Korean
 
@@ -210,13 +229,21 @@ Hangul is typed with your computer's Korean input method (Han/Eng key).
 - **Villagers follow the host's.** Villagers wandering near the host walk or run to the same places on guests'
   screens, and villagers away from the host are in the same acres too. Talking to or greeting a villager is still your
   own: during a conversation that villager stands still on your screen and follows again afterwards. They go home,
-  come out and sleep when the host's do. Villagers inside
-  houses, the island villager, insects and fish move on each machine by themselves.
+  come out and sleep when the host's do. **Inside a villager's house** the villager walks about the room where the
+  host's does when the host is in the same house (and comes in when the host's does). The island villager, insects
+  and fish move on each machine by themselves.
 - **The host's furniture is shared live.** When the host places, moves, turns or removes furniture, or changes the
   wallpaper or carpet, guests see it at once. A guest standing in that room sees the furniture rebuilt when it is not
   in a menu or a conversation and is standing or walking. What is inside storage furniture, and lamps on or off, are
   not shared. As in the original game, nobody can move furniture in someone else's house.
-- Custom designs worn as clothes show as the plain shirt to others.
+- **Custom designs show as drawn.** A design worn as clothing shows to everyone as its owner drew it (changed
+  designs too), and the designs of the host's houses (wallpaper, carpet, the house door) show to guests.
+- **Also shared, following the host**: what each player is doing (picking up, shaking a tree, fishing... with the
+  same animation), the weather, the town tune, the museum, the noticeboard, the police station's lost and found,
+  Nook's shop, the Able Sisters' display, the post office, the turnip prices, the visitors' events and the snowmen. A
+  guest's change at one of these places (a post on the board, a lost item taken, something bought or sold, the town
+  tune) goes to the host and from the host to everyone.
+- A guest's own town is saved with the guest's pockets and bells while visiting (see [Saving](#saving)).
 - Two players picking up the same item in the same instant can both get it.
 - While a guest is in the host's town, the guest's game clock follows the host's.
 - The room ends when the host closes it or quits. A guest already in the host's town stays there and takes the
