@@ -318,7 +318,7 @@ test `pc/tests/test_minimap.c`).
   backup), found by the town's id and name and checked against its copy-protect code.
 - Between scenes (`play_cleanup`, after `mFM_Field_dt` and before `mCD_toNextLand`: every actor has put its data
   back) at most every 20 s, not from the title demo, the player select or the opening.
-- Every `autosave_minutes` (default 5) while the player is outdoors in the town, nothing fading, no menu or message,
+- Every `autosave_every` minutes (default 1; 1.3.0 wrote `autosave_minutes = 5`, read only when not 5) while the player is outdoors in the town, nothing fading, no menu or message,
   standing, walking or running for 3 s and no unit placeholder (`RSV_NO`) written for 3 s. Live actors keep
   placeholders in the Save (a tree being shaken, a building...): the snapshot is a copy with their names put back
   (`Actor_info_PC_restore_fgdata_copy`, like `restore_fgdata_all` but into the copy). A player's room is not saved

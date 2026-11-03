@@ -57,8 +57,8 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
   each other (with your own custom designs), chat, and drop, pick up, plant and dig in the same town, with
   the host's villagers, furniture, weather, shops and museum. The host can send players out
   ([Multiplayer](#multiplayer)).
-- **Autosave**: the game saves by itself every few minutes outdoors, between scenes (going in or out of a
-  building) and when you quit, so closing it or a crash loses only a few minutes. Mr. Resetti therefore stays
+- **Autosave**: the game saves by itself every minute outdoors, between scenes (going in or out of a
+  building) and when you quit, so closing it or a crash loses about a minute at most. Mr. Resetti therefore stays
   away by default ([Saving](#saving)).
 - Korean fan patch support: install the patch zip from inside the game, switch between Korean and
   Japanese at any time, and type Hangul with a real keyboard (2-set layout) or an on-screen keyboard.
@@ -120,14 +120,14 @@ Version v0.1.6 and earlier can't update themselves: download v1.0.0 once by hand
 
 The game saves your town as the gyroid's "save and continue" would, without asking:
 
-- every few minutes while you are outdoors in your town and not doing anything special (not in a menu, a
+- every minute while you are outdoors in your town and not doing anything special (not in a menu, a
   conversation or holding up an item; it waits for such a moment);
 - when you go in or out of a building (at most once every 20 seconds);
 - when you quit from the menu or close the window.
 
 You can still save at the gyroid as usual. Turning the game off without saving no longer loses your play, so
 **Mr. Resetti does not come by default**. **Settings** → **Gameplay** → **Autosave** turns the autosave off, and
-**Mr. Resetti** brings him back (`autosave = 0`, `autosave_minutes = 5` (1-60) and `resetti = 1` in
+**Mr. Resetti** brings him back (`autosave = 0`, `autosave_every = 1` (minutes, 1-60) and `resetti = 1` in
 `settings.ini`). While you visit another town in multiplayer, your own town's file gets your pockets, bells and
 letters of the moment, as the train home would.
 
