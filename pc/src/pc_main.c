@@ -23,6 +23,7 @@
 #endif
 #include "pc_pause_menu.h"
 #include "pc_gui.h"
+#include "pc_autosave.h"
 #include "pc_input_script.h"
 #include "pc_ko.h"
 
@@ -352,6 +353,7 @@ int pc_platform_poll_events(void) {
         }
         switch (event.type) {
             case SDL_QUIT:
+                pc_autosave_quit();
                 g_pc_running = 0;
                 return 0;
             case SDL_WINDOWEVENT:

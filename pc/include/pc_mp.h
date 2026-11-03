@@ -25,7 +25,7 @@
 extern "C" {
 #endif
 
-#define PC_MP_PROTOCOL 1
+#define PC_MP_PROTOCOL 2
 #define PC_MP_MAX_PLAYERS 8
 #define PC_MP_DEFAULT_PORT 47070
 #define PC_MP_LAN_PORT 47071 /* where rooms on the network listen for the broadcast */
@@ -61,6 +61,12 @@ typedef struct {
     float x, y, z;
     int16_t angle;
     uint16_t flags;
+    uint16_t place;  /* the field (mFI_GetFieldId: a house, a shop...) */
+    uint16_t owner;  /* whose house it is (house_owner_name) */
+    uint16_t anim0;  /* the player's animation (mPlayer_ANIM_*), 0xFFFF = by anim */
+    uint8_t part;    /* its part table (mPlayer_PART_TABLE_*) */
+    uint8_t item;    /* the item kind in hand (mPlayer_ITEM_KIND_*) */
+    float frame;     /* the animation's frame */
 } PcMpState;
 
 typedef struct {

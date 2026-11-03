@@ -1,6 +1,7 @@
 /* pc_pause_menu.c - the game's pause; the menu itself is drawn by pc_gui (pc/src/gui) */
 #include "pc_platform.h"
 #include "pc_pause_menu.h"
+#include "pc_autosave.h"
 #include "pc_gui.h"
 #include "pc_minimap.h"
 #include "pc_mp_game.h"
@@ -52,4 +53,5 @@ void pc_pause_menu_draw(struct game_s* game) {
      * the menu is drawn over the finished frame by pc_gui_frame */
     pc_minimap_game_frame(game);
     pc_mp_game_frame(game); /* the multiplayer reads and changes the game here */
+    pc_autosave_frame(game);
 }

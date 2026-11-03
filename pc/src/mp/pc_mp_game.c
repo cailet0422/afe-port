@@ -6,6 +6,7 @@
 #include "pc_upnp.h"
 #include "pc_settings.h"
 #include "pc_gui.h"
+#include "pc_autosave.h"
 #include "pc_ko.h"
 #include "pc_rom_dir.h"
 #include "ko_charset.h"
@@ -21,12 +22,18 @@
 #include "m_private.h"
 #include "m_scene_table.h"
 #include "m_home_h.h"
+#include "m_house.h"
 #include "m_npc.h"
 #include "m_npc_schedule.h"
+#include "m_needlework.h"
 #include "ac_npc.h"
+#include "ac_my_indoor.h"
+#include "ac_weather.h"
+#include "m_kankyo.h"
 #include "lb_rtc.h"
 
 #include <stddef.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #ifdef _WIN32
@@ -55,6 +62,10 @@ enum {
     G_HOME,         /* host -> guests: town, house, floor, offset, length, bytes of mHm_flr_c */
     G_HOME_REQ,     /* guest -> host: all the houses, please */
     G_NPC,          /* host -> guests: town, count, villagers (unreliable, ~10 a second) */
+    G_DESIGN,       /* a player's own design: origin slot, pno, index, palette, name, id, pixels */
+    G_NPC_ROOM,     /* host -> guests: town, house owner, count, villagers in that house (unreliable) */
+    G_REGION,       /* host -> guests (or a guest's change -> host): town, region, offset, length, bytes */
+    G_REGION_REQ,   /* guest -> host: all of the shared town data, please */
 };
 
 static void home_frame(void);
@@ -63,6 +74,15 @@ static void home_reset(void);
 static void npc_frame(GAME_PLAY* play);
 static void npc_message(int from, const u8* m, int len);
 static void npc_reset(void);
+static void design_frame(void);
+static void npc_room_message(int from, const u8* m, int len);
+static void npc_room_frame(void);
+static void region_message(int from, const u8* m, int len);
+static void region_frame(void);
+static void region_reset(void);
+static void design_message(int from, const u8* m, int len);
+static void design_reset(void);
+static void design_forget(int slot);
 
 static PcMp* s_mp = NULL;
 
@@ -90,6 +110,8 @@ static uint32_t s_host_town = 0;
 static int s_slot_b_net = 0;
 static int s_visited = 0;   /* were in the host's town */
 static int s_fg_asked = 0;  /* asked for the item layer on this arrival */
+static int s_was_out = 0;   /* a guest outdoors in the host's town last frame */
+static int s_fg_shadow_ok = 0; /* host: the item layer as sent (fg_diff) */
 static int s_fg_blocks = 0;
 
 /* the other players */
@@ -313,6 +335,10 @@ static void update_me(void) {
         look.face = Now_Private->face;
         look.tan = (u8)(Now_Private->sunburn.rank > 0 ? Now_Private->sunburn.rank : 0);
         look.cloth = Now_Private->cloth.item;
+        if (Now_Private->cloth.item == RSV_CLOTH) {
+            /* a design of their own (my_org): its picture travels as G_DESIGN */
+            look.cloth = (u16)(PC_MP_LOOK_DESIGN | ((Now_Private->cloth.idx - 0x100) & 7));
+        }
         look.held = Now_Private->equipment;
     }
     look.korean = (u8)(g_pc_ko_mode != 0);
@@ -328,6 +354,9 @@ int pc_mp_game_host(const PcMpHostConfig* cfg) {
     s_visit = PC_MP_VISIT_NONE;
     home_reset();
     npc_reset();
+    design_reset();
+    region_reset();
+    s_fg_shadow_ok = 0;
     if (!g_pc_deterministic && s_upnp == 0) {
         s_upnp = 1;
         s_upnp_port = pc_mp_port(s_mp);
@@ -375,6 +404,10 @@ void pc_mp_game_leave(void) {
     if (s_mp == NULL) return;
     home_reset();
     npc_reset();
+    design_reset();
+    region_reset();
+    s_fg_shadow_ok = 0;
+    for (int i = 0; i < PC_MP_MAX_PLAYERS; i++) design_forget(i);
     if (is_host() && s_upnp == 2) {
         SDL_DetachThread(SDL_CreateThread(unmap_thread, "upnp", (void*)(uintptr_t)s_upnp_port));
         s_upnp = 0;
@@ -653,6 +686,7 @@ static void send_item_set(int to, int bx, int bz, int ux, int uz, u16 item) {
 }
 
 void pc_mp_fg_written(int bx, int bz, int ux, int uz, unsigned short old_item, unsigned short new_item) {
+    if (!s_applying) pc_autosave_unit_written(old_item, new_item);
     if (s_applying || !in_shared_town() || !outside_in_town() || save_unit(bx, bz, ux, uz) == NULL ||
         IS_PLACEHOLDER(old_item) || IS_PLACEHOLDER(new_item)) {
         return; /* (an actor made from the unit, or gone: this game's own) */
@@ -709,32 +743,87 @@ void pc_mp_deposit_written(int bx, int bz, int ux, int uz, int on) {
     pc_mp_send_game(s_mp, is_host() ? -1 : 0, 1, m, sizeof(m));
 }
 
-static void send_fg(int to) {
+static void send_fg_block(int to, int bx, int bz, const RealName* names, int nnames) {
     u8 m[1 + 4 + 1 + UT_X_NUM * UT_Z_NUM * 2 + UT_Z_NUM * 2];
+    size_t n = 0;
+
+    m[n++] = G_FG_DATA;
+    w32(m + n, room_town());
+    n += 4;
+    m[n++] = (u8)((bz - 1) * FG_BLOCK_X_NUM + (bx - 1));
+    for (int uz = 0; uz < UT_Z_NUM; uz++) {
+        for (int ux = 0; ux < UT_X_NUM; ux++) {
+            w16(m + n, shared_item(save_unit(bx, bz, ux, uz), names, nnames));
+            n += 2;
+        }
+    }
+    for (int uz = 0; uz < UT_Z_NUM; uz++) {
+        w16(m + n, *save_deposit(bx, bz, uz));
+        n += 2;
+    }
+    pc_mp_send_game(s_mp, to, 1, m, n);
+}
+
+static void send_fg(int to) {
     RealName names[96];
     int nnames = real_names(names, 96);
 
     for (int bz = 1; bz <= FG_BLOCK_Z_NUM; bz++) {
-        for (int bx = 1; bx <= FG_BLOCK_X_NUM; bx++) {
-            size_t n = 0;
+        for (int bx = 1; bx <= FG_BLOCK_X_NUM; bx++) send_fg_block(to, bx, bz, names, nnames);
+    }
+}
 
-            m[n++] = G_FG_DATA;
-            w32(m + n, room_town());
-            n += 4;
-            m[n++] = (u8)((bz - 1) * FG_BLOCK_X_NUM + (bx - 1));
+/* The host: the game also changes the town's items without the functions
+ * the hook is in (the day's regrowth of trees, fruit, weeds and flowers,
+ * shells on the beach, mushrooms, buried treasure): compare the item and
+ * buried layers with what was sent twice a second and send the blocks that
+ * changed (placeholders and units the game is busy with left as they were) */
+static u16 s_fg_shadow[FG_BLOCK_Z_NUM][FG_BLOCK_X_NUM][UT_Z_NUM][UT_X_NUM];
+static u16 s_dep_shadow[FG_BLOCK_Z_NUM][FG_BLOCK_X_NUM][UT_Z_NUM];
+
+static void fg_diff(void) {
+    RealName names[96];
+    int nnames = -1;
+
+    for (int bz = 1; bz <= FG_BLOCK_Z_NUM; bz++) {
+        for (int bx = 1; bx <= FG_BLOCK_X_NUM; bx++) {
+            int changed = 0;
+
             for (int uz = 0; uz < UT_Z_NUM; uz++) {
+                u16 dep = *save_deposit(bx, bz, uz);
+
+                if (dep != s_dep_shadow[bz - 1][bx - 1][uz]) {
+                    s_dep_shadow[bz - 1][bx - 1][uz] = dep;
+                    changed = 1;
+                }
                 for (int ux = 0; ux < UT_X_NUM; ux++) {
-                    w16(m + n, shared_item(save_unit(bx, bz, ux, uz), names, nnames));
-                    n += 2;
+                    u16 it = *save_unit(bx, bz, ux, uz);
+                    u16* sh = &s_fg_shadow[bz - 1][bx - 1][uz][ux];
+
+                    if (it != *sh && it != RSV_NO && !IS_PLACEHOLDER(it)) {
+                        *sh = it;
+                        changed = 1;
+                    }
                 }
             }
-            for (int uz = 0; uz < UT_Z_NUM; uz++) {
-                w16(m + n, *save_deposit(bx, bz, uz));
-                n += 2;
+            if (changed) {
+                if (nnames < 0) nnames = real_names(names, 96);
+                send_fg_block(-1, bx, bz, names, nnames);
             }
-            pc_mp_send_game(s_mp, to, 1, m, n);
         }
     }
+}
+
+static void fg_shadow_take(void) {
+    for (int bz = 1; bz <= FG_BLOCK_Z_NUM; bz++) {
+        for (int bx = 1; bx <= FG_BLOCK_X_NUM; bx++) {
+            for (int uz = 0; uz < UT_Z_NUM; uz++) {
+                s_dep_shadow[bz - 1][bx - 1][uz] = *save_deposit(bx, bz, uz);
+                for (int ux = 0; ux < UT_X_NUM; ux++) s_fg_shadow[bz - 1][bx - 1][uz][ux] = *save_unit(bx, bz, ux, uz);
+            }
+        }
+    }
+    s_fg_shadow_ok = 1;
 }
 
 static void game_message(int from, const u8* m, int len) {
@@ -817,6 +906,16 @@ static void game_message(int from, const u8* m, int len) {
         case G_NPC:
             npc_message(from, m, len);
             break;
+        case G_DESIGN:
+            design_message(from, m, len);
+            break;
+        case G_NPC_ROOM:
+            npc_room_message(from, m, len);
+            break;
+        case G_REGION:
+        case G_REGION_REQ:
+            region_message(from, m, len);
+            break;
         case G_TIME:
             if (!is_host() && len >= 5 + (int)sizeof(lbRTC_time_c) && in_shared_town() && town == s_my_town) {
                 lbRTC_time_c host_time, now;
@@ -850,9 +949,19 @@ static const PcMpPlayer* player_of(int slot, PcMpPlayer* buf) {
     return NULL;
 }
 
+/* in a player's or a villager's house (one scene for many houses: the
+ * field and house_owner_name tell which) */
+static int in_a_house(void) {
+    int type = mFI_GET_TYPE(mFI_GetFieldId());
+
+    return type == mFI_FIELD_PLAYER0_ROOM || type == mFI_FIELD_NPCROOM0;
+}
+
 static int wanted_here(const PcMpPlayer* p) {
     return p != NULL && !p->is_you && in_room() && p->state.town != 0 && p->state.town == s_my_town &&
-           p->state.scene == s_my_scene && pc_net_ms() - p->state_ms < 5000;
+           p->state.scene == s_my_scene && p->state.place == (u16)mFI_GetFieldId() &&
+           p->state.owner == (in_a_house() ? (u16)Common_Get(house_owner_name) : 0) &&
+           pc_net_ms() - p->state_ms < 5000;
 }
 
 int pc_mp_game_puppet_target(int slot, PcMpState* st, PcMpLook* look) {
@@ -936,6 +1045,13 @@ static void my_state(GAME_PLAY* play) {
         st.y = pl->actor_class.world.position.y;
         st.z = pl->actor_class.world.position.z;
         st.angle = pl->actor_class.shape_info.rotation.y;
+        st.place = (u16)mFI_GetFieldId();
+        st.owner = in_a_house() ? (u16)Common_Get(house_owner_name) : 0;
+        /* what the player is doing, as the game animates it (puppets play the same) */
+        st.anim0 = (u16)pl->animation0_idx;
+        st.part = (u8)pl->part_table_idx;
+        st.item = (u8)pl->item_kind;
+        st.frame = pl->keyframe0.frame_control.current_frame;
     }
     pc_mp_set_state(s_mp, &st);
 }
@@ -953,14 +1069,17 @@ static void events(void) {
                 s_visit = PC_MP_VISIT_DOWNLOADING;
                 update_me();
                 pc_mp_request_town(s_mp);
+                design_reset(); /* ours go to the room */
                 break;
             case PC_MP_EV_PLAYER_IN:
                 snprintf(text, sizeof(text), ko ? "%s 님이 들어왔습니다" : "%s joined", ev.text);
                 pc_gui_notify(text);
+                if (is_host()) design_reset(); /* everyone's designs for the newcomer */
                 break;
             case PC_MP_EV_PLAYER_OUT:
                 snprintf(text, sizeof(text), ko ? "%s 님이 나갔습니다" : "%s left", ev.text);
                 pc_gui_notify(text);
+                design_forget(ev.slot);
                 break;
             case PC_MP_EV_KICKED:
             case PC_MP_EV_CLOSED:
@@ -1049,6 +1168,8 @@ void pc_mp_game_frame(struct game_s* game) {
                 pc_mp_send_game(s_mp, 0, 1, m, 5);
                 m[0] = G_HOME_REQ;
                 pc_mp_send_game(s_mp, 0, 1, m, 5);
+                m[0] = G_REGION_REQ;
+                pc_mp_send_game(s_mp, 0, 1, m, 5);
                 s_fg_asked = 1;
                 s_fg_blocks = 0;
             }
@@ -1073,6 +1194,28 @@ void pc_mp_game_frame(struct game_s* game) {
         if (play != NULL) manage_puppets(play);
         home_frame();
         npc_frame(play);
+        design_frame();
+        npc_room_frame();
+        region_frame();
+        if (is_host() && in_shared_town()) {
+            if (!s_fg_shadow_ok) fg_shadow_take();
+            else if (s_frame % 30 == 0) fg_diff();
+        } else if (!is_host()) {
+            /* a guest stepping outside in the host's town: the whole item layer
+             * again (what its own game regrew while loading is the host's) */
+            int out = s_visit == PC_MP_VISIT_THERE && outside_in_town() && play != NULL &&
+                      play->fb_fade_type == FADE_TYPE_NONE;
+
+            if (out && !s_was_out && s_fg_asked) {
+                u8 m[5];
+
+                m[0] = G_FG_REQ;
+                w32(m + 1, s_host_town);
+                pc_mp_send_game(s_mp, 0, 1, m, 5);
+            }
+            s_was_out = out;
+        }
+        if (s_frame % 30 == 0) update_me(); /* changed clothes, a tool in hand */
         /* the host's clock for the guests in its town */
         if (is_host() && play != NULL && pc_net_ms() - s_time_sent > 10000) {
             u8 m[5 + sizeof(lbRTC_time_c)];
@@ -1115,6 +1258,8 @@ static const HomeRegion s_home_regions[] = {
 #define HOME_NREG ((int)(sizeof(s_home_regions) / sizeof(s_home_regions[0])))
 
 static u8 s_home_shadow[PLAYER_NUM][HOME_FLOORS][sizeof(mHm_flr_c)]; /* host: as sent */
+static u8 s_door_shadow[PLAYER_NUM]; /* host: the door decoration (a design) as sent */
+#define HOME_DOOR 0xFF /* G_HOME "floor": the house's door decoration (mHm_hs_c door_original) */
 static int s_home_shadow_ok = 0;
 static u8 s_home_target[PLAYER_NUM][HOME_FLOORS][sizeof(mHm_flr_c)]; /* guest: as received */
 static u8 s_home_mask[PLAYER_NUM][HOME_FLOORS][(sizeof(mHm_flr_c) + 7) / 8];
@@ -1157,8 +1302,27 @@ static void home_send(int to, int house, int floor, int off, int len) {
     }
 }
 
+static void door_send(int to, int house) {
+    u8 m[12];
+
+    m[0] = G_HOME;
+    w32(m + 1, s_my_town);
+    m[5] = (u8)house;
+    m[6] = HOME_DOOR;
+    w16(m + 7, 0);
+    w16(m + 9, 1);
+    m[11] = Save_Get(homes[house]).door_original;
+    pc_mp_send_game(s_mp, to, 1, m, sizeof(m));
+}
+
 /* host: what changed since it was sent, as runs of a region */
 static void home_diff(void) {
+    for (int h = 0; h < PLAYER_NUM; h++) {
+        if (Save_Get(homes[h]).door_original != s_door_shadow[h]) {
+            s_door_shadow[h] = Save_Get(homes[h]).door_original;
+            door_send(-1, h);
+        }
+    }
     for (int h = 0; h < PLAYER_NUM; h++) {
         for (int f = 0; f < HOME_FLOORS; f++) {
             u8* cur = floor_bytes(h, f);
@@ -1224,10 +1388,16 @@ int pc_mp_room_changes_pending(int house, int floor) {
     return s_home_dirty[house][floor] && in_shared_town() && !is_host();
 }
 
+static int s_design_room_dirty;
+
 int pc_mp_room_apply_changes(int house, int floor) {
+    int look;
+
     if (house < 0 || house >= PLAYER_NUM || floor < 0 || floor >= HOME_FLOORS) return 0;
     if (g_pc_verbose) printf("[MP] house %d floor %d: the host's furniture, built again\n", house, floor);
-    return home_apply(house, floor);
+    look = home_apply(house, floor) | s_design_room_dirty;
+    s_design_room_dirty = 0;
+    return look;
 }
 
 static void home_message(int from, const u8* m, int len) {
@@ -1241,6 +1411,7 @@ static void home_message(int from, const u8* m, int len) {
                         home_send(from, h, f, s_home_regions[r].off, s_home_regions[r].len);
                     }
                 }
+                door_send(from, h);
             }
         }
         return;
@@ -1249,7 +1420,12 @@ static void home_message(int from, const u8* m, int len) {
     {
         int h = m[5], f = m[6], off = r16(m + 7), n = r16(m + 9), ok = 0;
 
-        if (h >= PLAYER_NUM || f >= HOME_FLOORS || n <= 0 || 11 + n > len) return;
+        if (h >= PLAYER_NUM || n <= 0 || 11 + n > len) return;
+        if (f == HOME_DOOR) {
+            Save_Get(homes[h]).door_original = m[11]; /* (drawn as it is, every frame) */
+            return;
+        }
+        if (f >= HOME_FLOORS) return;
         for (int r = 0; r < HOME_NREG; r++) {
             ok |= off >= s_home_regions[r].off && off + n <= s_home_regions[r].off + s_home_regions[r].len;
         }
@@ -1268,6 +1444,7 @@ static void home_frame(void) {
         if (!s_home_shadow_ok) {
             for (int h = 0; h < PLAYER_NUM; h++) {
                 for (int f = 0; f < HOME_FLOORS; f++) memcpy(s_home_shadow[h][f], floor_bytes(h, f), FLOOR_SIZE);
+                s_door_shadow[h] = Save_Get(homes[h]).door_original;
             }
             s_home_shadow_ok = 1;
         }
@@ -1541,6 +1718,468 @@ static void npc_frame(GAME_PLAY* play) {
                        (s_npc[k].flags & NPC_EXACT) ? "" : " (coarse)", na->condition_info.hide_flg, na->schedule.type,
                        na->think.idx, na->action.idx, na->action.step);
             }
+        }
+    }
+}
+
+/* --- Designs: each player's own -----------------------------------------
+ *
+ * What a player wears, holds or hangs that is a design of their own refers
+ * to a slot of their my_org (Private_c, 8 designs of a palette index and
+ * 32x32 CI4 pixels); the pixels are only in their own game. Every player
+ * sends its 8 (and again any that changes); the host passes the guests' on
+ * and gives everyone's to a newcomer. A puppet wears the design its look
+ * names (PC_MP_LOOK_DESIGN); a guest in the host's town also writes the
+ * host's into its copy of the town, where its door, signboards, wallpaper
+ * and carpet read them. */
+
+#define DESIGN_COUNT mPr_ORIGINAL_DESIGN_COUNT
+#define DESIGN_TEX mNW_DESIGN_TEX_SIZE
+#define DESIGN_MSG (9 + 10 + (int)sizeof(PersonalID_c) + DESIGN_TEX)
+
+typedef struct {
+    u8 have[DESIGN_COUNT];
+    u8 palette[DESIGN_COUNT];
+    u8 name[DESIGN_COUNT][10];
+    u8 pno;
+    PersonalID_c pid;
+    u32 gen; /* grows with every design that comes */
+    u8 tex[DESIGN_COUNT][DESIGN_TEX];
+} Designs;
+
+static Designs s_designs[PC_MP_MAX_PLAYERS];
+static u8 s_design_sent[DESIGN_COUNT][1 + 10 + DESIGN_TEX];
+static int s_design_sent_ok = 0;
+static u32 s_design_frame = 0;
+/* (s_design_room_dirty: a host design changed while we stand in its room) */
+
+static void design_reset(void) {
+    s_design_sent_ok = 0; /* all ours again (and, as host, everyone's) */
+}
+
+static void design_forget(int slot) {
+    if (slot >= 0 && slot < PC_MP_MAX_PLAYERS) memset(&s_designs[slot], 0, sizeof(s_designs[0]));
+}
+
+int pc_mp_game_design(int slot, int index, unsigned char* palette, const unsigned char** tex, unsigned int* gen) {
+    const Designs* d;
+
+    if (slot < 0 || slot >= PC_MP_MAX_PLAYERS || index < 0 || index >= DESIGN_COUNT) return 0;
+    d = &s_designs[slot];
+    if (!d->have[index]) return 0;
+    *palette = d->palette[index];
+    *tex = d->tex[index];
+    *gen = d->gen;
+    return 1;
+}
+
+static void design_send(int to, int origin, int pno, const PersonalID_c* pid, int j, u8 palette, const u8* name,
+                        const u8* tex) {
+    u8 m[DESIGN_MSG];
+
+    m[0] = G_DESIGN;
+    w32(m + 1, s_my_town);
+    m[5] = (u8)origin;
+    m[6] = (u8)pno;
+    m[7] = (u8)j;
+    m[8] = palette;
+    memcpy(m + 9, name, 10);
+    memcpy(m + 19, pid, sizeof(PersonalID_c));
+    memcpy(m + 19 + sizeof(PersonalID_c), tex, DESIGN_TEX);
+    pc_mp_send_game(s_mp, to, 1, m, sizeof(m));
+}
+
+/* a host design changed in the guest's copy of the host's town: the room we
+ * stand in shows it again if it uses it */
+static void design_room_uses(int pno, int j) {
+    int id = mFI_GetFieldId(), house;
+
+    if (mFI_GET_TYPE(id) != mFI_FIELD_PLAYER0_ROOM) return;
+    house = mFI_GET_PLAYER_ROOM_NO(id);
+    if (mHS_get_pl_no_detail(house) == pno) {
+        int f = mFI_GetNowPlayerHouseFloorNo();
+
+        if (f >= 0 && f < HOME_FLOORS) {
+            (void)j;
+            s_home_dirty[house][f] = 1; /* built again: wallpaper, carpet, design furniture */
+            s_design_room_dirty = 1;
+        }
+    }
+}
+
+static void design_message(int from, const u8* m, int len) {
+    int origin, pno, j;
+    Designs* d;
+    PersonalID_c pid;
+
+    if (len < DESIGN_MSG) return;
+    origin = is_host() ? from : m[5];
+    pno = m[6];
+    j = m[7];
+    if (origin < 0 || origin >= PC_MP_MAX_PLAYERS || j >= DESIGN_COUNT) return;
+    if (!is_host() && origin == pc_mp_my_slot(s_mp)) return;
+    memcpy(&pid, m + 19, sizeof(pid));
+    d = &s_designs[origin];
+    d->have[j] = 1;
+    d->palette[j] = m[8] & 15;
+    memcpy(d->name[j], m + 9, 10);
+    memcpy(d->tex[j], m + 19 + sizeof(PersonalID_c), DESIGN_TEX);
+    d->pno = (u8)pno;
+    d->pid = pid;
+    d->gen++;
+    if (is_host()) {
+        /* to the others (the sender ignores its own) */
+        design_send(-1, origin, pno, &pid, j, d->palette[j], d->name[j], d->tex[j]);
+        return;
+    }
+    /* the host's own designs into our copy of its town */
+    if (origin == 0 && pno < PLAYER_NUM && in_shared_town() &&
+        mPr_CheckCmpPersonalID(&Save_Get(private_data[pno]).player_ID, &pid)) {
+        mNW_original_design_c* o = &Save_Get(private_data[pno]).my_org[j];
+
+        if (o->palette != d->palette[j] || memcmp(o->design.data, d->tex[j], DESIGN_TEX) != 0 ||
+            memcmp(o->name, d->name[j], 10) != 0) {
+            o->palette = d->palette[j];
+            memcpy(o->name, d->name[j], 10);
+            mNW_OverWriteOriginalTexture(o, d->tex[j]);
+            design_room_uses(pno, j);
+        }
+    }
+}
+
+static void design_frame(void) {
+    Private_c* me = Common_Get(now_private);
+
+    s_design_frame++;
+    if (me == NULL || (s_design_sent_ok && s_design_frame % 60 != 0)) return;
+    for (int j = 0; j < DESIGN_COUNT; j++) {
+        const mNW_original_design_c* o = &me->my_org[j];
+        u8* sent = s_design_sent[j];
+
+        if (s_design_sent_ok && sent[0] == o->palette && memcmp(sent + 1, o->name, 10) == 0 &&
+            memcmp(sent + 11, o->design.data, DESIGN_TEX) == 0) {
+            continue;
+        }
+        sent[0] = o->palette;
+        memcpy(sent + 1, o->name, 10);
+        memcpy(sent + 11, o->design.data, DESIGN_TEX);
+        {
+            int pno = (int)Common_Get(player_no);
+            int my = pc_mp_my_slot(s_mp);
+
+            /* (ours for our puppet on the others; the host keeps its own too) */
+            if (my >= 0 && my < PC_MP_MAX_PLAYERS) {
+                Designs* d = &s_designs[my];
+
+                d->have[j] = 1;
+                d->palette[j] = o->palette & 15;
+                memcpy(d->name[j], o->name, 10);
+                memcpy(d->tex[j], o->design.data, DESIGN_TEX);
+                d->pno = (u8)pno;
+                d->pid = me->player_ID;
+                d->gen++;
+            }
+            design_send(-1, my < 0 ? 0 : my, pno, &me->player_ID, j, o->palette, o->name, o->design.data);
+        }
+    }
+    if (!s_design_sent_ok && is_host()) {
+        /* a newcomer: the guests' designs we have */
+        for (int slot = 1; slot < PC_MP_MAX_PLAYERS; slot++) {
+            Designs* d = &s_designs[slot];
+
+            for (int j = 0; j < DESIGN_COUNT; j++) {
+                if (d->have[j]) design_send(-1, slot, d->pno, &d->pid, j, d->palette[j], d->name[j], d->tex[j]);
+            }
+        }
+    }
+    s_design_sent_ok = 1;
+}
+
+/* --- Villagers in their houses ------------------------------------------
+ *
+ * In its house a villager is run by the indoor controller (afe-decomp
+ * ac_npc2.c) in room coordinates: the host reports it (the same hook, as
+ * pc_mp_npc_room_report) and sends it with the house's owner; a guest in
+ * the same house (the field and house_owner_name) makes its copy walk where
+ * the host's is while it walks about the room. */
+
+typedef struct {
+    u16 id, owner;
+    u8 act, flags;
+    f32 x, y, z;
+    s16 angle;
+    u32 frame, ms;
+} NpcRoom;
+
+static NpcRoom s_npc_room[ANIMAL_NUM_MAX];
+static u32 s_npc_room_frame = 0;
+
+void pc_mp_npc_room_report(int idx, mActor_name_t npc_id, f32 x, f32 y, f32 z, s16 angle, int act, int flags) {
+    NpcRoom* n;
+
+    if (idx < 0 || idx >= ANIMAL_NUM_MAX || !is_host() || !in_shared_town()) return;
+    n = &s_npc_room[idx];
+    n->id = npc_id;
+    n->owner = (u16)Common_Get(house_owner_name);
+    n->x = x;
+    n->y = y;
+    n->z = z;
+    n->angle = angle;
+    n->act = (u8)act;
+    n->flags = (u8)flags;
+    n->frame = s_frame;
+}
+
+int pc_mp_npc_room_target(int idx, mActor_name_t npc_id, f32* x, f32* y, f32* z, s16* angle, int* act, int* flags) {
+    const NpcRoom* n;
+
+    if (idx < 0 || idx >= ANIMAL_NUM_MAX || !pc_mp_npc_guest()) return 0;
+    n = &s_npc_room[idx];
+    if (n->id != npc_id || pc_net_ms() - n->ms > 1500 || mFI_GET_TYPE(mFI_GetFieldId()) != mFI_FIELD_NPCROOM0 ||
+        n->owner != (u16)Common_Get(house_owner_name)) {
+        return 0;
+    }
+    if (g_pc_verbose && s_frame % 120 == 0) {
+        printf("[MP] room villager %d at the host %.0f,%.0f act %d flags %x\n", idx, n->x, n->z, n->act, n->flags);
+    }
+    *x = n->x;
+    *y = n->y;
+    *z = n->z;
+    *angle = n->angle;
+    *act = n->act;
+    *flags = n->flags;
+    return 1;
+}
+
+static void npc_room_message(int from, const u8* m, int len) {
+    int count;
+    u16 owner;
+
+    if (is_host() || from != 0 || len < 8 || !in_shared_town() || r32(m + 1) != s_my_town) return;
+    owner = r16(m + 5);
+    count = m[7];
+    if (8 + count * NPC_ENTRY > len) return;
+    for (int i = 0; i < count; i++) {
+        const u8* e = m + 8 + i * NPC_ENTRY;
+        int k = e[0];
+        NpcRoom* n;
+
+        if (k >= ANIMAL_NUM_MAX) continue;
+        n = &s_npc_room[k];
+        n->id = r16(e + 1);
+        n->owner = owner;
+        n->flags = e[3];
+        n->act = e[4];
+        n->x = (f32)(s16)r16(e + 5);
+        n->y = (f32)(s16)r16(e + 7);
+        n->z = (f32)(s16)r16(e + 9);
+        n->angle = (s16)r16(e + 11);
+        n->ms = pc_net_ms();
+    }
+}
+
+static void npc_room_frame(void) {
+    u8 m[8 + ANIMAL_NUM_MAX * NPC_ENTRY];
+    int count = 0;
+
+    s_npc_room_frame++;
+    if (!is_host() || !in_shared_town() || s_npc_room_frame % 6 != 0 ||
+        mFI_GET_TYPE(mFI_GetFieldId()) != mFI_FIELD_NPCROOM0) {
+        return;
+    }
+    m[0] = G_NPC_ROOM;
+    w32(m + 1, s_my_town);
+    w16(m + 5, (u16)Common_Get(house_owner_name));
+    for (int k = 0; k < ANIMAL_NUM_MAX; k++) {
+        const NpcRoom* n = &s_npc_room[k];
+        u8* e = m + 8 + count * NPC_ENTRY;
+
+        if (s_frame - n->frame > 2 || n->owner != (u16)Common_Get(house_owner_name)) continue;
+        e[0] = (u8)k;
+        w16(e + 1, n->id);
+        e[3] = n->flags;
+        e[4] = n->act;
+        w16(e + 5, (u16)(s16)n->x);
+        w16(e + 7, (u16)(s16)n->y);
+        w16(e + 9, (u16)(s16)n->z);
+        w16(e + 11, (u16)n->angle);
+        e[13] = NPC_NO_SCHEDULE;
+        count++;
+    }
+    m[7] = (u8)count;
+    if (count > 0) pc_mp_send_game(s_mp, -1, 0, m, (size_t)(8 + count * NPC_ENTRY));
+}
+
+/* --- The rest of the town's data -----------------------------------------
+ *
+ * Parts of the host's Save that every player should see the same: the
+ * weather, the town tune, the museum, the noticeboard, the lost and found,
+ * Nook's shop, the Able Sisters' display, the post office (letters waiting
+ * to go), the turnip prices, the visitors' events, the snowmen. The host
+ * compares them with what it sent every second and sends what changed; a
+ * guest arriving gets all of them. What a visitor can change there (a post
+ * on the board, the town tune, a lost item taken, things bought or sold, a
+ * design put on display, a letter sent) goes from the guest to the host
+ * while the guest is at that place, and from the host to everyone. */
+
+#define SAVE_FIELD(f) offsetof(Save_t, f), sizeof(((Save_t*)0)->f)
+
+typedef struct {
+    u32 off, len;
+    s16 guest_scene; /* a guest's change goes to the host while it is here: -1 never, -2 outdoors, -3 anywhere */
+    s16 guest_scene2;
+} Region;
+
+static const Region s_regions[] = {
+    { SAVE_FIELD(weather), -1, -1 },
+    { SAVE_FIELD(melody), -3, -1 },
+    { SAVE_FIELD(museum_display), -1, -1 },
+    { SAVE_FIELD(noticeboard), -2, -1 },
+    { SAVE_FIELD(police_box), SCENE_POLICE_BOX, -1 },
+    { SAVE_FIELD(shop), SCENE_SHOP0, SCENE_CONVENI },
+    { SAVE_FIELD(needlework), SCENE_NEEDLEWORK, -1 },
+    { SAVE_FIELD(post_office), SCENE_POST_OFFICE, -1 },
+    { SAVE_FIELD(kabu_price_schedule), -1, -1 },
+    { SAVE_FIELD(event_save_data), -1, -1 },
+    { SAVE_FIELD(snowmen), -1, -1 },
+};
+#define NREGIONS ((int)(sizeof(s_regions) / sizeof(s_regions[0])))
+#define REGION_WEATHER 0
+#define REGION_CHUNK 1000
+
+static u8* s_region_shadow[NREGIONS]; /* host: as sent; guest: as last taken from the host */
+static int s_region_ok = 0;
+static u32 s_region_frame = 0;
+static u32 s_region_applied_ms = 0;
+
+static u8* save_base(void) {
+    return (u8*)&Common_Get(save).save;
+}
+
+static void region_reset(void) {
+    s_region_ok = 0;
+}
+
+static void region_send(int to, int r, u32 off, u32 n) {
+    const u8* src = save_base() + s_regions[r].off;
+
+    while (n > 0) {
+        u8 m[12 + REGION_CHUNK];
+        u32 k = n > REGION_CHUNK ? REGION_CHUNK : n;
+
+        m[0] = G_REGION;
+        w32(m + 1, s_my_town);
+        m[5] = (u8)r;
+        w32(m + 6, off);
+        w16(m + 10, (u16)k);
+        memcpy(m + 12, src + off, k);
+        pc_mp_send_game(s_mp, to, 1, m, 12 + k);
+        off += k;
+        n -= k;
+    }
+}
+
+static int region_shadows(void) {
+    for (int r = 0; r < NREGIONS; r++) {
+        if (s_region_shadow[r] == NULL) {
+            s_region_shadow[r] = (u8*)malloc(s_regions[r].len);
+            if (s_region_shadow[r] == NULL) return 0;
+        }
+    }
+    return 1;
+}
+
+/* what changed in region r since the shadow: sent to `to`, the shadow updated */
+static void region_diff(int r, int to) {
+    const u8* cur = save_base() + s_regions[r].off;
+    u8* old = s_region_shadow[r];
+    u32 len = s_regions[r].len, run = 0, last = 0;
+    int in_run = 0;
+
+    for (u32 o = 0; o <= len; o++) {
+        int changed = o < len && cur[o] != old[o];
+
+        if (changed) {
+            if (!in_run) run = o;
+            in_run = 1;
+            last = o + 1;
+        } else if (in_run && (o >= len || o - last >= 16)) {
+            region_send(to, r, run, last - run);
+            memcpy(old + run, cur + run, last - run);
+            in_run = 0;
+        }
+    }
+}
+
+static int guest_at(const Region* rg) {
+    int scene = Save_Get(scene_no);
+
+    if (rg->guest_scene == -3) return 1;
+    if (rg->guest_scene == -2) return outside_in_town();
+    return rg->guest_scene >= 0 && (scene == rg->guest_scene || scene == rg->guest_scene2 ||
+                                    (rg->guest_scene == SCENE_SHOP0 && (scene == SCENE_SUPER || scene == SCENE_DEPART ||
+                                                                         scene == SCENE_DEPART_2)));
+}
+
+static void weather_now(void) {
+    u8 w = Save_Get(weather);
+    aWeather_Clip_c* clip = CLIP(weather_clip);
+
+    if (clip != NULL && clip->actor != NULL && clip->change_weather != NULL && outside_in_town()) {
+        clip->change_weather(clip->actor, (s16)mEnv_SAVE_GET_WEATHER_TYPE(w), (s16)mEnv_SAVE_GET_WEATHER_INTENSITY(w));
+    }
+}
+
+static void region_message(int from, const u8* m, int len) {
+    int r;
+    u32 off, n;
+
+    if (len < 5 || r32(m + 1) != s_my_town || !in_shared_town() || !region_shadows()) return;
+    if (m[0] == G_REGION_REQ) {
+        if (is_host()) {
+            for (r = 0; r < NREGIONS; r++) region_send(from, r, 0, s_regions[r].len);
+        }
+        return;
+    }
+    if (len < 12) return;
+    r = m[5];
+    off = r32(m + 6);
+    n = r16(m + 10);
+    if (r >= NREGIONS || n == 0 || 12 + (int)n > len || off + n > s_regions[r].len) return;
+    if (is_host()) {
+        /* a guest's change there: ours now, and to everyone by the next compare */
+        if (s_regions[r].guest_scene == -1) return;
+        memcpy(save_base() + s_regions[r].off + off, m + 12, n);
+        if (g_pc_verbose) printf("[MP] town data %d changed by a guest (%u bytes)\n", r, (unsigned)n);
+        return;
+    }
+    if (from != 0) return;
+    memcpy(save_base() + s_regions[r].off + off, m + 12, n);
+    memcpy(s_region_shadow[r] + off, m + 12, n);
+    s_region_applied_ms = pc_net_ms();
+    if (r == REGION_WEATHER) weather_now();
+}
+
+static void region_frame(void) {
+    s_region_frame++;
+    if (!in_shared_town() || s_region_frame % 60 != 0 || !region_shadows()) return;
+    if (!s_region_ok) {
+        for (int r = 0; r < NREGIONS; r++) memcpy(s_region_shadow[r], save_base() + s_regions[r].off, s_regions[r].len);
+        s_region_ok = 1;
+        return;
+    }
+    if (is_host()) {
+        for (int r = 0; r < NREGIONS; r++) region_diff(r, -1);
+        return;
+    }
+    /* a guest: what it changed itself at a place where it can (not just
+     * after the host's data came) goes to the host */
+    if (s_visit != PC_MP_VISIT_THERE || pc_net_ms() - s_region_applied_ms < 3000) return;
+    for (int r = 0; r < NREGIONS; r++) {
+        if (s_regions[r].guest_scene != -1 && guest_at(&s_regions[r])) {
+            region_diff(r, 0);
+        } else {
+            memcpy(s_region_shadow[r], save_base() + s_regions[r].off, s_regions[r].len);
         }
     }
 }

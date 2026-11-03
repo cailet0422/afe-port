@@ -8,6 +8,9 @@
 
 #include "game.h"
 #include "m_common_data.h"
+#include "m_npc_schedule.h"
+#include "m_player_lib.h"
+#include "m_needlework.h"
 #include "m_play.h"
 #include "m_field_info.h"
 #include "m_random_field_h.h"
@@ -68,6 +71,7 @@ typedef enum {
     SCRIPT_NOJOB,
     SCRIPT_JOBDONE,
     SCRIPT_BELLS,
+    SCRIPT_DESIGN,
     SCRIPT_WARP,
     SCRIPT_WEATHER,
     SCRIPT_FG,
@@ -290,6 +294,12 @@ int pc_input_script_load(const char* path) {
             ev.kind = SCRIPT_WEATHER;
             ev.value[0] = (u32)strtoul(arg, NULL, 10);
             ev.value[1] = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : mEnv_WEATHER_INTENSITY_NORMAL;
+        } else if (strcmp(word, "DESIGN") == 0 && fields >= 4) {
+            /* DESIGN slot pattern: a test design (stripes, the pattern a
+             * number 0-255) in the player's slot (0-7), and wear it */
+            ev.kind = SCRIPT_DESIGN;
+            ev.value[0] = (u32)strtoul(arg, NULL, 10) & 7;
+            ev.value[1] = (u32)strtoul(arg2, NULL, 10) & 0xFF;
         } else if (strcmp(word, "BELLS") == 0 && fields >= 3) {
             ev.kind = SCRIPT_BELLS;
             ev.value[0] = (u32)strtoul(arg, NULL, 10);
@@ -829,8 +839,11 @@ static void log_positions(u32 frame) {
         const Anmhome_c* home = &Save_Get(animals[i]).home_info;
 
         if (Save_Get(animals[i]).id.npc_id != EMPTY_NO) {
-            printf("[POS] frame %u home %04X block %u,%u x %.0f z %.0f\n", (unsigned)frame, Save_Get(animals[i]).id.npc_id,
-                   home->bx, home->bz, home_x(home), home_z(home));
+            mNPS_schedule_c* sched = mNPS_get_schedule_area(&Save_Get(animals[i]).id);
+
+            printf("[POS] frame %u home %04X block %u,%u x %.0f z %.0f at home %d schedule %d looks %d\n", (unsigned)frame,
+                   Save_Get(animals[i]).id.npc_id, home->bx, home->bz, home_x(home), home_z(home),
+                   Save_Get(animals[i]).is_home, sched != NULL ? (int)sched->current_type : -1, Save_Get(animals[i]).id.looks);
         }
     }
     printf("[POS] frame %u scene %d\n", (unsigned)frame, (int)Save_Get(scene_no));
@@ -1090,6 +1103,22 @@ static void debug_command(const ScriptEvent* ev) {
         Save_Set(weather, (u8)(ev->value[1] | (ev->value[0] << 4)));
         printf("[INPUT] frame %u: weather %u, intensity %u\n", (unsigned)s_frame, (unsigned)ev->value[0],
                (unsigned)ev->value[1]);
+    } else if (ev->kind == SCRIPT_DESIGN) {
+        mNW_original_design_c* d = &Now_Private->my_org[ev->value[0]];
+        u8 v = (u8)ev->value[1];
+
+        for (int i = 0; i < (int)sizeof(d->design.data); i++) {
+            /* bands of two colours of the palette, a row of 32 pixels in 16 bytes (CI4 tiles of 8x8: 32 bytes) */
+            int row = (i / 4) % 8 + ((i / 32) / 4) * 8;
+
+            d->design.data[i] = ((row / 4 + (v & 3)) & 1) ? (u8)(0x11 * (1 + (v >> 4) % 15)) : (u8)(0x11 * (v & 15));
+        }
+        d->palette = (u8)(v % 16);
+        Now_Private->cloth.item = RSV_CLOTH;
+        Now_Private->cloth.idx = (u16)(0x100 + ev->value[0]);
+        mPlib_change_player_cloth((GAME*)play, Now_Private->cloth.idx);
+        printf("[INPUT] frame %u: design %u (pattern %u) worn\n", (unsigned)s_frame, (unsigned)ev->value[0],
+               (unsigned)v);
     } else if (ev->kind == SCRIPT_BELLS) {
         Now_Private->inventory.wallet = ev->value[0];
         printf("[INPUT] frame %u: %u bells\n", (unsigned)s_frame, (unsigned)ev->value[0]);

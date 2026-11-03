@@ -17,6 +17,7 @@
 #include "m_play.h"
 #include "m_player.h"
 #include "m_player_lib.h"
+#include "m_needlework.h"
 #include "m_rcp.h"
 #include "sys_matrix.h"
 #include "c_keyframe.h"
@@ -40,6 +41,7 @@ typedef struct {
     int gender;
     PcMpLook look;
     int look_loaded;
+    unsigned int design_gen; /* of the design worn, as loaded */
     u8* face_tex;  /* 0xE00 */
     u16* face_pal; /* 0x20 */
     u8* cloth_tex; /* 0x200 */
@@ -83,26 +85,52 @@ static void set_skeleton(PC_MP_PLAYER_ACTOR* p, int gender) {
     p->anim = -1;
 }
 
-static void set_anim(PC_MP_PLAYER_ACTOR* p, int anim) {
-    if (anim == p->anim) {
-        return;
+/* the animation the player plays (anim0, an mPlayer_ANIM_*: picking up,
+ * shaking a tree, fishing...), at its frame; or still/walk/run/dash */
+static void set_anim(PC_MP_PLAYER_ACTOR* p, int anim, int anim0, float frame) {
+    int idx = (anim0 >= 0 && anim0 < mPlayer_ANIM_NUM && mPlib_Get_Pointer_Animation(anim0) != NULL)
+                  ? anim0
+                  : (anim0 = -1, anim_index(anim));
+
+    if (idx != p->anim) {
+        cKF_SkeletonInfo_R_init_standard_repeat_morph(&p->kf, mPlib_Get_Pointer_Animation(idx), NULL,
+                                                      p->anim < 0 ? 0.0f : -5.0f);
+        p->anim = idx;
+        if (anim0 >= 0 && frame >= p->kf.frame_control.start_frame && frame <= p->kf.frame_control.end_frame) {
+            p->kf.frame_control.current_frame = frame;
+        }
+    } else if (anim0 >= 0 && frame >= p->kf.frame_control.start_frame &&
+               frame <= p->kf.frame_control.end_frame) {
+        float d = frame - p->kf.frame_control.current_frame;
+
+        /* the same animation a little ahead or behind: catch up (positions
+         * come 15 times a second, the frame with them) */
+        if (d > 4.0f || d < -4.0f) {
+            p->kf.frame_control.current_frame = frame;
+        }
     }
-    cKF_SkeletonInfo_R_init_standard_repeat_morph(&p->kf, mPlib_Get_Pointer_Animation(anim_index(anim)), NULL,
-                                                  p->anim < 0 ? 0.0f : -5.0f);
-    p->anim = anim;
 }
 
 static void load_look(PC_MP_PLAYER_ACTOR* p, const PcMpLook* look) {
     int cloth = ITEM_IS_CLOTH(look->cloth) ? look->cloth - ITM_CLOTH_START : 0;
+    int design = (look->cloth & 0xFF00) == PC_MP_LOOK_DESIGN;
+    unsigned char palette;
+    const unsigned char* tex;
 
     if (cloth < 0 || cloth > CLOTH_NUM) {
-        cloth = 0; /* a design of their own: its picture is not here */
+        cloth = 0;
     }
     if (look->gender != p->gender || !p->look_loaded) {
         set_skeleton(p, look->gender == mPr_SEX_MALE ? mPr_SEX_MALE : mPr_SEX_FEMALE);
     }
     mPlib_PC_LoadFace(p->gender, look->face % mPr_FACE_TYPE_NUM, look->tan, p->face_tex, p->face_pal);
-    mPlib_Load_PlayerTexAndPallet(p->cloth_tex, p->cloth_pal, cloth);
+    if (design && pc_mp_game_design(p->slot, look->cloth & 7, &palette, &tex, &p->design_gen)) {
+        /* a design of their own, as they sent it (the palette is one of the 16 fixed ones) */
+        memcpy(p->cloth_tex, tex, mNW_DESIGN_TEX_SIZE);
+        memcpy(p->cloth_pal, mNW_PaletteIdx2Palette(palette), mNW_PALETTE_SIZE);
+    } else {
+        mPlib_Load_PlayerTexAndPallet(p->cloth_tex, p->cloth_pal, design ? 0 : cloth);
+    }
     p->look = *look;
     p->look_loaded = 1;
 }
@@ -135,7 +163,7 @@ static void Pc_Mp_Player_ct(ACTOR* actorx, GAME* game) {
     } else {
         set_skeleton(p, mPr_SEX_MALE);
     }
-    set_anim(p, 0);
+    set_anim(p, 0, -1, 0.0f);
     (void)game;
 }
 
@@ -162,6 +190,17 @@ static void Pc_Mp_Player_move(ACTOR* actorx, GAME* game) {
         Actor_delete(actorx);
         return;
     }
+    {
+        /* a design they wear that they changed (or that came after the look) */
+        unsigned char palette;
+        const unsigned char* tex;
+        unsigned int gen = p->design_gen;
+
+        if ((look.cloth & 0xFF00) == PC_MP_LOOK_DESIGN &&
+            pc_mp_game_design(p->slot, look.cloth & 7, &palette, &tex, &gen) && gen != p->design_gen) {
+            p->look_loaded = 0;
+        }
+    }
     if (!p->look_loaded || memcmp(&look, &p->look, sizeof(look)) != 0) {
         load_look(p, &look);
     }
@@ -184,7 +223,7 @@ static void Pc_Mp_Player_move(ACTOR* actorx, GAME* game) {
         actorx->shape_info.rotation.y += (s16)(diff / 3);
         actorx->world.angle.y = actorx->shape_info.rotation.y;
     }
-    set_anim(p, st.anim);
+    set_anim(p, st.anim, st.anim0, st.frame);
     cKF_SkeletonInfo_R_play(&p->kf);
     if (p->blink > 0) {
         p->blink--;

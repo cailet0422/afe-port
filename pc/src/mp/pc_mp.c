@@ -62,6 +62,7 @@ enum {
     T_PONG,
     T_ACK,
     T_PUNCH,
+    T_LOOK, /* guest -> host: its look changed (clothes, tool) */
 };
 
 enum {
@@ -393,6 +394,12 @@ static void pack_state(uint8_t* p, int slot, const PcMpState* s) {
     wf(p + 17, s->z);
     w16(p + 21, (uint16_t)s->angle);
     w16(p + 23, s->flags);
+    w16(p + 25, s->place);
+    w16(p + 27, s->owner);
+    w16(p + 29, s->anim0);
+    p[31] = s->part;
+    p[32] = s->item;
+    wf(p + 33, s->frame);
 }
 
 static void unpack_state(const uint8_t* p, PcMpState* s) {
@@ -405,8 +412,14 @@ static void unpack_state(const uint8_t* p, PcMpState* s) {
     s->z = rf(p + 17);
     s->angle = (int16_t)r16(p + 21);
     s->flags = r16(p + 23);
+    s->place = r16(p + 25);
+    s->owner = r16(p + 27);
+    s->anim0 = r16(p + 29);
+    s->part = p[31];
+    s->item = p[32];
+    s->frame = rf(p + 33);
 }
-#define STATE_SIZE 25
+#define STATE_SIZE 37
 
 /* --- Public: life cycle --- */
 
@@ -474,6 +487,11 @@ void pc_mp_set_me(PcMp* mp, const char* name, const PcMpLook* look) {
         if (changed && mp->mode == PC_MP_HOSTING) {
             mp->players[0].look = *look;
             send_players(mp);
+        } else if (changed && mp->mode == PC_MP_JOINED && mp->peers[0].used) {
+            uint8_t p[8];
+
+            pack_look(p, look);
+            send_rel(mp, &mp->peers[0], T_LOOK, p, sizeof(p));
         }
     }
     if (mp->mode == PC_MP_HOSTING) snprintf(mp->players[0].name, sizeof(mp->players[0].name), "%s", mp->my_name);
@@ -1055,6 +1073,13 @@ static void deliver(PcMp* mp, Peer* peer, uint8_t type, const uint8_t* p, size_t
             event(mp, PC_MP_EV_CHAT, from, text);
             break;
         }
+        case T_LOOK:
+            if (mp->mode == PC_MP_HOSTING && len >= 8 && peer->slot > 0 && peer->slot < PC_MP_MAX_PLAYERS &&
+                mp->players[peer->slot].used) {
+                unpack_look(p, &mp->players[peer->slot].look);
+                send_players(mp);
+            }
+            break;
         case T_TOWN_REQ:
             if (mp->mode == PC_MP_HOSTING) {
                 peer->town_asked = 2; /* once the game gives it (pc_mp_set_town_blob) */
