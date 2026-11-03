@@ -168,7 +168,7 @@ void pc_autosave_frame(struct game_s* game) {
         if (g_pc_verbose && SDL_GetTicks() % 5000 < 20) printf("[AUTOSAVE] waiting for a quiet moment outside (%d)\n", s_why);
         return;
     }
-    if (!save_now(play, "every few minutes")) s_last_ms = SDL_GetTicks() - every + 30000; /* again in 30 s */
+    if (!save_now(play, "on the timer")) s_last_ms = SDL_GetTicks() - every + 30000; /* again in 30 s */
 }
 
 void pc_autosave_quit(void) {

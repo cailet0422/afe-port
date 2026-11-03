@@ -17,16 +17,16 @@
 ## Download
 
 <!-- When a new release is published, update the version in these links (here and in README.ko.md). -->
-Latest release: **[v1.3.0](https://github.com/cailet0422/afe-port/releases/tag/v1.3.0)**
+Latest release: **[v1.3.1](https://github.com/cailet0422/afe-port/releases/tag/v1.3.1)**
 
 | Platform | Download | Requirements |
 |---|---|---|
-| Windows 64-bit | [DobutsuNoMoriEPlus-v1.3.0-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.0/DobutsuNoMoriEPlus-v1.3.0-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
-| Windows 32-bit | [DobutsuNoMoriEPlus-v1.3.0-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.0/DobutsuNoMoriEPlus-v1.3.0-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.3.0-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.0/DobutsuNoMoriEPlus-v1.3.0-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.3.0-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.3.0/DobutsuNoMoriEPlus-v1.3.0-Android.apk) | Android 5.0+, ARM 32/64-bit |
+| Windows 64-bit | [DobutsuNoMoriEPlus-v1.3.1-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/DobutsuNoMoriEPlus-v1.3.1-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
+| Windows 32-bit | [DobutsuNoMoriEPlus-v1.3.1-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/DobutsuNoMoriEPlus-v1.3.1-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.3.1-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/DobutsuNoMoriEPlus-v1.3.1-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.3.1-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/DobutsuNoMoriEPlus-v1.3.1-Android.apk) | Android 5.0+, ARM 32/64-bit |
 
-Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.3.0/SHA256SUMS.txt) ·
+Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/SHA256SUMS.txt) ·
 Older versions and release notes: [all releases](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -57,8 +57,8 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
   each other (with your own custom designs), chat, and drop, pick up, plant and dig in the same town, with
   the host's villagers, furniture, weather, shops and museum. The host can send players out
   ([Multiplayer](#multiplayer)).
-- **Autosave**: the game saves by itself every few minutes outdoors, between scenes (going in or out of a
-  building) and when you quit, so closing it or a crash loses only a few minutes. Mr. Resetti therefore stays
+- **Autosave**: the game saves by itself every minute outdoors, between scenes (going in or out of a
+  building) and when you quit, so closing it or a crash loses about a minute at most. Mr. Resetti therefore stays
   away by default ([Saving](#saving)).
 - Korean fan patch support: install the patch zip from inside the game, switch between Korean and
   Japanese at any time, and type Hangul with a real keyboard (2-set layout) or an on-screen keyboard.
@@ -120,14 +120,14 @@ Version v0.1.6 and earlier can't update themselves: download v1.0.0 once by hand
 
 The game saves your town as the gyroid's "save and continue" would, without asking:
 
-- every few minutes while you are outdoors in your town and not doing anything special (not in a menu, a
+- every minute while you are outdoors in your town and not doing anything special (not in a menu, a
   conversation or holding up an item; it waits for such a moment);
 - when you go in or out of a building (at most once every 20 seconds);
 - when you quit from the menu or close the window.
 
 You can still save at the gyroid as usual. Turning the game off without saving no longer loses your play, so
 **Mr. Resetti does not come by default**. **Settings** → **Gameplay** → **Autosave** turns the autosave off, and
-**Mr. Resetti** brings him back (`autosave = 0`, `autosave_minutes = 5` (1-60) and `resetti = 1` in
+**Mr. Resetti** brings him back (`autosave = 0`, `autosave_every = 1` (minutes, 1-60) and `resetti = 1` in
 `settings.ini`). While you visit another town in multiplayer, your own town's file gets your pockets, bells and
 letters of the moment, as the train home would.
 

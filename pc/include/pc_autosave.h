@@ -2,12 +2,12 @@
  *
  * What the gyroid's "save and continue" writes, without asking: between
  * scenes (afe-decomp m_play.c play_cleanup, when every actor has put its
- * data back), every few minutes while the player is outdoors and idle (in a
+ * data back), every minute (settings.ini autosave_every) while the player is outdoors and idle (in a
  * copy of the town with what live actors keep out of it put back:
  * mCD_PC_AutoSaveSnapshot), and when the game is quit from the menu or its
  * window is closed. The town file on the card is written in place (the
  * main copy, then the backup), so turning the game off never loses more
- * than a few minutes. A player visiting another town by train (the
+ * than a minute or so. A player visiting another town by train (the
  * multiplayer's trip) has their pockets, bells, letters... saved into their
  * own town's file, as the trip home would (mCD_PC_PatchTraveller).
  *

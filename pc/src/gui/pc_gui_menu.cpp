@@ -442,8 +442,8 @@ static void tab_gameplay() {
     int resetti = !g_pc_settings.disable_resetti;
 
     if (Switch(T("Autosave", "자동 저장"), &g_pc_settings.autosave,
-               T("Saves by itself when you go in or out of a building, every few minutes outside and when you quit",
-                 "건물에 드나들 때, 밖에서는 몇 분마다, 게임을 끌 때 저절로 저장합니다"))) {
+               T("Saves by itself when you go in or out of a building, every minute outside and when you quit",
+                 "건물에 드나들 때, 밖에서는 1분마다, 게임을 끌 때 저절로 저장합니다"))) {
         save();
     }
     if (Switch(T("Mr. Resetti", "도루묵씨(리셋씨) 등장"), &resetti,

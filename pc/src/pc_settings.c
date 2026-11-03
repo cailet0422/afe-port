@@ -17,7 +17,7 @@ PCSettings g_pc_settings = {
     .preload_textures = 0,
     .disable_resetti = 1,
     .autosave = 1,
-    .autosave_minutes = 5,
+    .autosave_minutes = 1,
     .nes_aspect = 1,
     .master_volume = 100,
 #ifdef __ANDROID__
@@ -80,8 +80,12 @@ static void apply_setting(const char* key, const char* value) {
         if (val == 1) g_pc_settings.disable_resetti = 1;
     } else if (strcmp(key, "autosave") == 0) {
         if (val == 0 || val == 1) g_pc_settings.autosave = val;
-    } else if (strcmp(key, "autosave_minutes") == 0) {
+    } else if (strcmp(key, "autosave_every") == 0) {
         if (val >= 1 && val <= 60) g_pc_settings.autosave_minutes = val;
+    } else if (strcmp(key, "autosave_minutes") == 0) {
+        /* (the key of 1.3.0, written as 5 by default: only another value
+         * was chosen; now every minute by default) */
+        if (val >= 1 && val <= 60 && val != 5) g_pc_settings.autosave_minutes = val;
     } else if (strcmp(key, "nes_aspect") == 0) {
         if (val == 0 || val == 1) g_pc_settings.nes_aspect = val;
     } else if (strcmp(key, "master_volume") == 0) {
@@ -153,10 +157,10 @@ void pc_settings_save(void) {
     fprintf(f, "mp_name = %s\n", g_pc_settings.mp_name);
     fprintf(f, "\n");
     fprintf(f, "[Gameplay]\n");
-    fprintf(f, "# Save by itself: between scenes, every few minutes outside and on quitting: 0 = no, 1 = yes\n");
+    fprintf(f, "# Save by itself: between scenes, every minute outside and on quitting: 0 = no, 1 = yes\n");
     fprintf(f, "autosave = %d\n", g_pc_settings.autosave);
     fprintf(f, "# How often outside, in minutes (1-60)\n");
-    fprintf(f, "autosave_minutes = %d\n", g_pc_settings.autosave_minutes);
+    fprintf(f, "autosave_every = %d\n", g_pc_settings.autosave_minutes);
     fprintf(f, "# Mr. Resetti comes when the game was turned off without saving: 0 = no, 1 = yes\n");
     fprintf(f, "resetti = %d\n", !g_pc_settings.disable_resetti);
     fprintf(f, "\n");

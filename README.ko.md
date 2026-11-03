@@ -17,16 +17,16 @@
 ## 다운로드
 
 <!-- 새 릴리즈를 내면 아래 링크의 버전을 바꾼다(README.md도 함께). -->
-최신 릴리즈: **[v1.3.0](https://github.com/cailet0422/afe-port/releases/tag/v1.3.0)**
+최신 릴리즈: **[v1.3.1](https://github.com/cailet0422/afe-port/releases/tag/v1.3.1)**
 
 | 플랫폼 | 다운로드 | 필요 사항 |
 |---|---|---|
-| Windows 64비트 | [DobutsuNoMoriEPlus-v1.3.0-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.0/DobutsuNoMoriEPlus-v1.3.0-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` 포함) |
-| Windows 32비트 | [DobutsuNoMoriEPlus-v1.3.0-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.0/DobutsuNoMoriEPlus-v1.3.0-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.3.0-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.0/DobutsuNoMoriEPlus-v1.3.0-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.3.0-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.3.0/DobutsuNoMoriEPlus-v1.3.0-Android.apk) | Android 5.0 이상, ARM 32·64비트 |
+| Windows 64비트 | [DobutsuNoMoriEPlus-v1.3.1-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/DobutsuNoMoriEPlus-v1.3.1-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` 포함) |
+| Windows 32비트 | [DobutsuNoMoriEPlus-v1.3.1-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/DobutsuNoMoriEPlus-v1.3.1-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.3.1-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/DobutsuNoMoriEPlus-v1.3.1-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.3.1-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/DobutsuNoMoriEPlus-v1.3.1-Android.apk) | Android 5.0 이상, ARM 32·64비트 |
 
-체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.3.0/SHA256SUMS.txt) ·
+체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/SHA256SUMS.txt) ·
 이전 버전과 릴리즈 노트: [전체 릴리즈](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -53,8 +53,8 @@
   인터넷의 친구가 기차를 타고 놀러 옵니다. 서로 보고(각자의 마이디자인 옷 그대로), 채팅하고, 같은 마을에서 아이템을
   떨어뜨리고 줍고 심고 팝니다. 주민, 가구, 날씨, 상점, 박물관도 호스트를 따릅니다. 호스트는 손님을 내보낼 수
   있습니다([멀티플레이](#멀티플레이)).
-- **자동 저장**: 야외에서 몇 분마다, 건물에 들어가고 나올 때, 게임을 끌 때 스스로 저장합니다. 그냥 꺼지거나 튕겨도
-  몇 분치만 잃습니다. 그래서 도루묵씨(리셋씨)는 기본으로 나오지 않습니다([저장](#저장)).
+- **자동 저장**: 야외에서 1분마다, 건물에 들어가고 나올 때, 게임을 끌 때 스스로 저장합니다. 그냥 꺼지거나 튕겨도
+  많아야 1분 남짓만 잃습니다. 그래서 도루묵씨(리셋씨)는 기본으로 나오지 않습니다([저장](#저장)).
 - 한글패치 지원: 게임 안에서 패치 zip을 골라 바로 적용하고, 한국어와 일본어를 언제든 오갈 수 있습니다.
   실제 키보드(두벌식)나 화면 키보드로 한글을 입력합니다.
 - Android: 화면 터치 게임패드, 실제 게임패드, 비정상 종료 시 다음 실행 때 크래시 리포트 표시.
@@ -111,13 +111,13 @@ v0.1.6 이하는 스스로 업데이트하지 못하니 v1.0.0은 한 번 직접
 게임이 묻지 않고 하니와의 "저장하고 계속하기"처럼 마을을 저장합니다.
 
 - 내 마을 야외에 있고 특별한 일을 하고 있지 않을 때(메뉴·대화 중이 아니고, 아이템을 들어 올리고 있지 않을 때)
-  몇 분마다. 그런 순간이 올 때까지 기다립니다.
+  1분마다. 그런 순간이 올 때까지 기다립니다.
 - 건물에 들어가거나 나올 때(20초에 한 번까지).
 - 메뉴에서 게임을 끄거나 창을 닫을 때.
 
 하니와에서 저장하는 것도 그대로 됩니다. 저장하지 않고 꺼도 플레이가 남으니 **도루묵씨(리셋씨)는 기본으로 오지
 않습니다**. **Settings** → **Gameplay** → **자동 저장**에서 자동 저장을 끄고, **도루묵씨(리셋씨) 등장**에서 다시
-나오게 할 수 있습니다(`settings.ini`의 `autosave = 0`, `autosave_minutes = 5`(1–60), `resetti = 1`). 멀티플레이로
+나오게 할 수 있습니다(`settings.ini`의 `autosave = 0`, `autosave_every = 1`(분, 1–60), `resetti = 1`). 멀티플레이로
 다른 마을에 놀러 가 있는 동안에는, 집에 기차로 돌아갈 때처럼 내 마을 파일에 그때의 주머니·벨·편지가 저장됩니다.
 
 ### 한국어로 플레이하기
