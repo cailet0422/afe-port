@@ -405,7 +405,7 @@ void CenterNext(float width) {
 
 /* (no std::string here: the decomp's libc headers come first) */
 struct Note {
-    char text[160];
+    char text[768];
     Uint32 until;
 };
 #define MAX_NOTES 4
@@ -434,7 +434,8 @@ void DrawNotifications() {
 
     for (int i = 0; i < s_note_count; i++) {
         const Note& n = s_notes[i];
-        ImVec2 size = ImGui::CalcTextSize(n.text);
+        float wrap = vp->Size.x * 0.85f - pad * 2.0f; /* (a long one in lines) */
+        ImVec2 size = ImGui::CalcTextSize(n.text, NULL, false, wrap);
         float x = vp->Pos.x + (vp->Size.x - size.x) * 0.5f;
         Uint32 left = n.until - SDL_GetTicks();
         int alpha = left < 500 ? (int)(left * 255 / 500) : 255;
@@ -443,7 +444,8 @@ void DrawNotifications() {
                           IM_COL32(0xFF, 0xF8, 0xE7, alpha * 235 / 255), 12.0f * g_scale);
         dl->AddRect(ImVec2(x - pad, y - pad * 0.6f), ImVec2(x + size.x + pad, y + size.y + pad * 0.6f),
                     IM_COL32(0x4C, 0xA8, 0x5C, alpha), 12.0f * g_scale, 0, 2.0f * g_scale);
-        dl->AddText(ImVec2(x, y), IM_COL32(0x4A, 0x3B, 0x2A, alpha), n.text);
+        dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(x, y), IM_COL32(0x4A, 0x3B, 0x2A, alpha), n.text,
+                    NULL, wrap);
         y += size.y + pad * 2.0f;
     }
 }
@@ -710,7 +712,9 @@ extern "C" void pc_gui_notify(const char* text) {
     }
     Note& n = s_notes[s_note_count++];
     snprintf(n.text, sizeof(n.text), "%s", text);
-    n.until = SDL_GetTicks() + 4000;
+    /* 4 s, longer for a long one (to read) */
+    n.until = SDL_GetTicks() + 4000 + (Uint32)(strlen(n.text) > 120 ? (strlen(n.text) - 120) * 30 : 0);
+    if (n.until - SDL_GetTicks() > 15000) n.until = SDL_GetTicks() + 15000;
     printf("[GUI] %s\n", text);
 }
 

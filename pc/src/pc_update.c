@@ -299,7 +299,8 @@ typedef struct {
 #endif
 
 /* WinHTTP: in every Windows, follows GitHub's redirect to its file server */
-static int http_get(const char* url, int api, size_t max, uint64_t expected, Buffer* out, char* err, size_t errn) {
+static int http_get_once(const char* url, int api, size_t max, uint64_t expected, Buffer* out, char* err,
+                         size_t errn) {
     wchar_t wurl[2048], host[256], path[2048], query[1024], agent[128];
     URL_COMPONENTS uc;
     HINTERNET session = NULL, connection = NULL, request = NULL;
@@ -408,6 +409,27 @@ done:
         out->len = 0;
     }
     return ok;
+}
+
+/* GitHub's servers now and then answer 500 or 503 for a moment (just after
+ * a release is made, say): such a request is tried again, as curl --retry
+ * does on Linux */
+static int worth_retry(const char* err) {
+    if (strncmp(err, "HTTP ", 5) == 0) {
+        int code = atoi(err + 5);
+
+        return code >= 500 || code == 429;
+    }
+    return strcmp(err, "cancelled") != 0 && strcmp(err, "bad address") != 0 &&
+           strcmp(err, "the file is too big") != 0 && strcmp(err, "out of memory") != 0;
+}
+
+static int http_get(const char* url, int api, size_t max, uint64_t expected, Buffer* out, char* err, size_t errn) {
+    for (int attempt = 0;; attempt++) {
+        if (http_get_once(url, api, max, expected, out, err, errn)) return 1;
+        if (attempt >= 3 || SDL_AtomicGet(&s_cancel) || !worth_retry(err)) return 0;
+        SDL_Delay(2000u * (unsigned)(attempt + 1));
+    }
 }
 #else
 /* curl (or wget) into a temporary file: Linux has no HTTPS of its own that

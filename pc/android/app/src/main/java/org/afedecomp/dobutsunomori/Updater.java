@@ -323,7 +323,13 @@ final class Updater {
                             new AlertDialog.Builder(activity, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
                                 .setTitle("업데이트하지 못했습니다")
                                 .setMessage(failure + "\n\ngithub.com/cailet0422/afe-port/releases")
-                                .setPositiveButton("확인", null)
+                                .setPositiveButton("다시 시도", new DialogInterface.OnClickListener() {
+                                    @Override
+                                    public void onClick(DialogInterface d, int which) {
+                                        download(activity, release);
+                                    }
+                                })
+                                .setNegativeButton("닫기", null)
                                 .show();
                         }
                     }
@@ -380,8 +386,18 @@ final class Updater {
         MessageDigest sha = MessageDigest.getInstance("SHA-256");
         long size = 0;
 
-        try (OutputStream out = new FileOutputStream(part)) {
-            size = download(release.apkUrl, out, sha, release.apkSize, progress);
+        for (int attempt = 0;; attempt++) {
+            sha.reset();
+            try (OutputStream out = new FileOutputStream(part)) {
+                size = download(release.apkUrl, out, sha, release.apkSize, progress);
+                break;
+            } catch (IOException e) {
+                if (attempt >= RETRIES || !worthRetry(e)) {
+                    part.delete();
+                    throw e;
+                }
+                pause(attempt);
+            }
         }
         if (release.apkSize > 0 && size != release.apkSize) {
             part.delete();
@@ -416,6 +432,39 @@ final class Updater {
         return null;
     }
 
+    /* GitHub's servers now and then answer 500 or 503 for a moment (just
+     * after a release is made, say): such a request is tried again */
+    private static final int RETRIES = 3;
+
+    private static final class HttpError extends IOException {
+        final int code;
+
+        HttpError(int code) {
+            super("HTTP " + code);
+            this.code = code;
+        }
+    }
+
+    private static boolean worthRetry(IOException e) {
+        if (sCancel) {
+            return false;
+        }
+        if (e instanceof HttpError) {
+            int code = ((HttpError) e).code;
+
+            return code >= 500 || code == 429;
+        }
+        return true; /* a timeout, a connection cut */
+    }
+
+    private static void pause(int attempt) {
+        try {
+            Thread.sleep(2000L * (attempt + 1));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     private static HttpURLConnection open(String url, boolean api) throws IOException {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
 
@@ -428,7 +477,7 @@ final class Updater {
             int code = c.getResponseCode();
 
             c.disconnect();
-            throw new IOException("HTTP " + code);
+            throw new HttpError(code);
         }
         return c;
     }
@@ -436,7 +485,18 @@ final class Updater {
     private static byte[] get(String url, boolean api, int max, long expected, Progress progress) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
 
-        download(url, out, null, expected, progress);
+        for (int attempt = 0;; attempt++) {
+            out.reset();
+            try {
+                download(url, out, null, expected, progress);
+                break;
+            } catch (IOException e) {
+                if (attempt >= RETRIES || !worthRetry(e)) {
+                    throw e;
+                }
+                pause(attempt);
+            }
+        }
         if (out.size() > max) {
             throw new IOException("too big");
         }
