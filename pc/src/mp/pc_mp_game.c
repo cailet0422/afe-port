@@ -1207,6 +1207,68 @@ static void my_state(GAME_PLAY* play) {
         st.part = (u8)pl->part_table_idx;
         st.item = (u8)pl->item_kind;
         st.frame = pl->keyframe0.frame_control.current_frame;
+        /* what is in the hand, and the arms holding it */
+        st.anim1 = (pl->part_table_idx != mPlayer_PART_TABLE_NORMAL && pl->animation1_idx >= 0 &&
+                    pl->animation1_idx < mPlayer_ANIM_NUM)
+                       ? (u8)pl->animation1_idx
+                       : 0xFF;
+        st.frame1 = pl->keyframe1.frame_control.current_frame;
+        st.item_main = (pl->now_item_main_index > mPlayer_ITEM_MAIN_NONE &&
+                        pl->now_item_main_index < mPlayer_ITEM_MAIN_NUM)
+                           ? (u8)pl->now_item_main_index
+                           : 0;
+        {
+            int bank = pl->item_bank_idx & 1;
+            int shape = pl->item_shape_type[bank], anim = pl->item_animation_idx[bank];
+            f32 scale = pl->item_scale * 100.0f;
+
+            st.item_shape = (shape >= 0 && shape < mPlayer_ITEM_DATA_NUM) ? (u8)shape : 0xFF;
+            st.item_anim = (anim >= 0 && anim < mPlayer_ITEM_DATA_NUM) ? (u8)anim : 0xFF;
+            st.item_scale = (u8)(scale < 0.0f ? 0 : scale > 255.0f ? 255 : (int)(scale + 0.5f));
+        }
+        st.item_frame = pl->item_keyframe.frame_control.current_frame;
+        {
+            /* an item held up as the player actor draws it (m_player_draw.c_inc) */
+            mActor_name_t shown = EMPTY_NO;
+            f32 scale = 0.0f;
+            const xyz_t* at = NULL;
+
+            if (idx == mPlayer_INDEX_PICKUP && !pl->main_data.pickup.signboard_flag) {
+                shown = pl->main_data.pickup.item;
+                scale = pl->main_data.pickup.scale;
+                at = &pl->main_data.pickup.item_pos;
+            } else if (idx == mPlayer_INDEX_PICKUP_JUMP && !pl->main_data.pickup_jump.ftr_flag) {
+                shown = pl->main_data.pickup_jump.item;
+                scale = pl->main_data.pickup_jump.scale;
+                at = &pl->main_data.pickup_jump.item_pos;
+            } else if (idx == mPlayer_INDEX_GET_SCOOP) {
+                shown = pl->main_data.get_scoop.item;
+                scale = pl->main_data.get_scoop.scale;
+                at = pl->keyframe0.frame_control.current_frame <= 42.0f ? &pl->scoop_pos : &pl->left_hand_pos;
+            } else if (idx == mPlayer_INDEX_PUTAWAY_SCOOP) {
+                shown = pl->main_data.putaway_scoop.item;
+                scale = pl->main_data.putaway_scoop.scale;
+                at = &pl->left_hand_pos;
+            }
+            if (shown != EMPTY_NO && scale > 0.0f && at != NULL) {
+                st.shown = shown;
+                st.shown_scale = (u8)(scale * 100.0f > 255.0f ? 255 : (int)(scale * 100.0f + 0.5f));
+                st.shown_at[0] = (s16)(at->x - st.x);
+                st.shown_at[1] = (s16)(at->y - st.y);
+                st.shown_at[2] = (s16)(at->z - st.z);
+            } else {
+                st.shown = EMPTY_NO;
+            }
+        }
+        if (st.item_main == mPlayer_ITEM_MAIN_BALLOON_NORMAL) {
+            st.item_rot[0] = (s16)(pl->balloon_lean_angle + pl->balloon_angle.x + pl->ballon_add_rot_x);
+            st.item_rot[1] = 0;
+            st.item_rot[2] = pl->balloon_angle.z;
+        } else {
+            st.item_rot[0] = pl->net_angle.x;
+            st.item_rot[1] = pl->net_angle.y;
+            st.item_rot[2] = pl->net_angle.z;
+        }
     }
     pc_mp_set_state(s_mp, &st);
 }
@@ -1405,9 +1467,20 @@ typedef struct {
     u8 look;  /* wallpaper / carpet */
 } HomeRegion;
 
+#define FLR_FIELD(f) offsetof(mHm_flr_c, f), sizeof(((mHm_flr_c*)0)->f)
+
 static const HomeRegion s_home_regions[] = {
-    { offsetof(mHm_flr_c, layer_main.items), sizeof(((mHm_flr_c*)0)->layer_main.items), 1, 0 },
-    { offsetof(mHm_flr_c, layer_secondary.items), sizeof(((mHm_flr_c*)0)->layer_secondary.items), 1, 0 },
+    { FLR_FIELD(layer_main.items), 1, 0 },
+    { FLR_FIELD(layer_secondary.items), 1, 0 },
+    /* what storage furniture holds (a dresser's things, a stereo's record) */
+    { FLR_FIELD(layer_storage1.items), 1, 0 },
+    { FLR_FIELD(layer_storage2.items), 1, 0 },
+    /* lamps, TVs, radios on or off; the gyroids' steps; the tempo */
+    { FLR_FIELD(layer_main.ftr_switch), 0, 0 },
+    { FLR_FIELD(layer_secondary.ftr_switch), 0, 0 },
+    { FLR_FIELD(layer_main.haniwa_step), 0, 0 },
+    { FLR_FIELD(layer_secondary.haniwa_step), 0, 0 },
+    { FLR_FIELD(tempo_beat), 0, 0 },
     { offsetof(mHm_flr_c, wall_floor), sizeof(mHm_wf_c), 0, 1 },
     { offsetof(mHm_flr_c, floor_bit_info), sizeof(mHm_fllot_bit_c), 0, 1 },
 };
@@ -1426,6 +1499,23 @@ static u8* floor_bytes(int house, int floor) {
     return (u8*)&Save_Get(homes[house]).floors[floor];
 }
 
+extern void aMR_PC_StorageIntoCopy(const void* floor, void* copy, int size);
+
+/* the host: a floor as it is, with what storage furniture holds while the
+ * host is in that room (out of the save then) put back */
+static u8* floor_view(int house, int floor) {
+    static u8 copy[FLOOR_SIZE];
+    int id = mFI_GetFieldId();
+
+    if (mFI_GET_TYPE(id) == mFI_FIELD_PLAYER0_ROOM && mFI_GET_PLAYER_ROOM_NO(id) == house &&
+        mFI_GetNowPlayerHouseFloorNo() == floor) {
+        memcpy(copy, floor_bytes(house, floor), FLOOR_SIZE);
+        aMR_PC_StorageIntoCopy(floor_bytes(house, floor), copy, FLOOR_SIZE);
+        return copy;
+    }
+    return floor_bytes(house, floor);
+}
+
 static void home_reset(void) {
     s_home_shadow_ok = 0;
     memset(s_home_mask, 0, sizeof(s_home_mask));
@@ -1440,7 +1530,7 @@ static int in_house_room(int house, int floor) {
            mFI_GetNowPlayerHouseFloorNo() == floor;
 }
 
-static void home_send(int to, int house, int floor, int off, int len) {
+static void home_send(int to, int house, int floor, const u8* src, int off, int len) {
     while (len > 0) {
         u8 m[11 + 1024];
         int n = len > 1024 ? 1024 : len;
@@ -1451,7 +1541,7 @@ static void home_send(int to, int house, int floor, int off, int len) {
         m[6] = (u8)floor;
         w16(m + 7, (u16)off);
         w16(m + 9, (u16)n);
-        memcpy(m + 11, floor_bytes(house, floor) + off, (size_t)n);
+        memcpy(m + 11, src + off, (size_t)n);
         pc_mp_send_game(s_mp, to, 1, m, (size_t)(11 + n));
         off += n;
         len -= n;
@@ -1481,7 +1571,7 @@ static void home_diff(void) {
     }
     for (int h = 0; h < PLAYER_NUM; h++) {
         for (int f = 0; f < HOME_FLOORS; f++) {
-            u8* cur = floor_bytes(h, f);
+            u8* cur = floor_view(h, f);
             u8* old = s_home_shadow[h][f];
 
             for (int r = 0; r < HOME_NREG; r++) {
@@ -1505,7 +1595,7 @@ static void home_diff(void) {
                         if (run < 0) run = o;
                         last = o + step;
                     } else if (run >= 0 && (o >= rg->off + rg->len || o - last >= 16)) {
-                        home_send(-1, h, f, run, last - run);
+                        home_send(-1, h, f, cur, run, last - run);
                         memcpy(old + run, cur + run, (size_t)(last - run));
                         run = -1;
                     }
@@ -1563,8 +1653,10 @@ static void home_message(int from, const u8* m, int len) {
         if (is_host() && town == s_my_town) {
             for (int h = 0; h < PLAYER_NUM; h++) {
                 for (int f = 0; f < HOME_FLOORS; f++) {
+                    const u8* src = floor_view(h, f);
+
                     for (int r = 0; r < HOME_NREG; r++) {
-                        home_send(from, h, f, s_home_regions[r].off, s_home_regions[r].len);
+                        home_send(from, h, f, src, s_home_regions[r].off, s_home_regions[r].len);
                     }
                 }
                 door_send(from, h);
@@ -1599,7 +1691,7 @@ static void home_frame(void) {
         if (!in_shared_town()) return;
         if (!s_home_shadow_ok) {
             for (int h = 0; h < PLAYER_NUM; h++) {
-                for (int f = 0; f < HOME_FLOORS; f++) memcpy(s_home_shadow[h][f], floor_bytes(h, f), FLOOR_SIZE);
+                for (int f = 0; f < HOME_FLOORS; f++) memcpy(s_home_shadow[h][f], floor_view(h, f), FLOOR_SIZE);
                 s_door_shadow[h] = Save_Get(homes[h]).door_original;
             }
             s_home_shadow_ok = 1;
@@ -2198,6 +2290,41 @@ static const Region s_regions[] = {
     { SAVE_FIELD(kabu_price_schedule), -1, -1 },
     { SAVE_FIELD(event_save_data), -1, -1 },
     { SAVE_FIELD(snowmen), -1, -1 },
+    /* the houses outside the floors: size, roof, basement (homes[].haniwa_tempo
+     * to door_original), the mailbox's letters (its flag), the gyroid at the
+     * door (a visitor buys from it), the cockroaches, the music collected */
+#define HOUSE_REGIONS(h)                                                                                          \
+    { offsetof(Save_t, homes[h].haniwa_tempo),                                                                    \
+      offsetof(Save_t, homes[h].door_original) + 1 - offsetof(Save_t, homes[h].haniwa_tempo), -1, -1 },          \
+        { SAVE_FIELD(homes[h].mailbox), -1, -1 }, { SAVE_FIELD(homes[h].haniwa), -2, -1 },                         \
+        { SAVE_FIELD(homes[h].goki), -1, -1 }, { SAVE_FIELD(homes[h].music_box), -1, -1 }
+    HOUSE_REGIONS(0), HOUSE_REGIONS(1), HOUSE_REGIONS(2), HOUSE_REGIONS(3),
+#undef HOUSE_REGIONS
+    /* the villagers' own data (their clothes and umbrella, moving in or out,
+     * moods...), the town's events and its other state */
+    { SAVE_FIELD(animals), -1, -1 },
+    { offsetof(Save_t, now_npc_max), 2, -1, -1 }, /* (and remove_animal_idx) */
+    { SAVE_FIELD(last_removed_animal_id), -1, -1 },
+    { SAVE_FIELD(event_save_common), -1, -1 },
+    { SAVE_FIELD(house_arrangement), -1, -1 },
+    { SAVE_FIELD(num_statues), -1, -1 },
+    { SAVE_FIELD(npc_force_go_home), -1, -1 },
+    { SAVE_FIELD(last_grow_time), -1, -1 },
+    { SAVE_FIELD(npc_used_tbl), -1, -1 },
+    { offsetof(Save_t, haniwa_scheduled), 3, -1, -1 }, /* (and dust_flag, clear_grass) */
+    { SAVE_FIELD(keep_house_size), -1, -1 },
+    { SAVE_FIELD(bridge), -1, -1 },
+    { SAVE_FIELD(fishRecord), -1, -1 },
+    { SAVE_FIELD(mask_cat), -1, -1 },
+    { SAVE_FIELD(return_animal), -1, -1 },
+    { SAVE_FIELD(LightHouse), -1, -1 },
+    { offsetof(Save_t, insect_term), 4, -1, -1 }, /* (the fish's term too) */
+    { SAVE_FIELD(good_field), -1, -1 },
+    { offsetof(Save_t, rainbow_month), 3, -1, -1 },
+    { SAVE_FIELD(add_npc), -1, -1 },
+    { SAVE_FIELD(monument_order), -1, -1 },
+    { SAVE_FIELD(monument_count), -1, -1 },
+    { SAVE_FIELD(sick_info), -1, -1 },
 };
 #define NREGIONS ((int)(sizeof(s_regions) / sizeof(s_regions[0])))
 #define REGION_WEATHER 0

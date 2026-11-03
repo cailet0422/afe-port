@@ -72,6 +72,7 @@ typedef enum {
     SCRIPT_JOBDONE,
     SCRIPT_BELLS,
     SCRIPT_DESIGN,
+    SCRIPT_EQUIP,
     SCRIPT_WARP,
     SCRIPT_WEATHER,
     SCRIPT_FG,
@@ -300,6 +301,10 @@ int pc_input_script_load(const char* path) {
             ev.kind = SCRIPT_DESIGN;
             ev.value[0] = (u32)strtoul(arg, NULL, 10) & 7;
             ev.value[1] = (u32)strtoul(arg2, NULL, 10) & 0xFF;
+        } else if (strcmp(word, "EQUIP") == 0 && fields >= 3) {
+            /* EQUIP item: the tool in hand (hex, 0 = none) */
+            ev.kind = SCRIPT_EQUIP;
+            ev.value[0] = (u32)strtoul(arg, NULL, 16);
         } else if (strcmp(word, "BELLS") == 0 && fields >= 3) {
             ev.kind = SCRIPT_BELLS;
             ev.value[0] = (u32)strtoul(arg, NULL, 10);
@@ -1119,6 +1124,9 @@ static void debug_command(const ScriptEvent* ev) {
         mPlib_change_player_cloth((GAME*)play, Now_Private->cloth.idx);
         printf("[INPUT] frame %u: design %u (pattern %u) worn\n", (unsigned)s_frame, (unsigned)ev->value[0],
                (unsigned)v);
+    } else if (ev->kind == SCRIPT_EQUIP) {
+        Now_Private->equipment = (mActor_name_t)ev->value[0];
+        printf("[INPUT] frame %u: %04X in hand\n", (unsigned)s_frame, (unsigned)ev->value[0]);
     } else if (ev->kind == SCRIPT_BELLS) {
         Now_Private->inventory.wallet = ev->value[0];
         printf("[INPUT] frame %u: %u bells\n", (unsigned)s_frame, (unsigned)ev->value[0]);

@@ -234,17 +234,24 @@ Hangul is typed with your computer's Korean input method (Han/Eng key).
   and fish move on each machine by themselves.
 - **The host's furniture is shared live.** When the host places, moves, turns or removes furniture, or changes the
   wallpaper or carpet, guests see it at once. A guest standing in that room sees the furniture rebuilt when it is not
-  in a menu or a conversation and is standing or walking. What is inside storage furniture, and lamps on or off, are
-  not shared. As in the original game, nobody can move furniture in someone else's house.
+  in a menu or a conversation and is standing or walking. Lamps, TVs and radios on or off, the record in a stereo,
+  what storage furniture holds and the gyroids' steps follow the host's too. As in the original game, nobody can move
+  furniture in someone else's house.
 - **Custom designs show as drawn.** A design worn as clothing shows to everyone as its owner drew it (changed
   designs too), and the designs of the host's houses (wallpaper, carpet, the house door) show to guests.
+- **Tools in hand show.** Others see the net, axe, rod, shovel, umbrella (custom-design umbrellas as drawn),
+  balloon, pinwheel, fan, flower or party popper in your hand, with your arms holding it and the net or rod moving as
+  you swing or cast, and the item you hold up after picking something up or digging it up.
 - **Also shared, following the host**: what each player is doing (picking up, shaking a tree, fishing... with the
   same animation), the weather, the town tune, the museum, the noticeboard, the police station's lost and found,
   Nook's shop, the Able Sisters' display, the post office, the turnip prices, the visitors' events and the snowmen. A
   guest's change at one of these places (a post on the board, a lost item taken, something bought or sold, the town
-  tune) goes to the host and from the host to everyone.
+  tune) goes to the host and from the host to everyone. Also the outside of the houses (size, roof colour, basement,
+  the mailbox's flag), the gyroid at a house's door (a visitor buying from it goes to the host), the villagers' own
+  data (their clothes and umbrellas, moving in or out), the extra bridge, the lighthouse, the fishing tourney,
+  Blanca, the town's assessment and the other town events.
 - A guest's own town is saved with the guest's pockets and bells while visiting (see [Saving](#saving)).
-- Two players picking up the same item in the same instant can both get it.
+- Two players taking the same item at the same moment: the first one gets it, and the other's pocket gives it back.
 - While a guest is in the host's town, the guest's game clock follows the host's.
 - The room ends when the host closes it or quits. A guest already in the host's town stays there and takes the
   train home.

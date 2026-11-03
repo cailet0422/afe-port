@@ -349,7 +349,7 @@ editor: villager catchphrase etc.), `RESETS` (number of times the game was turne
 comes, with `resetti = 1`), `CATCH` (print the villager's catchphrase bytes), `ITEM` (print the item the menu selected), `JOBDONE` (finish
 the part-time job the way the game does: clear the errand, make it wait for the HRA notice and restart the clock),
 `NOJOB` (turn off only the part-time job event), `DESIGN slot pattern` (fill a custom design slot with test
-stripes and wear it), `CLOCK h[:m]` (advance the clock to that time: past midnight into the
+stripes and wear it), `EQUIP item` (that tool in hand, hex), `CLOCK h[:m]` (advance the clock to that time: past midnight into the
 next day without relaunching), `FG x,z item` (place an item on that ground tile: walking into a `008D` Mr. Resetti hole
 drops you into the Reset Center).
 

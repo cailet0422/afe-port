@@ -400,6 +400,21 @@ static void pack_state(uint8_t* p, int slot, const PcMpState* s) {
     p[31] = s->part;
     p[32] = s->item;
     wf(p + 33, s->frame);
+    p[37] = s->anim1;
+    p[38] = s->item_main;
+    p[39] = s->item_shape;
+    p[40] = s->item_anim;
+    p[41] = s->item_scale;
+    wf(p + 42, s->frame1);
+    wf(p + 46, s->item_frame);
+    w16(p + 50, (uint16_t)s->item_rot[0]);
+    w16(p + 52, (uint16_t)s->item_rot[1]);
+    w16(p + 54, (uint16_t)s->item_rot[2]);
+    w16(p + 56, s->shown);
+    p[58] = s->shown_scale;
+    w16(p + 59, (uint16_t)s->shown_at[0]);
+    w16(p + 61, (uint16_t)s->shown_at[1]);
+    w16(p + 63, (uint16_t)s->shown_at[2]);
 }
 
 static void unpack_state(const uint8_t* p, PcMpState* s) {
@@ -418,8 +433,23 @@ static void unpack_state(const uint8_t* p, PcMpState* s) {
     s->part = p[31];
     s->item = p[32];
     s->frame = rf(p + 33);
+    s->anim1 = p[37];
+    s->item_main = p[38];
+    s->item_shape = p[39];
+    s->item_anim = p[40];
+    s->item_scale = p[41];
+    s->frame1 = rf(p + 42);
+    s->item_frame = rf(p + 46);
+    s->item_rot[0] = (int16_t)r16(p + 50);
+    s->item_rot[1] = (int16_t)r16(p + 52);
+    s->item_rot[2] = (int16_t)r16(p + 54);
+    s->shown = r16(p + 56);
+    s->shown_scale = p[58];
+    s->shown_at[0] = (int16_t)r16(p + 59);
+    s->shown_at[1] = (int16_t)r16(p + 61);
+    s->shown_at[2] = (int16_t)r16(p + 63);
 }
-#define STATE_SIZE 37
+#define STATE_SIZE 65
 
 /* --- Public: life cycle --- */
 
