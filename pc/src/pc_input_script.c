@@ -72,6 +72,8 @@ typedef enum {
     SCRIPT_JOBDONE,
     SCRIPT_BELLS,
     SCRIPT_DESIGN,
+    SCRIPT_EQUIP,
+    SCRIPT_HANIWA,
     SCRIPT_WARP,
     SCRIPT_WEATHER,
     SCRIPT_FG,
@@ -300,6 +302,16 @@ int pc_input_script_load(const char* path) {
             ev.kind = SCRIPT_DESIGN;
             ev.value[0] = (u32)strtoul(arg, NULL, 10) & 7;
             ev.value[1] = (u32)strtoul(arg2, NULL, 10) & 0xFF;
+        } else if (strcmp(word, "HANIWA") == 0 && fields >= 5) {
+            /* HANIWA slot item price: the gyroid at the player's door sells that item (hex) */
+            ev.kind = SCRIPT_HANIWA;
+            ev.value[0] = (u32)strtoul(arg, NULL, 10) % HANIWA_ITEM_HOLD_NUM;
+            ev.value[1] = (u32)strtoul(arg2, NULL, 16);
+            ev.value[2] = (u32)strtoul(arg3, NULL, 10);
+        } else if (strcmp(word, "EQUIP") == 0 && fields >= 3) {
+            /* EQUIP item: the tool in hand (hex, 0 = none) */
+            ev.kind = SCRIPT_EQUIP;
+            ev.value[0] = (u32)strtoul(arg, NULL, 16);
         } else if (strcmp(word, "BELLS") == 0 && fields >= 3) {
             ev.kind = SCRIPT_BELLS;
             ev.value[0] = (u32)strtoul(arg, NULL, 10);
@@ -884,6 +896,13 @@ static void log_positions(u32 frame) {
         }
         printf("\n");
     }
+    for (int h = 0; h < PLAYER_NUM; h++) {
+        const Haniwa_c* haniwa = &Save_Get(homes[h]).haniwa;
+
+        printf("[POS] frame %u gyroid %d bells %u items %04X %04X %04X %04X\n", (unsigned)frame, h,
+               (unsigned)haniwa->bells, haniwa->items[0].item, haniwa->items[1].item, haniwa->items[2].item,
+               haniwa->items[3].item);
+    }
     if (Common_Get(player_no) < PLAYER_NUM) {
         /* the player's house and debt: a house is enlarged a day after its loan is paid */
         const mHm_hs_c* house = &Save_Get(homes[mHS_get_arrange_idx(Common_Get(player_no))]);
@@ -1119,6 +1138,19 @@ static void debug_command(const ScriptEvent* ev) {
         mPlib_change_player_cloth((GAME*)play, Now_Private->cloth.idx);
         printf("[INPUT] frame %u: design %u (pattern %u) worn\n", (unsigned)s_frame, (unsigned)ev->value[0],
                (unsigned)v);
+    } else if (ev->kind == SCRIPT_HANIWA) {
+        if (Common_Get(player_no) < PLAYER_NUM) {
+            Haniwa_c* haniwa = &Save_Get(homes[mHS_get_arrange_idx(Common_Get(player_no))]).haniwa;
+
+            haniwa->items[ev->value[0]].item = (mActor_name_t)ev->value[1];
+            haniwa->items[ev->value[0]].exchange_type = mHm_HANIWA_TRADE_2;
+            haniwa->items[ev->value[0]].extra_data = ev->value[2];
+            printf("[INPUT] frame %u: the gyroid sells %04X for %u\n", (unsigned)s_frame, (unsigned)ev->value[1],
+                   (unsigned)ev->value[2]);
+        }
+    } else if (ev->kind == SCRIPT_EQUIP) {
+        Now_Private->equipment = (mActor_name_t)ev->value[0];
+        printf("[INPUT] frame %u: %04X in hand\n", (unsigned)s_frame, (unsigned)ev->value[0]);
     } else if (ev->kind == SCRIPT_BELLS) {
         Now_Private->inventory.wallet = ev->value[0];
         printf("[INPUT] frame %u: %u bells\n", (unsigned)s_frame, (unsigned)ev->value[0]);

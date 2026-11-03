@@ -66,6 +66,7 @@ enum {
     G_NPC_ROOM,     /* host -> guests: town, house owner, count, villagers in that house (unreliable) */
     G_REGION,       /* host -> guests (or a guest's change -> host): town, region, offset, length, bytes */
     G_REGION_REQ,   /* guest -> host: all of the shared town data, please */
+    G_ITEM_NO,      /* host -> a guest: town, bx, bz, ux, uz, what is there, the guest's old, new: refused */
 };
 
 static void home_frame(void);
@@ -685,6 +686,127 @@ static void send_item_set(int to, int bx, int bz, int ux, int uz, u16 item) {
     pc_mp_send_game(s_mp, to, 1, m, sizeof(m));
 }
 
+/* Two players taking the same item in the same instant: the host keeps
+ * who changed each unit lately, and refuses a guest's change that another
+ * made a moment before (or that does not match the unit any more); the
+ * refused guest gives back what went into its pockets, or gets back what
+ * it put down (G_ITEM_NO). */
+#define POCKETABLE(it) (ITEM_IS_FTR(it) || ITEM_IS_ITEM1(it))
+#define RECENT_MS 3000
+
+typedef struct {
+    u8 bx, bz, ux, uz, by;
+    u16 old, item;
+    u32 ms;
+} Recent;
+static Recent s_recent[64];
+static int s_nrecent = 0;
+
+typedef struct {
+    u8 bx, bz, ux, uz;
+    u16 old, item;
+    int had; /* of old in the pockets before */
+    u32 ms;
+} Sent;
+static Sent s_sent[16];
+static int s_nsent = 0;
+
+typedef struct {
+    u16 item;
+    int give; /* 1: back into the pockets; 0: one out of them once it is there */
+    int had;
+    u32 ms;
+} PocketFix;
+static PocketFix s_pfix[8];
+
+static int pockets_count(u16 item) {
+    Private_c* me = Common_Get(now_private);
+    int n = 0;
+
+    if (me == NULL) return 0;
+    for (int i = 0; i < mPr_POCKETS_SLOT_COUNT; i++) n += me->inventory.pockets[i] == item;
+    return n;
+}
+
+static void recent_note(int bx, int bz, int ux, int uz, u16 old, u16 item, int by) {
+    Recent* r = &s_recent[s_nrecent++ % (int)(sizeof(s_recent) / sizeof(s_recent[0]))];
+
+    r->bx = (u8)bx; r->bz = (u8)bz; r->ux = (u8)ux; r->uz = (u8)uz;
+    r->old = old; r->item = item; r->by = (u8)by; r->ms = pc_net_ms();
+}
+
+/* the host: the last change of this unit was another's, from old to item,
+ * a moment ago (the same change made twice: the second one is refused) */
+static int recent_other(int bx, int bz, int ux, int uz, u16 old, u16 item, int by) {
+    const int n = (int)(sizeof(s_recent) / sizeof(s_recent[0]));
+    u32 now = pc_net_ms();
+
+    for (int k = 1; k <= n && k <= s_nrecent; k++) {
+        const Recent* r = &s_recent[(s_nrecent - k) % n];
+
+        if (r->bx != bx || r->bz != bz || r->ux != ux || r->uz != uz) continue;
+        return now - r->ms < RECENT_MS && r->by != by && r->old == old && r->item == item;
+    }
+    return 0;
+}
+
+static void send_item_no(int to, int bx, int bz, int ux, int uz, u16 cur, u16 old, u16 item) {
+    u8 m[15];
+
+    m[0] = G_ITEM_NO;
+    w32(m + 1, room_town());
+    m[5] = (u8)bx; m[6] = (u8)bz; m[7] = (u8)ux; m[8] = (u8)uz;
+    w16(m + 9, cur);
+    w16(m + 11, old);
+    w16(m + 13, item);
+    pc_mp_send_game(s_mp, to, 1, m, sizeof(m));
+}
+
+static void pocket_fix_add(u16 item, int give, int had) {
+    for (int i = 0; i < (int)(sizeof(s_pfix) / sizeof(s_pfix[0])); i++) {
+        if (s_pfix[i].ms == 0) {
+            s_pfix[i].item = item;
+            s_pfix[i].give = give;
+            s_pfix[i].had = had;
+            s_pfix[i].ms = pc_net_ms() | 1;
+            return;
+        }
+    }
+}
+
+/* a guest, every frame: the pockets put right once the game is done with them */
+static void pocket_fix_frame(void) {
+    Private_c* me = Common_Get(now_private);
+    u32 now = pc_net_ms();
+
+    if (me == NULL) return;
+    for (int i = 0; i < (int)(sizeof(s_pfix) / sizeof(s_pfix[0])); i++) {
+        PocketFix* f = &s_pfix[i];
+
+        if (f->ms == 0) continue;
+        if (now - f->ms > 6000) {
+            f->ms = 0; /* (never came into the pockets: bells, or eaten) */
+            continue;
+        }
+        if (!f->give && pockets_count(f->item) > f->had) {
+            for (int j = mPr_POCKETS_SLOT_COUNT - 1; j >= 0; j--) {
+                if (me->inventory.pockets[j] == f->item) {
+                    mPr_SetPossessionItem(me, j, EMPTY_NO, mPr_ITEM_COND_NORMAL);
+                    break;
+                }
+            }
+            if (g_pc_verbose) printf("[MP] %04X was taken by another player first: out of the pockets\n", f->item);
+            f->ms = 0;
+        } else if (f->give) {
+            int j = mPr_GetPossessionItemIdx(me, EMPTY_NO);
+
+            if (j >= 0) mPr_SetPossessionItem(me, j, f->item, mPr_ITEM_COND_NORMAL);
+            if (g_pc_verbose) printf("[MP] %04X could not be put down there: back into the pockets\n", f->item);
+            f->ms = 0;
+        }
+    }
+}
+
 void pc_mp_fg_written(int bx, int bz, int ux, int uz, unsigned short old_item, unsigned short new_item) {
     if (!s_applying) pc_autosave_unit_written(old_item, new_item);
     if (s_applying || !in_shared_town() || !outside_in_town() || save_unit(bx, bz, ux, uz) == NULL ||
@@ -711,9 +833,17 @@ void pc_mp_fg_written(int bx, int bz, int ux, int uz, unsigned short old_item, u
     }
     if (old_item == new_item) return;
     if (is_host()) {
+        recent_note(bx, bz, ux, uz, old_item, new_item, 0);
         send_item_set(-1, bx, bz, ux, uz, new_item);
     } else {
         u8 m[13];
+        Sent* sent = &s_sent[s_nsent++ % (int)(sizeof(s_sent) / sizeof(s_sent[0]))];
+
+        sent->bx = (u8)bx; sent->bz = (u8)bz; sent->ux = (u8)ux; sent->uz = (u8)uz;
+        sent->old = old_item;
+        sent->item = new_item;
+        sent->had = pockets_count(old_item);
+        sent->ms = pc_net_ms();
 
         m[0] = G_ITEM;
         w32(m + 1, room_town());
@@ -838,18 +968,43 @@ static void game_message(int from, const u8* m, int len) {
                 u16* cur = save_unit(bx, bz, ux, uz);
 
                 if (cur == NULL) return;
-                if (*cur == old || old == 0xFFFE || *cur == item) {
+                if ((*cur == old || old == 0xFFFE || *cur == item) &&
+                    !(*cur == item && old != item && recent_other(bx, bz, ux, uz, old, item, from))) {
                     put_unit(bx, bz, ux, uz, item);
+                    recent_note(bx, bz, ux, uz, old, item, from);
                     send_item_set(-1, bx, bz, ux, uz, item);
                 } else {
-                    /* someone was first: the guest gets what is there */
-                    send_item_set(from, bx, bz, ux, uz, *cur);
+                    /* someone was first: the guest gets what is there (and
+                     * puts its pockets right) */
+                    send_item_no(from, bx, bz, ux, uz, *cur, old, item);
                 }
             }
             break;
         case G_ITEM_SET:
             if (!is_host() && len >= 11 && in_shared_town() && town == s_my_town) {
                 put_unit(m[5], m[6], m[7], m[8], r16(m + 9));
+            }
+            break;
+        case G_ITEM_NO:
+            if (!is_host() && len >= 15 && in_shared_town() && town == s_my_town) {
+                u16 old = r16(m + 11), item = r16(m + 13);
+
+                put_unit(m[5], m[6], m[7], m[8], r16(m + 9));
+                for (int i = 0; i < (int)(sizeof(s_sent) / sizeof(s_sent[0])); i++) {
+                    Sent* t = &s_sent[i];
+
+                    if (t->ms == 0 || t->bx != m[5] || t->bz != m[6] || t->ux != m[7] || t->uz != m[8] ||
+                        t->old != old || t->item != item) {
+                        continue;
+                    }
+                    if (POCKETABLE(old) && !POCKETABLE(item)) {
+                        pocket_fix_add(old, 0, t->had); /* picked up: give it back */
+                    } else if (!POCKETABLE(old) && POCKETABLE(item)) {
+                        pocket_fix_add(item, 1, 0); /* put down: take it back */
+                    }
+                    t->ms = 0;
+                    break;
+                }
             }
             break;
         case G_DEPOSIT:
@@ -1052,6 +1207,68 @@ static void my_state(GAME_PLAY* play) {
         st.part = (u8)pl->part_table_idx;
         st.item = (u8)pl->item_kind;
         st.frame = pl->keyframe0.frame_control.current_frame;
+        /* what is in the hand, and the arms holding it */
+        st.anim1 = (pl->part_table_idx != mPlayer_PART_TABLE_NORMAL && pl->animation1_idx >= 0 &&
+                    pl->animation1_idx < mPlayer_ANIM_NUM)
+                       ? (u8)pl->animation1_idx
+                       : 0xFF;
+        st.frame1 = pl->keyframe1.frame_control.current_frame;
+        st.item_main = (pl->now_item_main_index > mPlayer_ITEM_MAIN_NONE &&
+                        pl->now_item_main_index < mPlayer_ITEM_MAIN_NUM)
+                           ? (u8)pl->now_item_main_index
+                           : 0;
+        {
+            int bank = pl->item_bank_idx & 1;
+            int shape = pl->item_shape_type[bank], anim = pl->item_animation_idx[bank];
+            f32 scale = pl->item_scale * 100.0f;
+
+            st.item_shape = (shape >= 0 && shape < mPlayer_ITEM_DATA_NUM) ? (u8)shape : 0xFF;
+            st.item_anim = (anim >= 0 && anim < mPlayer_ITEM_DATA_NUM) ? (u8)anim : 0xFF;
+            st.item_scale = (u8)(scale < 0.0f ? 0 : scale > 255.0f ? 255 : (int)(scale + 0.5f));
+        }
+        st.item_frame = pl->item_keyframe.frame_control.current_frame;
+        {
+            /* an item held up as the player actor draws it (m_player_draw.c_inc) */
+            mActor_name_t shown = EMPTY_NO;
+            f32 scale = 0.0f;
+            const xyz_t* at = NULL;
+
+            if (idx == mPlayer_INDEX_PICKUP && !pl->main_data.pickup.signboard_flag) {
+                shown = pl->main_data.pickup.item;
+                scale = pl->main_data.pickup.scale;
+                at = &pl->main_data.pickup.item_pos;
+            } else if (idx == mPlayer_INDEX_PICKUP_JUMP && !pl->main_data.pickup_jump.ftr_flag) {
+                shown = pl->main_data.pickup_jump.item;
+                scale = pl->main_data.pickup_jump.scale;
+                at = &pl->main_data.pickup_jump.item_pos;
+            } else if (idx == mPlayer_INDEX_GET_SCOOP) {
+                shown = pl->main_data.get_scoop.item;
+                scale = pl->main_data.get_scoop.scale;
+                at = pl->keyframe0.frame_control.current_frame <= 42.0f ? &pl->scoop_pos : &pl->left_hand_pos;
+            } else if (idx == mPlayer_INDEX_PUTAWAY_SCOOP) {
+                shown = pl->main_data.putaway_scoop.item;
+                scale = pl->main_data.putaway_scoop.scale;
+                at = &pl->left_hand_pos;
+            }
+            if (shown != EMPTY_NO && scale > 0.0f && at != NULL) {
+                st.shown = shown;
+                st.shown_scale = (u8)(scale * 100.0f > 255.0f ? 255 : (int)(scale * 100.0f + 0.5f));
+                st.shown_at[0] = (s16)(at->x - st.x);
+                st.shown_at[1] = (s16)(at->y - st.y);
+                st.shown_at[2] = (s16)(at->z - st.z);
+            } else {
+                st.shown = EMPTY_NO;
+            }
+        }
+        if (st.item_main == mPlayer_ITEM_MAIN_BALLOON_NORMAL) {
+            st.item_rot[0] = (s16)(pl->balloon_lean_angle + pl->balloon_angle.x + pl->ballon_add_rot_x);
+            st.item_rot[1] = 0;
+            st.item_rot[2] = pl->balloon_angle.z;
+        } else {
+            st.item_rot[0] = pl->net_angle.x;
+            st.item_rot[1] = pl->net_angle.y;
+            st.item_rot[2] = pl->net_angle.z;
+        }
     }
     pc_mp_set_state(s_mp, &st);
 }
@@ -1197,6 +1414,7 @@ void pc_mp_game_frame(struct game_s* game) {
         design_frame();
         npc_room_frame();
         region_frame();
+        if (!is_host()) pocket_fix_frame();
         if (is_host() && in_shared_town()) {
             if (!s_fg_shadow_ok) fg_shadow_take();
             else if (s_frame % 30 == 0) fg_diff();
@@ -1249,9 +1467,20 @@ typedef struct {
     u8 look;  /* wallpaper / carpet */
 } HomeRegion;
 
+#define FLR_FIELD(f) offsetof(mHm_flr_c, f), sizeof(((mHm_flr_c*)0)->f)
+
 static const HomeRegion s_home_regions[] = {
-    { offsetof(mHm_flr_c, layer_main.items), sizeof(((mHm_flr_c*)0)->layer_main.items), 1, 0 },
-    { offsetof(mHm_flr_c, layer_secondary.items), sizeof(((mHm_flr_c*)0)->layer_secondary.items), 1, 0 },
+    { FLR_FIELD(layer_main.items), 1, 0 },
+    { FLR_FIELD(layer_secondary.items), 1, 0 },
+    /* what storage furniture holds (a dresser's things, a stereo's record) */
+    { FLR_FIELD(layer_storage1.items), 1, 0 },
+    { FLR_FIELD(layer_storage2.items), 1, 0 },
+    /* lamps, TVs, radios on or off; the gyroids' steps; the tempo */
+    { FLR_FIELD(layer_main.ftr_switch), 0, 0 },
+    { FLR_FIELD(layer_secondary.ftr_switch), 0, 0 },
+    { FLR_FIELD(layer_main.haniwa_step), 0, 0 },
+    { FLR_FIELD(layer_secondary.haniwa_step), 0, 0 },
+    { FLR_FIELD(tempo_beat), 0, 0 },
     { offsetof(mHm_flr_c, wall_floor), sizeof(mHm_wf_c), 0, 1 },
     { offsetof(mHm_flr_c, floor_bit_info), sizeof(mHm_fllot_bit_c), 0, 1 },
 };
@@ -1270,6 +1499,23 @@ static u8* floor_bytes(int house, int floor) {
     return (u8*)&Save_Get(homes[house]).floors[floor];
 }
 
+extern void aMR_PC_StorageIntoCopy(const void* floor, void* copy, int size);
+
+/* the host: a floor as it is, with what storage furniture holds while the
+ * host is in that room (out of the save then) put back */
+static u8* floor_view(int house, int floor) {
+    static u8 copy[FLOOR_SIZE];
+    int id = mFI_GetFieldId();
+
+    if (mFI_GET_TYPE(id) == mFI_FIELD_PLAYER0_ROOM && mFI_GET_PLAYER_ROOM_NO(id) == house &&
+        mFI_GetNowPlayerHouseFloorNo() == floor) {
+        memcpy(copy, floor_bytes(house, floor), FLOOR_SIZE);
+        aMR_PC_StorageIntoCopy(floor_bytes(house, floor), copy, FLOOR_SIZE);
+        return copy;
+    }
+    return floor_bytes(house, floor);
+}
+
 static void home_reset(void) {
     s_home_shadow_ok = 0;
     memset(s_home_mask, 0, sizeof(s_home_mask));
@@ -1284,7 +1530,7 @@ static int in_house_room(int house, int floor) {
            mFI_GetNowPlayerHouseFloorNo() == floor;
 }
 
-static void home_send(int to, int house, int floor, int off, int len) {
+static void home_send(int to, int house, int floor, const u8* src, int off, int len) {
     while (len > 0) {
         u8 m[11 + 1024];
         int n = len > 1024 ? 1024 : len;
@@ -1295,7 +1541,7 @@ static void home_send(int to, int house, int floor, int off, int len) {
         m[6] = (u8)floor;
         w16(m + 7, (u16)off);
         w16(m + 9, (u16)n);
-        memcpy(m + 11, floor_bytes(house, floor) + off, (size_t)n);
+        memcpy(m + 11, src + off, (size_t)n);
         pc_mp_send_game(s_mp, to, 1, m, (size_t)(11 + n));
         off += n;
         len -= n;
@@ -1325,7 +1571,7 @@ static void home_diff(void) {
     }
     for (int h = 0; h < PLAYER_NUM; h++) {
         for (int f = 0; f < HOME_FLOORS; f++) {
-            u8* cur = floor_bytes(h, f);
+            u8* cur = floor_view(h, f);
             u8* old = s_home_shadow[h][f];
 
             for (int r = 0; r < HOME_NREG; r++) {
@@ -1349,7 +1595,7 @@ static void home_diff(void) {
                         if (run < 0) run = o;
                         last = o + step;
                     } else if (run >= 0 && (o >= rg->off + rg->len || o - last >= 16)) {
-                        home_send(-1, h, f, run, last - run);
+                        home_send(-1, h, f, cur, run, last - run);
                         memcpy(old + run, cur + run, (size_t)(last - run));
                         run = -1;
                     }
@@ -1407,8 +1653,10 @@ static void home_message(int from, const u8* m, int len) {
         if (is_host() && town == s_my_town) {
             for (int h = 0; h < PLAYER_NUM; h++) {
                 for (int f = 0; f < HOME_FLOORS; f++) {
+                    const u8* src = floor_view(h, f);
+
                     for (int r = 0; r < HOME_NREG; r++) {
-                        home_send(from, h, f, s_home_regions[r].off, s_home_regions[r].len);
+                        home_send(from, h, f, src, s_home_regions[r].off, s_home_regions[r].len);
                     }
                 }
                 door_send(from, h);
@@ -1443,7 +1691,7 @@ static void home_frame(void) {
         if (!in_shared_town()) return;
         if (!s_home_shadow_ok) {
             for (int h = 0; h < PLAYER_NUM; h++) {
-                for (int f = 0; f < HOME_FLOORS; f++) memcpy(s_home_shadow[h][f], floor_bytes(h, f), FLOOR_SIZE);
+                for (int f = 0; f < HOME_FLOORS; f++) memcpy(s_home_shadow[h][f], floor_view(h, f), FLOOR_SIZE);
                 s_door_shadow[h] = Save_Get(homes[h]).door_original;
             }
             s_home_shadow_ok = 1;
@@ -2042,6 +2290,41 @@ static const Region s_regions[] = {
     { SAVE_FIELD(kabu_price_schedule), -1, -1 },
     { SAVE_FIELD(event_save_data), -1, -1 },
     { SAVE_FIELD(snowmen), -1, -1 },
+    /* the houses outside the floors: size, roof, basement (homes[].haniwa_tempo
+     * to door_original), the mailbox's letters (its flag), the gyroid at the
+     * door (a visitor buys from it), the cockroaches, the music collected */
+#define HOUSE_REGIONS(h)                                                                                          \
+    { offsetof(Save_t, homes[h].haniwa_tempo),                                                                    \
+      offsetof(Save_t, homes[h].door_original) + 1 - offsetof(Save_t, homes[h].haniwa_tempo), -1, -1 },          \
+        { SAVE_FIELD(homes[h].mailbox), -1, -1 }, { SAVE_FIELD(homes[h].haniwa), -2, -1 },                         \
+        { SAVE_FIELD(homes[h].goki), -1, -1 }, { SAVE_FIELD(homes[h].music_box), -1, -1 }
+    HOUSE_REGIONS(0), HOUSE_REGIONS(1), HOUSE_REGIONS(2), HOUSE_REGIONS(3),
+#undef HOUSE_REGIONS
+    /* the villagers' own data (their clothes and umbrella, moving in or out,
+     * moods...), the town's events and its other state */
+    { SAVE_FIELD(animals), -1, -1 },
+    { offsetof(Save_t, now_npc_max), 2, -1, -1 }, /* (and remove_animal_idx) */
+    { SAVE_FIELD(last_removed_animal_id), -1, -1 },
+    { SAVE_FIELD(event_save_common), -1, -1 },
+    { SAVE_FIELD(house_arrangement), -1, -1 },
+    { SAVE_FIELD(num_statues), -1, -1 },
+    { SAVE_FIELD(npc_force_go_home), -1, -1 },
+    { SAVE_FIELD(last_grow_time), -1, -1 },
+    { SAVE_FIELD(npc_used_tbl), -1, -1 },
+    { offsetof(Save_t, haniwa_scheduled), 3, -1, -1 }, /* (and dust_flag, clear_grass) */
+    { SAVE_FIELD(keep_house_size), -1, -1 },
+    { SAVE_FIELD(bridge), -1, -1 },
+    { SAVE_FIELD(fishRecord), -1, -1 },
+    { SAVE_FIELD(mask_cat), -1, -1 },
+    { SAVE_FIELD(return_animal), -1, -1 },
+    { SAVE_FIELD(LightHouse), -1, -1 },
+    { offsetof(Save_t, insect_term), 4, -1, -1 }, /* (the fish's term too) */
+    { SAVE_FIELD(good_field), -1, -1 },
+    { offsetof(Save_t, rainbow_month), 3, -1, -1 },
+    { SAVE_FIELD(add_npc), -1, -1 },
+    { SAVE_FIELD(monument_order), -1, -1 },
+    { SAVE_FIELD(monument_count), -1, -1 },
+    { SAVE_FIELD(sick_info), -1, -1 },
 };
 #define NREGIONS ((int)(sizeof(s_regions) / sizeof(s_regions[0])))
 #define REGION_WEATHER 0

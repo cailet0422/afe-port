@@ -161,6 +161,30 @@ be made; then one side needs the port forwarded (UPnP or by hand).
 - **Every item outside, again**: besides the changes the hooks see, the host compares the whole item and buried layer
   with what it sent every half second and sends the acres that differ (changes the game makes without the hooks: a
   day's new weeds, things the villagers or events put down); a guest stepping outside asks for the whole layer again.
+- **Held items** (`pc_mp_puppet.c`): with the position go the upper body's animation (`animation1_idx`, its frame,
+  `part_table_idx`), what the hand shows (`now_item_main_index`, the item's model and animation from
+  `item_shape_type` / `item_animation_idx` of the current bank, its frame, `item_scale`, `net_angle` or the balloon's
+  tilt and sway) and an item held up (picked up, dug up: the item, its size and its place from the player). The
+  puppet combines the two body animations with the game's part table (`cKF_SkeletonInfo_R_combine_play`), keeps the
+  matrix of the right hand while drawing (joint `mPlayer_JOINT_HAND`) and draws the item there as the player actor's
+  `Player_actor_Item_draw_*` do: a display list (axe, shovel, fan, party popper, flower with its palette), the item's
+  own skeleton (net with its angle, rod, pinwheel, balloon from the hand's position) or the umbrella as the umbrella
+  tool actor draws it (a custom design from the owner's designs). Held-up items go through the field's or the shop
+  goods' single-item draw.
+- **The same item taken twice** (`G_ITEM_NO`): the host keeps who changed each unit lately; a guest's change that
+  another made a moment before (the same unit, the same item to the same result), or that does not match the unit,
+  is refused with what is there. The guest then takes one of that item back out of its pockets once it arrives
+  there (or puts back into them an item it could not put down).
+- **Inside the houses, more**: the storage layers (`layer_storage1/2`), the switches (`ftr_switch`), the gyroid steps
+  and the tempo of each floor. While the host is in a room, afe-decomp `ac_my_room.c` writes the switches and steps
+  into the save every half second (`aMR_PC_KeepState`; the room's constructor clears them there), and the host sends
+  that floor with what storage furniture holds put back (`aMR_PC_StorageIntoCopy`: the constructor takes those items
+  out of the save into the furniture actors).
+- **More of the town** (`G_REGION`): each house's outside (size, roof colour, flags: `homes[].haniwa_tempo` to
+  `door_original`), mailbox, door gyroid (the gyroid's stock and bells after a guest's purchase go to the host while the guest is outdoors), cockroaches and
+  music collected; `animals[]`, `event_save_common`, the bridge, the lighthouse, the fishing records, Blanca, the
+  returning villager, the town assessment, the rainbow, the insect and fish terms, the e+ villager additions,
+  monuments, the sick villager and the town's flags.
 - **Saving while visiting**: the port's autosave (`pc_autosave.c`) writes a visiting guest's pockets, bells and
   letters into the guest's own town file (`mCD_PC_PatchTraveller`), as the trip home would, so a guest whose game
   stops in the host's town keeps what it had.
@@ -172,11 +196,11 @@ be made; then one side needs the port forwarded (UPnP or by hand).
   position; for the others only the rough one the game keeps (the acre) is shared. Talking and greeting, going in and
   out of houses, sleeping and catching insects are each game's own. Villagers inside houses follow only while the host
   is in the same house. The island villager, insects and fish are not shared.
-- In houses, the furniture and items on the floor and on tables and the wallpaper and carpet are shared; what is inside
-  storage furniture (held by the furniture actors of whoever is in the room), lamps on or off and gyroid steps are not.
-- A puppet does not hold the tool or item in its hand (the arm moves as the player's does).
-- Two players picking up the same item in the same instant can both get it (the host corrects the ground, not the
-  pocket).
+- Each player's own: insects and fish (spawned by each game's set manager for the acre it enters), balloons floating
+  by, Wisp's spirits, rolling snowballs, a beach ball, the money rock's coins, bees, and the island (its villager, items
+  and weather). The fishing bobber and line, and a letter or present handed over, are not drawn on puppets.
+- A guest can turn a lamp in the host's house on or off on its own screen; it follows the host's again when the
+  host's changes.
 
 ## Testing
 

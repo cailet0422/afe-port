@@ -25,7 +25,7 @@
 extern "C" {
 #endif
 
-#define PC_MP_PROTOCOL 2
+#define PC_MP_PROTOCOL 3
 #define PC_MP_MAX_PLAYERS 8
 #define PC_MP_DEFAULT_PORT 47070
 #define PC_MP_LAN_PORT 47071 /* where rooms on the network listen for the broadcast */
@@ -67,6 +67,17 @@ typedef struct {
     uint8_t part;    /* its part table (mPlayer_PART_TABLE_*) */
     uint8_t item;    /* the item kind in hand (mPlayer_ITEM_KIND_*) */
     float frame;     /* the animation's frame */
+    uint8_t anim1;      /* the upper body's animation while holding something (mPlayer_ANIM_*), 0xFF = none */
+    uint8_t item_main;  /* what the hand shows (mPlayer_ITEM_MAIN_*, 0 = nothing) */
+    uint8_t item_shape; /* its model (mPlib_Get_Item_DataPointer), 0xFF = none */
+    uint8_t item_anim;  /* its own animation, 0xFF = none */
+    uint8_t item_scale; /* its size in hundredths (growing out of the pocket) */
+    float frame1;       /* the upper body's frame */
+    float item_frame;   /* the item's frame */
+    int16_t item_rot[3]; /* the net's angle; the balloon's tilt (x) and sway (z) */
+    uint16_t shown;      /* an item held up (picked up, dug up), EMPTY_NO = none */
+    uint8_t shown_scale; /* its size in hundredths */
+    int16_t shown_at[3]; /* where, from the player's position */
 } PcMpState;
 
 typedef struct {

@@ -17,16 +17,16 @@
 ## Download
 
 <!-- When a new release is published, update the version in these links (here and in README.ko.md). -->
-Latest release: **[v1.3.1](https://github.com/cailet0422/afe-port/releases/tag/v1.3.1)**
+Latest release: **[v1.4.0](https://github.com/cailet0422/afe-port/releases/tag/v1.4.0)**
 
 | Platform | Download | Requirements |
 |---|---|---|
-| Windows 64-bit | [DobutsuNoMoriEPlus-v1.3.1-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/DobutsuNoMoriEPlus-v1.3.1-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
-| Windows 32-bit | [DobutsuNoMoriEPlus-v1.3.1-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/DobutsuNoMoriEPlus-v1.3.1-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.3.1-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/DobutsuNoMoriEPlus-v1.3.1-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.3.1-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/DobutsuNoMoriEPlus-v1.3.1-Android.apk) | Android 5.0+, ARM 32/64-bit |
+| Windows 64-bit | [DobutsuNoMoriEPlus-v1.4.0-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.0/DobutsuNoMoriEPlus-v1.4.0-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
+| Windows 32-bit | [DobutsuNoMoriEPlus-v1.4.0-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.0/DobutsuNoMoriEPlus-v1.4.0-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.4.0-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.0/DobutsuNoMoriEPlus-v1.4.0-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.4.0-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.4.0/DobutsuNoMoriEPlus-v1.4.0-Android.apk) | Android 5.0+, ARM 32/64-bit |
 
-Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.3.1/SHA256SUMS.txt) ·
+Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.4.0/SHA256SUMS.txt) ·
 Older versions and release notes: [all releases](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -234,17 +234,25 @@ Hangul is typed with your computer's Korean input method (Han/Eng key).
   and fish move on each machine by themselves.
 - **The host's furniture is shared live.** When the host places, moves, turns or removes furniture, or changes the
   wallpaper or carpet, guests see it at once. A guest standing in that room sees the furniture rebuilt when it is not
-  in a menu or a conversation and is standing or walking. What is inside storage furniture, and lamps on or off, are
-  not shared. As in the original game, nobody can move furniture in someone else's house.
+  in a menu or a conversation and is standing or walking. Lamps, TVs and radios on or off, the record in a stereo,
+  what storage furniture holds and the gyroids' steps follow the host's too. As in the original game, nobody can move
+  furniture in someone else's house.
 - **Custom designs show as drawn.** A design worn as clothing shows to everyone as its owner drew it (changed
   designs too), and the designs of the host's houses (wallpaper, carpet, the house door) show to guests.
+- **Tools in hand show.** Others see the net, axe, rod, shovel, umbrella (custom-design umbrellas as drawn),
+  balloon, pinwheel, fan, flower or party popper in your hand, with your arms holding it and the net or rod moving as
+  you swing or cast, and the item you hold up after picking something up or digging it up.
 - **Also shared, following the host**: what each player is doing (picking up, shaking a tree, fishing... with the
   same animation), the weather, the town tune, the museum, the noticeboard, the police station's lost and found,
   Nook's shop, the Able Sisters' display, the post office, the turnip prices, the visitors' events and the snowmen. A
   guest's change at one of these places (a post on the board, a lost item taken, something bought or sold, the town
-  tune) goes to the host and from the host to everyone.
+  tune) goes to the host and from the host to everyone. Also the outside of the houses (size, roof colour, basement,
+  the mailbox's flag), the gyroid at a house's door (what a guest buys from it goes into the guest's pockets, and the
+  gyroid keeps the bells for the house's owner, on the host's side too), the villagers' own data (their clothes and
+  umbrellas, moving in or out), the extra bridge, the lighthouse, the fishing tourney, Blanca, the town's assessment
+  and the other town events.
 - A guest's own town is saved with the guest's pockets and bells while visiting (see [Saving](#saving)).
-- Two players picking up the same item in the same instant can both get it.
+- Two players taking the same item at the same moment: the first one gets it, and the other's pocket gives it back.
 - While a guest is in the host's town, the guest's game clock follows the host's.
 - The room ends when the host closes it or quits. A guest already in the host's town stays there and takes the
   train home.

@@ -33,6 +33,9 @@
  *     <frame> BELLS <n>               debug: n bells in the wallet
  *     <frame> DESIGN <slot> <n>       debug: fill custom design slot (0-7) with test stripes
  *                                     (pattern n, 0-255) and wear it
+ *     <frame> EQUIP <item>            debug: that tool in hand (hex: 2200 net, 2201 axe, 0 none)
+ *     <frame> HANIWA <slot> <item> <price>  debug: the gyroid at the player's door sells that item
+ *                                     (hex) for that many bells
  *     <frame> WARP <x>,<z> [<dir>]    debug: the town again with the player at x,z (as on
  *                                     leaving a building), facing mSc_DIRECT_* (4 north)
  *     <frame> CLOCK <h>[:<m>[:<s>]]   debug: the clock forward to the next h:m:s (today if
