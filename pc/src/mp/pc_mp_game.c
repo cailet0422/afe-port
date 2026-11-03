@@ -631,8 +631,17 @@ static void guest_got_town(void) {
     s_slot_b_net = 1;
     s_visit = PC_MP_VISIT_READY;
     s_fg_asked = 0;
-    pc_gui_notify(pc_gui_korean() ? "호스트 마을이 준비됐어요. 기차역 역무원에게 여행을 부탁하세요!"
-                                  : "The host's town is ready: ask the station master for a trip!");
+    if (Common_Get(now_private) != NULL && mEv_CheckFirstJob()) {
+        /* (the station master runs no train for someone still on Nook's
+         * part-time job: the original game's rule) */
+        pc_gui_notify(pc_gui_korean()
+                          ? "호스트 마을이 준비됐어요. 단, 너굴 상점 아르바이트를 끝내야 기차를 탈 수 있어요(원래 게임의 규칙)."
+                          : "The host's town is ready, but the train only runs once you have finished Tom Nook's "
+                            "part-time job (the original game's rule).");
+    } else {
+        pc_gui_notify(pc_gui_korean() ? "호스트 마을이 준비됐어요. 기차역 역무원에게 여행을 부탁하세요!"
+                                      : "The host's town is ready: ask the station master for a trip!");
+    }
 }
 
 /* --- Items --- */

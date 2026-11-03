@@ -224,7 +224,9 @@ Hangul is typed with your computer's Korean input method (Han/Eng key).
 **Things to keep in mind**
 
 - **Everyone should use the same version** of the game; with different versions joining may fail.
-- Guests also need **a saved town of their own**, with **a different name** from the host's town.
+- Guests also need **a saved town of their own**, with **a different name** from the host's town, and their
+  character must have **finished Tom Nook's part-time job**: before that the station master says no train will come
+  for a while (the original game's rule).
 - Only the host's town is shared.
 - **Villagers follow the host's.** Villagers wandering near the host walk or run to the same places on guests'
   screens, and villagers away from the host are in the same acres too. Talking to or greeting a villager is still your
@@ -274,7 +276,9 @@ Hangul is typed with your computer's Korean input method (Han/Eng key).
 - Joining over the internet can take about half a minute while each side finds the other.
 - Public Wi-Fi (cafés, schools, offices), guest Wi-Fi networks, mobile data and hotspots may block it or fail to
   connect; with both sides on mobile data it most likely will not connect. Host from a home connection.
-- On Windows, allow the game if a firewall prompt appears when you first open or join a room.
+- On Windows, allow the game if a firewall prompt appears when you first open or join a room, for **both private
+  and public networks** (Windows often counts a home connection as public). If it was allowed for one only, change it
+  in Windows Security → Firewall & network protection → Allow an app through firewall.
 - On Android, keep the game on screen while playing: switching apps or turning the screen off can drop the
   connection.
 - The port can be changed with `mp_port` in `settings.ini` (default 47070).

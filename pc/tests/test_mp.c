@@ -351,6 +351,24 @@ static void test_internet(void) {
     }
     CHECK(found);
     for (int k = 0; k < s_nannounced; k++) CHECK(s_announced[k].port != pc_mp_port(host));
+    {
+        /* that forwarded port does not reach the room (a router that does
+         * not forward it, a firewall): a guest with the code still gets in,
+         * where the room's punch comes from */
+        PcMp* late = pc_mp_new(0);
+
+        pc_mp_add_bootstrap(late, &node);
+        pc_mp_join(late, &code_addr, room16, "");
+        for (int i = 0; i < 5000 && pc_mp_mode(late) != PC_MP_JOINED; i++) {
+            pc_mp_tick(host);
+            pc_mp_tick(guest);
+            pc_mp_tick(late);
+            node_tick();
+            pc_net_sleep(5);
+        }
+        CHECK(pc_mp_mode(late) == PC_MP_JOINED);
+        pc_mp_free(late);
+    }
     /* a router behind another router (its address is not the one seen):
      * the code keeps the address and port the internet sees */
     pc_mp_set_port_mapping(host, 0xC0A80101u, 47070);

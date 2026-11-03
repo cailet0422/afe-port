@@ -1189,7 +1189,22 @@ static void handle(PcMp* mp, const PcNetAddr* from, const uint8_t* pkt, int n, i
             }
             return;
         case T_PUNCH:
-            return; /* it opened the way: the next JOIN goes through */
+            /* it opened the way: the next JOIN goes through. Joining by
+             * code, the room is where its punch comes from (the router of
+             * a room may not forward the code's port, or the computer's
+             * firewall may keep it closed, while this way is open) */
+            if (mp->mode == PC_MP_JOINING && !pc_net_addr_equal(from, &mp->join_addr) &&
+                (r32(pkt + 8) & 0xFFFF) == (mp->join_room & 0xFFFF)) {
+                char was[32], now[32];
+
+                pc_net_addr_str(&mp->join_addr, was, sizeof(was));
+                pc_net_addr_str(from, now, sizeof(now));
+                printf("[MP] the room answered from %s (the code says %s): joining there\n", now, was);
+                mp->join_addr = *from;
+                mp->peers[0].addr = *from;
+                send_join(mp);
+            }
+            return;
         default:
             break;
     }
