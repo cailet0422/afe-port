@@ -66,6 +66,7 @@ enum {
     G_NPC_ROOM,     /* host -> guests: town, house owner, count, villagers in that house (unreliable) */
     G_REGION,       /* host -> guests (or a guest's change -> host): town, region, offset, length, bytes */
     G_REGION_REQ,   /* guest -> host: all of the shared town data, please */
+    G_ITEM_NO,      /* host -> a guest: town, bx, bz, ux, uz, what is there, the guest's old, new: refused */
 };
 
 static void home_frame(void);
@@ -685,6 +686,127 @@ static void send_item_set(int to, int bx, int bz, int ux, int uz, u16 item) {
     pc_mp_send_game(s_mp, to, 1, m, sizeof(m));
 }
 
+/* Two players taking the same item in the same instant: the host keeps
+ * who changed each unit lately, and refuses a guest's change that another
+ * made a moment before (or that does not match the unit any more); the
+ * refused guest gives back what went into its pockets, or gets back what
+ * it put down (G_ITEM_NO). */
+#define POCKETABLE(it) (ITEM_IS_FTR(it) || ITEM_IS_ITEM1(it))
+#define RECENT_MS 3000
+
+typedef struct {
+    u8 bx, bz, ux, uz, by;
+    u16 old, item;
+    u32 ms;
+} Recent;
+static Recent s_recent[64];
+static int s_nrecent = 0;
+
+typedef struct {
+    u8 bx, bz, ux, uz;
+    u16 old, item;
+    int had; /* of old in the pockets before */
+    u32 ms;
+} Sent;
+static Sent s_sent[16];
+static int s_nsent = 0;
+
+typedef struct {
+    u16 item;
+    int give; /* 1: back into the pockets; 0: one out of them once it is there */
+    int had;
+    u32 ms;
+} PocketFix;
+static PocketFix s_pfix[8];
+
+static int pockets_count(u16 item) {
+    Private_c* me = Common_Get(now_private);
+    int n = 0;
+
+    if (me == NULL) return 0;
+    for (int i = 0; i < mPr_POCKETS_SLOT_COUNT; i++) n += me->inventory.pockets[i] == item;
+    return n;
+}
+
+static void recent_note(int bx, int bz, int ux, int uz, u16 old, u16 item, int by) {
+    Recent* r = &s_recent[s_nrecent++ % (int)(sizeof(s_recent) / sizeof(s_recent[0]))];
+
+    r->bx = (u8)bx; r->bz = (u8)bz; r->ux = (u8)ux; r->uz = (u8)uz;
+    r->old = old; r->item = item; r->by = (u8)by; r->ms = pc_net_ms();
+}
+
+/* the host: the last change of this unit was another's, from old to item,
+ * a moment ago (the same change made twice: the second one is refused) */
+static int recent_other(int bx, int bz, int ux, int uz, u16 old, u16 item, int by) {
+    const int n = (int)(sizeof(s_recent) / sizeof(s_recent[0]));
+    u32 now = pc_net_ms();
+
+    for (int k = 1; k <= n && k <= s_nrecent; k++) {
+        const Recent* r = &s_recent[(s_nrecent - k) % n];
+
+        if (r->bx != bx || r->bz != bz || r->ux != ux || r->uz != uz) continue;
+        return now - r->ms < RECENT_MS && r->by != by && r->old == old && r->item == item;
+    }
+    return 0;
+}
+
+static void send_item_no(int to, int bx, int bz, int ux, int uz, u16 cur, u16 old, u16 item) {
+    u8 m[15];
+
+    m[0] = G_ITEM_NO;
+    w32(m + 1, room_town());
+    m[5] = (u8)bx; m[6] = (u8)bz; m[7] = (u8)ux; m[8] = (u8)uz;
+    w16(m + 9, cur);
+    w16(m + 11, old);
+    w16(m + 13, item);
+    pc_mp_send_game(s_mp, to, 1, m, sizeof(m));
+}
+
+static void pocket_fix_add(u16 item, int give, int had) {
+    for (int i = 0; i < (int)(sizeof(s_pfix) / sizeof(s_pfix[0])); i++) {
+        if (s_pfix[i].ms == 0) {
+            s_pfix[i].item = item;
+            s_pfix[i].give = give;
+            s_pfix[i].had = had;
+            s_pfix[i].ms = pc_net_ms() | 1;
+            return;
+        }
+    }
+}
+
+/* a guest, every frame: the pockets put right once the game is done with them */
+static void pocket_fix_frame(void) {
+    Private_c* me = Common_Get(now_private);
+    u32 now = pc_net_ms();
+
+    if (me == NULL) return;
+    for (int i = 0; i < (int)(sizeof(s_pfix) / sizeof(s_pfix[0])); i++) {
+        PocketFix* f = &s_pfix[i];
+
+        if (f->ms == 0) continue;
+        if (now - f->ms > 6000) {
+            f->ms = 0; /* (never came into the pockets: bells, or eaten) */
+            continue;
+        }
+        if (!f->give && pockets_count(f->item) > f->had) {
+            for (int j = mPr_POCKETS_SLOT_COUNT - 1; j >= 0; j--) {
+                if (me->inventory.pockets[j] == f->item) {
+                    mPr_SetPossessionItem(me, j, EMPTY_NO, mPr_ITEM_COND_NORMAL);
+                    break;
+                }
+            }
+            if (g_pc_verbose) printf("[MP] %04X was taken by another player first: out of the pockets\n", f->item);
+            f->ms = 0;
+        } else if (f->give) {
+            int j = mPr_GetPossessionItemIdx(me, EMPTY_NO);
+
+            if (j >= 0) mPr_SetPossessionItem(me, j, f->item, mPr_ITEM_COND_NORMAL);
+            if (g_pc_verbose) printf("[MP] %04X could not be put down there: back into the pockets\n", f->item);
+            f->ms = 0;
+        }
+    }
+}
+
 void pc_mp_fg_written(int bx, int bz, int ux, int uz, unsigned short old_item, unsigned short new_item) {
     if (!s_applying) pc_autosave_unit_written(old_item, new_item);
     if (s_applying || !in_shared_town() || !outside_in_town() || save_unit(bx, bz, ux, uz) == NULL ||
@@ -711,9 +833,17 @@ void pc_mp_fg_written(int bx, int bz, int ux, int uz, unsigned short old_item, u
     }
     if (old_item == new_item) return;
     if (is_host()) {
+        recent_note(bx, bz, ux, uz, old_item, new_item, 0);
         send_item_set(-1, bx, bz, ux, uz, new_item);
     } else {
         u8 m[13];
+        Sent* sent = &s_sent[s_nsent++ % (int)(sizeof(s_sent) / sizeof(s_sent[0]))];
+
+        sent->bx = (u8)bx; sent->bz = (u8)bz; sent->ux = (u8)ux; sent->uz = (u8)uz;
+        sent->old = old_item;
+        sent->item = new_item;
+        sent->had = pockets_count(old_item);
+        sent->ms = pc_net_ms();
 
         m[0] = G_ITEM;
         w32(m + 1, room_town());
@@ -838,18 +968,43 @@ static void game_message(int from, const u8* m, int len) {
                 u16* cur = save_unit(bx, bz, ux, uz);
 
                 if (cur == NULL) return;
-                if (*cur == old || old == 0xFFFE || *cur == item) {
+                if ((*cur == old || old == 0xFFFE || *cur == item) &&
+                    !(*cur == item && old != item && recent_other(bx, bz, ux, uz, old, item, from))) {
                     put_unit(bx, bz, ux, uz, item);
+                    recent_note(bx, bz, ux, uz, old, item, from);
                     send_item_set(-1, bx, bz, ux, uz, item);
                 } else {
-                    /* someone was first: the guest gets what is there */
-                    send_item_set(from, bx, bz, ux, uz, *cur);
+                    /* someone was first: the guest gets what is there (and
+                     * puts its pockets right) */
+                    send_item_no(from, bx, bz, ux, uz, *cur, old, item);
                 }
             }
             break;
         case G_ITEM_SET:
             if (!is_host() && len >= 11 && in_shared_town() && town == s_my_town) {
                 put_unit(m[5], m[6], m[7], m[8], r16(m + 9));
+            }
+            break;
+        case G_ITEM_NO:
+            if (!is_host() && len >= 15 && in_shared_town() && town == s_my_town) {
+                u16 old = r16(m + 11), item = r16(m + 13);
+
+                put_unit(m[5], m[6], m[7], m[8], r16(m + 9));
+                for (int i = 0; i < (int)(sizeof(s_sent) / sizeof(s_sent[0])); i++) {
+                    Sent* t = &s_sent[i];
+
+                    if (t->ms == 0 || t->bx != m[5] || t->bz != m[6] || t->ux != m[7] || t->uz != m[8] ||
+                        t->old != old || t->item != item) {
+                        continue;
+                    }
+                    if (POCKETABLE(old) && !POCKETABLE(item)) {
+                        pocket_fix_add(old, 0, t->had); /* picked up: give it back */
+                    } else if (!POCKETABLE(old) && POCKETABLE(item)) {
+                        pocket_fix_add(item, 1, 0); /* put down: take it back */
+                    }
+                    t->ms = 0;
+                    break;
+                }
             }
             break;
         case G_DEPOSIT:
@@ -1197,6 +1352,7 @@ void pc_mp_game_frame(struct game_s* game) {
         design_frame();
         npc_room_frame();
         region_frame();
+        if (!is_host()) pocket_fix_frame();
         if (is_host() && in_shared_town()) {
             if (!s_fg_shadow_ok) fg_shadow_take();
             else if (s_frame % 30 == 0) fg_diff();
