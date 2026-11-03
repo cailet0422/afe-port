@@ -84,6 +84,12 @@ passes positions and messages on (a star: the host decides). A peer silent for 1
     to where that packet came from: the code's port may not reach the room (a router that does not really forward
     it, a Windows firewall closed to unasked packets) while this way, opened from the room's side, is open.
 
+  Two STUN servers (Google's and Cloudflare's) are asked for the socket's outside address. If they see different
+  ports, the router gives each destination its own port (a "symmetric" NAT): the room page and a failed join say so
+  and point to UPnP or a forwarded UDP 47070, which no punching replaces. As such routers often take the next ports,
+  the room's punch also goes to the 24 ports after the guest's known one, and every eighth `JOIN` of a guest also to
+  the 24 ports after the code's.
+
   On Windows the firewall's first prompt allows the game on private networks only and adds a rule blocking it on
   public ones (a block rule wins over any allow rule); a guest's packets that come from another outside port than the
   room has seen (an endpoint-dependent NAT, many mobile networks) are then dropped. **Allow in Windows Firewall** on the

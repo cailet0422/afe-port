@@ -34,6 +34,7 @@
 #define PEER_TIMEOUT_MS 15000
 #define JOIN_RETRY_MS 400
 #define JOIN_TIMEOUT_MS 40000
+#define PUNCH_SPREAD 24 /* ports after a peer's known one tried too (routers that change the port) */
 #define PING_MS 1000
 #define STATE_MS 66
 #define LAN_BROADCAST_MS 2000
@@ -153,6 +154,10 @@ struct PcMp {
     PcNetAddr stun;
     uint8_t stun_tx[12];
     uint32_t stun_sent;
+    PcNetAddr stun2, external2; /* the second server and what it saw */
+    uint8_t stun2_tx[12];
+    uint32_t stun2_sent;
+    int join_spray; /* JOINs sent since the last one to the code's next ports */
     PcNetAddr external;
     PcNetAddr mapped; /* the router's address and the port it forwards to us (UPnP) */
     int punch_alt;
@@ -554,6 +559,20 @@ void pc_mp_set_stun(PcMp* mp, const PcNetAddr* server) {
     mp->stun_sent = 0;
 }
 
+void pc_mp_set_stun2(PcMp* mp, const PcNetAddr* server) {
+    mp->stun2 = *server;
+    mp->stun2_sent = 0;
+}
+
+int pc_mp_nat_varies(PcMp* mp) {
+    if (mp->external.ip == 0 || mp->external2.ip == 0) return -1;
+    return mp->external.ip != mp->external2.ip || mp->external.port != mp->external2.port;
+}
+
+int pc_mp_external_port_known(PcMp* mp) {
+    return mp->external.ip != 0 || mapped_usable(mp);
+}
+
 /* What the internet sees of our socket: STUN's answer, else the DHT's */
 static int seen_addr(PcMp* mp, PcNetAddr* out) {
     if (mp->external.ip != 0) {
@@ -828,6 +847,19 @@ static void send_join(PcMp* mp) {
     w32(p + 2 + PC_MP_NAME_LEN + 8 + 32, mp->join_room);
     raw_send(mp, &mp->join_addr, T_JOIN, 0, 0, p, sizeof(p));
     mp->join_sent = mp->now;
+    /* now and then, over the internet, the code's next ports too: a room
+     * behind a router that gives each destination its own port answers
+     * from one of them (its punch then gets through to us, and we join
+     * where it came from) */
+    if (pc_mp_ip_is_public(mp->join_addr.ip) && ++mp->join_spray >= 8) {
+        mp->join_spray = 0;
+        for (int k = 1; k <= PUNCH_SPREAD && mp->join_addr.port + k <= 65535; k++) {
+            PcNetAddr next = mp->join_addr;
+
+            next.port = (uint16_t)(mp->join_addr.port + k);
+            raw_send(mp, &next, T_JOIN, 0, 0, p, sizeof(p));
+        }
+    }
 }
 
 int pc_mp_join(PcMp* mp, const PcNetAddr* addr, uint32_t room_id, const char* password) {
@@ -1135,6 +1167,7 @@ static void handle(PcMp* mp, const PcNetAddr* from, const uint8_t* pkt, int n, i
         PcNetAddr mapped;
 
         if (pc_stun_parse(pkt, n, mp->stun_tx, &mapped)) mp->external = mapped;
+        else if (pc_stun_parse(pkt, n, mp->stun2_tx, &mapped)) mp->external2 = mapped;
         return;
     }
     if (pkt[0] == 'd') {
@@ -1337,6 +1370,14 @@ static void internet_tick(PcMp* mp) {
         pc_net_send(mp->sock, &mp->stun, req, sizeof(req));
         mp->stun_sent = mp->now;
     }
+    if (mp->stun2.ip != 0 && mp->external2.ip == 0 && (mp->stun2_sent == 0 || mp->now - mp->stun2_sent > 5000) &&
+        (mp->mode == PC_MP_HOSTING || mp->browsing || mp->mode == PC_MP_JOINING)) {
+        uint8_t req[20];
+
+        pc_stun_request(req, mp->stun2_tx);
+        pc_net_send(mp->sock, &mp->stun2, req, sizeof(req));
+        mp->stun2_sent = mp->now;
+    }
     if (pc_dht_bootstrap_count(mp->dht) == 0) return;
     pc_dht_tick(mp->dht, mp->now);
 
@@ -1382,7 +1423,17 @@ static void internet_tick(PcMp* mp) {
             mp->dht_punch_was_running = 0;
             n = pc_dht_lookup_peers(mp->dht, 2, peers, 64);
             for (int i = 0; i < n; i++) {
-                if (peer_by_addr(mp, &peers[i]) == NULL) raw_send(mp, &peers[i], T_PUNCH, 0, 0, NULL, 0);
+                if (peer_by_addr(mp, &peers[i]) != NULL) continue;
+                raw_send(mp, &peers[i], T_PUNCH, 0, 0, NULL, 0);
+                /* a router that gives each destination its own port often
+                 * takes the next ones: the guest's way to us is likely
+                 * among them (PUNCH_SPREAD) */
+                for (int k = 1; k <= PUNCH_SPREAD && peers[i].port + k <= 65535; k++) {
+                    PcNetAddr next = peers[i];
+
+                    next.port = (uint16_t)(peers[i].port + k);
+                    raw_send(mp, &next, T_PUNCH, 0, 0, NULL, 0);
+                }
             }
         }
     } else if (mp->browsing && mp->mode == PC_MP_IDLE) {

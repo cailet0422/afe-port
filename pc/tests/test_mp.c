@@ -385,11 +385,64 @@ static void test_internet(void) {
     pc_net_close(s_node);
 }
 
+/* Two fake STUN servers: the second sees another port (a router that gives
+ * each destination its own one) when told to */
+static void stun_answer(PcNetSocket* s, int shift) {
+    uint8_t req[64], resp[32];
+    PcNetAddr from;
+    int n;
+
+    while ((n = pc_net_recv(s, &from, req, sizeof(req))) > 0) {
+        uint16_t port = (uint16_t)(from.port + shift);
+        uint32_t ip = 0xCB007107u; /* (an outside address) */
+
+        if (n < 20) continue;
+        memcpy(resp, req, 20);
+        resp[0] = 0x01; resp[1] = 0x01; resp[2] = 0; resp[3] = 12;
+        resp[20] = 0x00; resp[21] = 0x20; resp[22] = 0; resp[23] = 8;
+        resp[24] = 0; resp[25] = 0x01;
+        resp[26] = (uint8_t)((port ^ 0x2112) >> 8); resp[27] = (uint8_t)(port ^ 0x2112);
+        ip ^= 0x2112A442u;
+        resp[28] = (uint8_t)(ip >> 24); resp[29] = (uint8_t)(ip >> 16); resp[30] = (uint8_t)(ip >> 8); resp[31] = (uint8_t)ip;
+        pc_net_send(s, &from, resp, sizeof(resp));
+    }
+}
+
+static void test_nat_kind(void) {
+    for (int shift = 0; shift <= 7; shift += 7) {
+        PcMp* mp = pc_mp_new(0);
+        PcNetSocket* a = pc_net_open(0);
+        PcNetSocket* b = pc_net_open(0);
+        PcNetAddr sa = { 0x7F000001u, pc_net_port(a) }, sb = { 0x7F000001u, pc_net_port(b) };
+        PcMpHostConfig cfg;
+
+        memset(&cfg, 0, sizeof(cfg));
+        snprintf(cfg.room_name, sizeof(cfg.room_name), "Nat");
+        cfg.max_players = 2;
+        pc_mp_host(mp, &cfg);
+        CHECK(pc_mp_nat_varies(mp) == -1 && !pc_mp_external_port_known(mp));
+        pc_mp_set_stun(mp, &sa);
+        pc_mp_set_stun2(mp, &sb);
+        for (int i = 0; i < 200 && pc_mp_nat_varies(mp) == -1; i++) {
+            pc_mp_tick(mp);
+            stun_answer(a, 0);
+            stun_answer(b, shift);
+            pc_net_sleep(5);
+        }
+        CHECK(pc_mp_nat_varies(mp) == (shift != 0));
+        CHECK(pc_mp_external_port_known(mp));
+        pc_mp_free(mp);
+        pc_net_close(a);
+        pc_net_close(b);
+    }
+}
+
 int main(void) {
     srand(1234);
     pc_net_init();
     test_codes();
     test_bencode_stun();
+    test_nat_kind();
     test_rooms();
     test_internet();
     if (s_fail == 0) printf("test_mp: all passed\n");

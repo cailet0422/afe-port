@@ -233,8 +233,12 @@ static void room_view(PcMp* mp) {
             if (pc_mp_game_visit(NULL) == PC_MP_VISIT_DOWNLOADING && progress >= 0) Progress(progress);
         }
     }
-    pc_mp_game_net_status(buf, sizeof(buf));
-    Help(buf);
+    {
+        char status[1024]; /* (with what the router does, in Korean too) */
+
+        pc_mp_game_net_status(status, sizeof(status));
+        Help(status);
+    }
 
     snprintf(buf, sizeof(buf), T("Players (%d/%d)", "참가자 (%d/%d)"), n, room->max_players);
     Heading(buf);

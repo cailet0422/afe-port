@@ -93,8 +93,8 @@ static SDL_mutex* s_lock = NULL;
 static PcNetAddr s_boot[8];
 static int s_nboot = 0;
 static int s_boot_given = 0;
-static PcNetAddr s_stun;
-static int s_stun_given = 0;
+static PcNetAddr s_stun, s_stun2;
+static int s_stun_given = 0, s_stun2_given = 0;
 static int s_net_started = 0;
 static volatile int s_upnp = 0; /* 0 not tried, 1 trying, 2 open, 3 no */
 static volatile uint32_t s_upnp_ext = 0;
@@ -271,9 +271,16 @@ static int net_thread(void* unused) {
             SDL_UnlockMutex(s_lock);
         }
     }
-    if (pc_net_resolve("stun.l.google.com", 19302, &a) || pc_net_resolve("stun.cloudflare.com", 3478, &a)) {
+    /* two STUN servers: whether the router keeps one outside port for every destination */
+    if (pc_net_resolve("stun.l.google.com", 19302, &a)) {
         SDL_LockMutex(s_lock);
         s_stun = a;
+        SDL_UnlockMutex(s_lock);
+    }
+    if (pc_net_resolve("stun.cloudflare.com", 3478, &a)) {
+        SDL_LockMutex(s_lock);
+        if (s_stun.ip == 0) s_stun = a;
+        else s_stun2 = a;
         SDL_UnlockMutex(s_lock);
     }
     return 0;
@@ -504,6 +511,35 @@ void pc_mp_game_net_status(char* buf, size_t n) {
         pc_net_addr_str(&ext, a, sizeof(a));
         snprintf(buf, n, ko ? "인터넷 주소 %s%s%s" : "Internet address %s%s%s", a, port,
                  pc_mp_internet_ready(s_mp) ? (ko ? ", DHT 연결됨" : ", DHT connected") : "");
+        if (!pc_mp_port_mapped(s_mp)) {
+            /* what the router does with the game's packets: without a port
+             * it opens, guests from other networks get in only by punching */
+            const char* note = NULL;
+
+            if (pc_mp_nat_varies(s_mp) == 1) {
+                note = ko ? "\n이 공유기는 상대마다 다른 바깥 포트를 씁니다(대칭형 NAT). 이대로는 다른 네트워크에서 이 방에 "
+                            "들어오기 어렵습니다. 공유기 설정에서 UPnP를 켜거나, UDP 47070 포트를 이 기기로 포트포워딩해 "
+                            "주세요. 그러면 위에 \"(공유기 포트 열림)\"이 뜹니다."
+                          : "\nThis router gives each destination another outside port (a symmetric NAT): players from "
+                            "other networks will hardly get into this room. Turn UPnP on in the router's settings, or "
+                            "forward UDP port 47070 to this device; \"(router port open)\" then shows above.";
+            } else if (!pc_mp_external_port_known(s_mp)) {
+                note = ko ? "\n바깥 포트를 확인하지 못했습니다(STUN 응답 없음). 다른 네트워크에서 안 들어와지면 공유기에서 "
+                            "UPnP를 켜거나 UDP 47070을 포트포워딩해 주세요."
+                          : "\nThe outside port is not known (STUN did not answer). If players from other networks "
+                            "cannot get in, turn UPnP on in the router or forward UDP 47070.";
+            } else if (pc_mp_nat_varies(s_mp) == 0) {
+                note = ko ? "\n공유기가 포트를 열지 않았습니다(UPnP 없음). 홀펀칭으로 연결하는데, 상대 공유기에 따라 안 될 수 "
+                            "있습니다. 확실하게 하려면 UPnP를 켜거나 UDP 47070을 포트포워딩해 주세요."
+                          : "\nThe router opened no port (no UPnP): players from other networks get in by hole punching, "
+                            "which their router may not allow. For a sure way, turn UPnP on or forward UDP 47070.";
+            }
+            if (note != NULL) {
+                size_t used = strlen(buf);
+
+                snprintf(buf + used, n > used ? n - used : 0, "%s", note);
+            }
+        }
     } else if (s_nboot == 0 && s_net_started) {
         snprintf(buf, n, ko ? "인터넷 확인 중... (같은 네트워크는 바로 됩니다)" : "Looking for the internet... (LAN works now)");
     } else {
@@ -1292,7 +1328,7 @@ static void my_state(GAME_PLAY* play) {
 
 static void events(void) {
     PcMpEvent ev;
-    char text[256];
+    char text[768]; /* (the advice on a room that does not answer, in Korean) */
     int ko = pc_gui_korean();
 
     while (pc_mp_poll_event(s_mp, &ev)) {
@@ -1318,9 +1354,37 @@ static void events(void) {
             case PC_MP_EV_KICKED:
             case PC_MP_EV_CLOSED:
             case PC_MP_EV_DENIED:
-                pc_gui_notify(ev.kind == PC_MP_EV_KICKED ? (ko ? "호스트가 방에서 내보냈습니다" : ev.text)
-                              : ev.kind == PC_MP_EV_CLOSED ? (ko ? "방이 닫혔습니다" : ev.text)
-                                                           : ev.text);
+                if (ev.kind == PC_MP_EV_DENIED) {
+                    /* (pc_mp.c: 0 no answer, 1 full, 2 password, 3 version, 4 sent out, 5 no such room) */
+                    static const char* const why_ko[] = { "방이 응답하지 않습니다", "방이 가득 찼습니다",
+                                                          "비밀번호가 틀렸습니다", "다른 버전의 게임입니다",
+                                                          "이 방에서 내보내졌습니다", "그런 방이 없습니다" };
+                    const char* why = ko && ev.slot >= 0 && ev.slot < 6 ? why_ko[ev.slot] : ev.text;
+
+                    if (ev.slot == 0 && pc_mp_nat_varies(s_mp) == 1) {
+                        /* the guest's own router changes the port for each destination */
+                        snprintf(text, sizeof(text),
+                                 ko ? "%s. 이 기기의 공유기가 상대마다 다른 바깥 포트를 써서(대칭형 NAT) 길을 뚫기 어렵습니다. "
+                                      "호스트 공유기에서 UPnP를 켜거나 UDP 47070을 포트포워딩하면 들어갈 수 있습니다."
+                                    : "%s. This device's router gives each destination another outside port (a "
+                                      "symmetric NAT). With UPnP on, or UDP 47070 forwarded, on the host's router you "
+                                      "can get in.",
+                                 why);
+                    } else if (ev.slot == 0) {
+                        snprintf(text, sizeof(text),
+                                 ko ? "%s. 다른 네트워크라면 호스트 공유기에서 UPnP를 켜거나 UDP 47070을 호스트 기기로 "
+                                      "포트포워딩해 주세요(방 화면에 \"공유기 포트 열림\"이 뜨면 됩니다)."
+                                    : "%s. From another network: turn UPnP on, or forward UDP 47070 to the host's device, "
+                                      "on the host's router (\"router port open\" then shows on its room page).",
+                                 why);
+                    } else {
+                        snprintf(text, sizeof(text), "%s", why);
+                    }
+                    pc_gui_notify(text);
+                } else {
+                    pc_gui_notify(ev.kind == PC_MP_EV_KICKED ? (ko ? "호스트가 방에서 내보냈습니다" : ev.text)
+                                                               : (ko ? "방이 닫혔습니다" : ev.text));
+                }
                 if (s_visit != PC_MP_VISIT_THERE && !s_foreigner) {
                     slot_b_restore();
                     s_visit = PC_MP_VISIT_NONE;
@@ -1367,6 +1431,10 @@ void pc_mp_game_frame(struct game_s* game) {
         if (!s_stun_given && s_stun.ip != 0) {
             pc_mp_set_stun(s_mp, &s_stun);
             s_stun_given = 1;
+        }
+        if (!s_stun2_given && s_stun2.ip != 0) {
+            pc_mp_set_stun2(s_mp, &s_stun2);
+            s_stun2_given = 1;
         }
         SDL_UnlockMutex(s_lock);
     }

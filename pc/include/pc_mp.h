@@ -162,6 +162,14 @@ int pc_mp_port_mapped(PcMp* mp);
 /* 0 for private, carrier-NAT (100.64/10), loopback, link-local, multicast */
 int pc_mp_ip_is_public(uint32_t ip);
 int pc_mp_internet_ready(PcMp* mp); /* 1 if the DHT answered */
+/* A second STUN server: two servers seeing different outside ports of the
+ * one socket means a router that gives each destination its own port (a
+ * "symmetric" NAT), which no punching gets through reliably */
+void pc_mp_set_stun2(PcMp* mp, const PcNetAddr* server);
+/* 1 the outside port differs by destination, 0 the same for both, -1 not known yet */
+int pc_mp_nat_varies(PcMp* mp);
+/* 1 if the outside port is known (STUN answered, or a forwarded port), 0 if it is a guess */
+int pc_mp_external_port_known(PcMp* mp);
 
 /* --- Browsing --- */
 void pc_mp_browse(PcMp* mp, int on);
