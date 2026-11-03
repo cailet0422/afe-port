@@ -78,6 +78,12 @@ e+가 슬롯 B 메모리 카드의 마을로 갈 때처럼, 게임이 내 마을
     방에 닿지 않을 수 있지만(포트를 실제로는 넘겨주지 않는 공유기, 먼저 오는 패킷을 막는 Windows 방화벽), 방 쪽에서
     연 이 길은 열려 있기 때문입니다.
 
+  Windows 방화벽이 처음 묻는 창은 게임을 개인 네트워크에서만 허용하고 공용 네트워크에서는 막는 규칙을 만듭니다(막는
+  규칙이 허용 규칙보다 우선). 그러면 방이 본 것과 다른 바깥 포트에서 오는 손님 패킷(목적지마다 포트를 바꾸는 NAT, 많은
+  휴대폰 네트워크)은 버려집니다. 방 화면의 **Windows 방화벽 허용**(`pc_firewall.c`)은 관리자 동의를 받아
+  (`ShellExecuteExW` "runas") `cmd /s /c "netsh advfirewall firewall delete rule name=all program=<게임> & netsh
+  advfirewall firewall add rule ... dir=in action=allow program=<게임> protocol=UDP profile=any"`를 실행합니다.
+
   Windows의 UDP 소켓은 앞서 보낸 패킷에 대한 ICMP "port unreachable"을 다음 `recvfrom`의 오류(`WSAECONNRESET`)로
   알립니다. DHT는 사라진 노드에 많이 보내므로 이것을 끄고(`SIO_UDP_CONNRESET`), 그런 오류가 와도 뒤의 패킷을 계속
   읽습니다.

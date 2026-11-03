@@ -525,6 +525,7 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_dht.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_mp.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_upnp.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_firewall.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_mp_game.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_mp_puppet.c
     ${SYSTEM_FONT_C}
@@ -696,7 +697,7 @@ endif()
 
 if(WIN32)
     target_link_libraries(afe_pc opengl32 winmm imm32 version setupapi ole32 uuid) # ole32/uuid: folder dialog (pc_rom_dir.c)
-    target_link_libraries(afe_pc ws2_32 iphlpapi) # multiplayer (pc/src/mp)
+    target_link_libraries(afe_pc ws2_32 iphlpapi shell32) # multiplayer (pc/src/mp; shell32: pc_firewall.c)
     if(PC_UPDATER)
         target_link_libraries(afe_pc winhttp) # pc_update.c
     endif()

@@ -84,6 +84,13 @@ passes positions and messages on (a star: the host decides). A peer silent for 1
     to where that packet came from: the code's port may not reach the room (a router that does not really forward
     it, a Windows firewall closed to unasked packets) while this way, opened from the room's side, is open.
 
+  On Windows the firewall's first prompt allows the game on private networks only and adds a rule blocking it on
+  public ones (a block rule wins over any allow rule); a guest's packets that come from another outside port than the
+  room has seen (an endpoint-dependent NAT, many mobile networks) are then dropped. **Allow in Windows Firewall** on the
+  room page (`pc_firewall.c`) runs, with the administrator's consent (`ShellExecuteExW` "runas"), `cmd /s /c "netsh
+  advfirewall firewall delete rule name=all program=<the game> & netsh advfirewall firewall add rule ... dir=in
+  action=allow program=<the game> protocol=UDP profile=any"`.
+
   On Windows, a UDP socket reports an ICMP "port unreachable" for an earlier packet as an error of the next `recvfrom`
   (`WSAECONNRESET`); the DHT sends to many nodes that are gone, so this is turned off (`SIO_UDP_CONNRESET`) and such an
   error does not stop the reading of the packets after it.

@@ -277,8 +277,10 @@ Hangul is typed with your computer's Korean input method (Han/Eng key).
 - Public Wi-Fi (cafés, schools, offices), guest Wi-Fi networks, mobile data and hotspots may block it or fail to
   connect; with both sides on mobile data it most likely will not connect. Host from a home connection.
 - On Windows, allow the game if a firewall prompt appears when you first open or join a room, for **both private
-  and public networks** (Windows often counts a home connection as public). If it was allowed for one only, change it
-  in Windows Security → Firewall & network protection → Allow an app through firewall.
+  and public networks** (Windows often counts a home connection as public, and its prompt then also adds a rule
+  blocking the game there). If guests from other networks cannot get into a room on your PC, press **Allow in
+  Windows Firewall** on the multiplayer page while hosting: Windows asks for an administrator's consent, then the
+  game's old rules are replaced by one allowing it on every network.
 - On Android, keep the game on screen while playing: switching apps or turning the screen off can drop the
   connection.
 - The port can be changed with `mp_port` in `settings.ini` (default 47070).

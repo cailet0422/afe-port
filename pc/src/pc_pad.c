@@ -112,12 +112,20 @@ u32 PADRead(PADStatus* status) {
     /* Keys type into the in-game text editor while it takes input, or into
      * the chat box while it is open; once they finish the keys still held
      * are ignored until let go (the Enter that sent a line is not Start) */
-    if (pc_typing_takes_keys() || pc_gui_chat_active()) {
-        s_typed_held = held;
-        held = 0;
-    } else {
-        s_typed_held &= held;
-        held &= ~s_typed_held;
+    {
+        /* (and on the first read after: the Enter that sent a chat line
+         * closes the box in the frame it is pressed, before this read) */
+        static int s_typing_before = 0;
+        int typing = pc_typing_takes_keys() || pc_gui_chat_active();
+
+        if (typing || s_typing_before) {
+            s_typed_held = held;
+            held = 0;
+        } else {
+            s_typed_held &= held;
+            held &= ~s_typed_held;
+        }
+        s_typing_before = typing;
     }
 
     /* hotplug */
