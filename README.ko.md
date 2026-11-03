@@ -17,16 +17,16 @@
 ## 다운로드
 
 <!-- 새 릴리즈를 내면 아래 링크의 버전을 바꾼다(README.md도 함께). -->
-최신 릴리즈: **[v1.4.1](https://github.com/cailet0422/afe-port/releases/tag/v1.4.1)**
+최신 릴리즈: **[v1.4.2](https://github.com/cailet0422/afe-port/releases/tag/v1.4.2)**
 
 | 플랫폼 | 다운로드 | 필요 사항 |
 |---|---|---|
-| Windows 64비트 | [DobutsuNoMoriEPlus-v1.4.1-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.1/DobutsuNoMoriEPlus-v1.4.1-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` 포함) |
-| Windows 32비트 | [DobutsuNoMoriEPlus-v1.4.1-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.1/DobutsuNoMoriEPlus-v1.4.1-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.4.1-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.1/DobutsuNoMoriEPlus-v1.4.1-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.4.1-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.4.1/DobutsuNoMoriEPlus-v1.4.1-Android.apk) | Android 5.0 이상, ARM 32·64비트 |
+| Windows 64비트 | [DobutsuNoMoriEPlus-v1.4.2-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.2/DobutsuNoMoriEPlus-v1.4.2-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` 포함) |
+| Windows 32비트 | [DobutsuNoMoriEPlus-v1.4.2-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.2/DobutsuNoMoriEPlus-v1.4.2-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.4.2-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.2/DobutsuNoMoriEPlus-v1.4.2-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.4.2-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.4.2/DobutsuNoMoriEPlus-v1.4.2-Android.apk) | Android 5.0 이상, ARM 32·64비트 |
 
-체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.4.1/SHA256SUMS.txt) ·
+체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.4.2/SHA256SUMS.txt) ·
 이전 버전과 릴리즈 노트: [전체 릴리즈](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -252,8 +252,9 @@ v0.1.6 이하는 스스로 업데이트하지 못하니 v1.0.0은 한 번 직접
 - 카페·학교·회사 같은 공용 와이파이, 게스트 와이파이, 휴대폰 데이터·핫스팟에서는 막히거나 연결되지 않을 수
   있습니다. 특히 양쪽 다 휴대폰 데이터면 연결되지 않을 가능성이 큽니다. 방은 집 인터넷에서 여는 것이 좋습니다.
 - Windows는 처음 방을 열거나 참여할 때 방화벽 창이 뜨면 **개인 네트워크와 공용 네트워크 모두** 허용해 주세요(집
-  인터넷도 Windows가 공용 네트워크로 보는 경우가 많습니다). 한쪽만 허용했다면 Windows 보안 → 방화벽 및 네트워크
-  보호 → 방화벽에서 앱 허용에서 바꿀 수 있습니다.
+  인터넷도 Windows가 공용 네트워크로 보는 경우가 많고, 그러면 그 창이 공용 네트워크에서 게임을 막는 규칙도 만듭니다).
+  PC에서 연 방에 다른 네트워크의 손님이 못 들어오면, 방을 연 상태에서 멀티플레이 화면의 **Windows 방화벽 허용**을
+  누르세요. 관리자 확인 창이 뜨고, 게임의 예전 규칙을 지운 뒤 모든 네트워크에서 허용하는 규칙 하나를 만듭니다.
 - Android는 플레이하는 동안 게임을 화면에 띄워 두세요. 다른 앱으로 가거나 화면이 꺼지면 연결이 끊길 수 있습니다.
 - 포트는 `settings.ini`의 `mp_port`로 바꿀 수 있습니다(기본 47070).
 - 실제로 서로 다른 네트워크 사이에서는 아직 충분히 확인하지 못했습니다. 안 되면 멀티플레이 화면의 "인터넷 주소"

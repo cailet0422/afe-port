@@ -7,6 +7,7 @@
 #include "pc_settings.h"
 #include "pc_gui.h"
 #include "pc_autosave.h"
+#include "pc_firewall.h"
 #include "pc_ko.h"
 #include "pc_rom_dir.h"
 #include "ko_charset.h"
@@ -364,6 +365,13 @@ int pc_mp_game_host(const PcMpHostConfig* cfg) {
         SDL_DetachThread(SDL_CreateThread(upnp_thread, "upnp", NULL));
     }
     set_port_mapping();
+    if (pc_firewall_state() == PC_FIREWALL_IDLE) {
+        /* Windows, the firewall rule not made this run (pc_firewall.h) */
+        pc_gui_notify(pc_gui_korean()
+                          ? "다른 네트워크의 손님이 못 들어오면 멀티플레이 화면의 'Windows 방화벽 허용'을 눌러 주세요."
+                          : "If guests from other networks cannot get in, press 'Allow in Windows Firewall' on the "
+                            "multiplayer page.");
+    }
     return 1;
 }
 

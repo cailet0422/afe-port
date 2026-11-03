@@ -4,6 +4,7 @@
 extern "C" {
 #include "pc_platform.h"
 #include "pc_mp.h"
+#include "pc_firewall.h"
 #include "pc_mp_game.h"
 #include "pc_settings.h"
 #include "pc_typing.h"
@@ -200,6 +201,26 @@ static void room_view(PcMp* mp) {
                                  "공개방: 같은 네트워크와 인터넷 목록에 보입니다. 코드로도 들어올 수 있어요.")
                              : T("Private: only who has the code (and the password) gets in.",
                                  "비공개방: 코드(와 비밀번호)를 아는 사람만 들어옵니다."));
+        if (pc_firewall_state() != PC_FIREWALL_NONE) {
+            /* Windows: the firewall's prompt allows private networks only (pc_firewall.h) */
+            int fw = pc_firewall_state();
+
+            if (fw == PC_FIREWALL_RUNNING) ImGui::BeginDisabled();
+            if (SmallButton(T("Allow in Windows Firewall", "Windows 방화벽 허용"))) pc_firewall_allow_start();
+            if (fw == PC_FIREWALL_RUNNING) ImGui::EndDisabled();
+            ImGui::SameLine();
+            ImGui::TextUnformatted(fw == PC_FIREWALL_RUNNING    ? T("Waiting for Windows...", "Windows 확인을 기다리는 중...")
+                                   : fw == PC_FIREWALL_DONE     ? T("Allowed on every network.", "모든 네트워크에서 허용했습니다.")
+                                   : fw == PC_FIREWALL_DECLINED ? T("Not allowed (cancelled).", "취소되어 허용하지 않았습니다.")
+                                   : fw == PC_FIREWALL_FAILED   ? T("Could not change the firewall.", "방화벽을 바꾸지 못했습니다.")
+                                                                : "");
+            Help(T("If guests from other networks cannot get in: Windows' first prompt allows the game on private "
+                   "networks only and blocks it on public ones, which a home connection often counts as. This asks "
+                   "Windows (administrator) to allow the game on every network.",
+                   "다른 네트워크의 손님이 못 들어오면 누르세요. Windows가 처음 묻는 창은 게임을 개인 네트워크에서만 허용하고 "
+                   "공용 네트워크에서는 막는데, 집 인터넷도 공용으로 잡히는 경우가 많습니다. 관리자 확인 창이 뜨고, 게임을 "
+                   "모든 네트워크에서 허용합니다."));
+        }
     } else {
         int progress = 0;
         const char* v = visit_text(&progress);

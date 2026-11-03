@@ -17,16 +17,16 @@
 ## Download
 
 <!-- When a new release is published, update the version in these links (here and in README.ko.md). -->
-Latest release: **[v1.4.1](https://github.com/cailet0422/afe-port/releases/tag/v1.4.1)**
+Latest release: **[v1.4.2](https://github.com/cailet0422/afe-port/releases/tag/v1.4.2)**
 
 | Platform | Download | Requirements |
 |---|---|---|
-| Windows 64-bit | [DobutsuNoMoriEPlus-v1.4.1-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.1/DobutsuNoMoriEPlus-v1.4.1-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
-| Windows 32-bit | [DobutsuNoMoriEPlus-v1.4.1-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.1/DobutsuNoMoriEPlus-v1.4.1-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.4.1-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.1/DobutsuNoMoriEPlus-v1.4.1-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.4.1-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.4.1/DobutsuNoMoriEPlus-v1.4.1-Android.apk) | Android 5.0+, ARM 32/64-bit |
+| Windows 64-bit | [DobutsuNoMoriEPlus-v1.4.2-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.2/DobutsuNoMoriEPlus-v1.4.2-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
+| Windows 32-bit | [DobutsuNoMoriEPlus-v1.4.2-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.2/DobutsuNoMoriEPlus-v1.4.2-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.4.2-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.2/DobutsuNoMoriEPlus-v1.4.2-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.4.2-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.4.2/DobutsuNoMoriEPlus-v1.4.2-Android.apk) | Android 5.0+, ARM 32/64-bit |
 
-Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.4.1/SHA256SUMS.txt) ·
+Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.4.2/SHA256SUMS.txt) ·
 Older versions and release notes: [all releases](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -277,8 +277,10 @@ Hangul is typed with your computer's Korean input method (Han/Eng key).
 - Public Wi-Fi (cafés, schools, offices), guest Wi-Fi networks, mobile data and hotspots may block it or fail to
   connect; with both sides on mobile data it most likely will not connect. Host from a home connection.
 - On Windows, allow the game if a firewall prompt appears when you first open or join a room, for **both private
-  and public networks** (Windows often counts a home connection as public). If it was allowed for one only, change it
-  in Windows Security → Firewall & network protection → Allow an app through firewall.
+  and public networks** (Windows often counts a home connection as public, and its prompt then also adds a rule
+  blocking the game there). If guests from other networks cannot get into a room on your PC, press **Allow in
+  Windows Firewall** on the multiplayer page while hosting: Windows asks for an administrator's consent, then the
+  game's old rules are replaced by one allowing it on every network.
 - On Android, keep the game on screen while playing: switching apps or turning the screen off can drop the
   connection.
 - The port can be changed with `mp_port` in `settings.ini` (default 47070).
