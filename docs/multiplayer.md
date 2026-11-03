@@ -80,7 +80,13 @@ passes positions and messages on (a star: the host decides). A peer silent for 1
   - guests that are browsing announce themselves under `afe-port/v1/seek`; public rooms look that up every 15 s and send
     their room info to each, which opens the host's router for that guest (hole punching);
   - a guest joining by code announces itself under a key made from the code; the room looks it up every 8 s and sends a
-    packet to each guest found, which opens its router for the guest's next `JOIN`.
+    packet to each guest found, which opens its router for the guest's next `JOIN`. The guest then sends its `JOIN`
+    to where that packet came from: the code's port may not reach the room (a router that does not really forward
+    it, a Windows firewall closed to unasked packets) while this way, opened from the room's side, is open.
+
+  On Windows, a UDP socket reports an ICMP "port unreachable" for an earlier packet as an error of the next `recvfrom`
+  (`WSAECONNRESET`); the DHT sends to many nodes that are gone, so this is turned off (`SIO_UDP_CONNRESET`) and such an
+  error does not stop the reading of the packets after it.
 
   Keys are the first 20 bytes of a SHA-256 of the text. Joining over the internet can take up to half a minute while
   the DHT finds each side; on the same network it is immediate.

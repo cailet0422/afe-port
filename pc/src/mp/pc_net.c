@@ -100,6 +100,20 @@ static PcNetSocket* open_socket(uint16_t port, int shared) {
         return NULL;
     }
     set_nonblocking(fd);
+#ifdef _WIN32
+    {
+        /* Windows reports an ICMP "port unreachable" for an earlier
+         * packet (a DHT node gone, a guest's old port) as an error of the
+         * next recvfrom: not an error of this socket, so not at all */
+#ifndef SIO_UDP_CONNRESET
+#define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR, 12)
+#endif
+        BOOL report = FALSE;
+        DWORD bytes = 0;
+
+        WSAIoctl(fd, SIO_UDP_CONNRESET, &report, sizeof(report), NULL, 0, &bytes, NULL, NULL);
+    }
+#endif
     {
         int size = 1 << 20;
         setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (const char*)&size, sizeof(size));
@@ -158,11 +172,22 @@ int pc_net_recv(PcNetSocket* s, PcNetAddr* from, void* buf, size_t cap) {
     if (s == NULL) {
         return -1;
     }
-    n = (int)recvfrom(s->fd, (char*)buf, (int)cap, 0, (struct sockaddr*)&sa, &len);
+    for (int tries = 0;; tries++) {
+        len = sizeof(sa);
+        n = (int)recvfrom(s->fd, (char*)buf, (int)cap, 0, (struct sockaddr*)&sa, &len);
+#ifdef _WIN32
+        /* a port that refused an earlier packet (ICMP): not this socket's
+         * error, and the packets after it are still to be read */
+        if (n < 0 && WSAGetLastError() == WSAECONNRESET && tries < 64) continue;
+#else
+        if (n < 0 && (errno == ECONNREFUSED || errno == EINTR) && tries < 64) continue;
+#endif
+        break;
+    }
     if (n < 0) {
 #ifdef _WIN32
         int err = WSAGetLastError();
-        /* a port that refused an earlier packet (ICMP) is not this socket's error */
+
         return err == WSAEWOULDBLOCK || err == WSAECONNRESET ? 0 : -1;
 #else
         return errno == EAGAIN || errno == EWOULDBLOCK || errno == ECONNREFUSED || errno == EINTR ? 0 : -1;
