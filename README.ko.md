@@ -17,16 +17,16 @@
 ## 다운로드
 
 <!-- 새 릴리즈를 내면 아래 링크의 버전을 바꾼다(README.md도 함께). -->
-최신 릴리즈: **[v1.4.5](https://github.com/cailet0422/afe-port/releases/tag/v1.4.5)**
+최신 릴리즈: **[v1.4.6](https://github.com/cailet0422/afe-port/releases/tag/v1.4.6)**
 
 | 플랫폼 | 다운로드 | 필요 사항 |
 |---|---|---|
-| Windows 64비트 | [DobutsuNoMoriEPlus-v1.4.5-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.5/DobutsuNoMoriEPlus-v1.4.5-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` 포함) |
-| Windows 32비트 | [DobutsuNoMoriEPlus-v1.4.5-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.5/DobutsuNoMoriEPlus-v1.4.5-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.4.5-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.5/DobutsuNoMoriEPlus-v1.4.5-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.4.5-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.4.5/DobutsuNoMoriEPlus-v1.4.5-Android.apk) | Android 5.0 이상, ARM 32·64비트 |
+| Windows 64비트 | [DobutsuNoMoriEPlus-v1.4.6-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.6/DobutsuNoMoriEPlus-v1.4.6-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` 포함) |
+| Windows 32비트 | [DobutsuNoMoriEPlus-v1.4.6-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.6/DobutsuNoMoriEPlus-v1.4.6-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.4.6-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.6/DobutsuNoMoriEPlus-v1.4.6-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.4.6-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.4.6/DobutsuNoMoriEPlus-v1.4.6-Android.apk) | Android 5.0 이상, ARM 32·64비트 |
 
-체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.4.5/SHA256SUMS.txt) ·
+체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.4.6/SHA256SUMS.txt) ·
 이전 버전과 릴리즈 노트: [전체 릴리즈](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -82,7 +82,8 @@
 1. 디스크 이미지를 폰의 폴더에 둡니다(예: `Download/동물의숲`. `Download` 바로 아래는 고를 수 없으니
    그 안에 폴더를 만듭니다).
 2. APK를 설치하고(출처를 알 수 없는 앱 허용) 실행한 뒤, **폴더 선택**으로 그 폴더를 고릅니다.
-3. 화면 터치 게임패드나 실제 게임패드로 플레이합니다.
+3. 화면 터치 게임패드나 실제 게임패드로 플레이합니다. 터치 게임패드의 START 왼쪽 **SAVE**를 누르면 바로
+   저장합니다.
 
 APK는 정식 키로 서명되어 있어(인증서 SHA-256
 `db6fc1ad60b6b6d980bee0990f120ef481f195f117729fa194b124d14752e8b7`) 새 버전을 덮어서 설치해도 세이브가
@@ -119,6 +120,10 @@ v0.1.6 이하는 스스로 업데이트하지 못하니 v1.0.0은 한 번 직접
 새 마을도 같은 방법으로 저장합니다. 첫 저장 때 하니와에서 처음 저장할 때처럼 메모리 카드에 마을 파일을 만듭니다.
 첫날은 하니와도 주민을 한 명이라도 만난 뒤부터 저장해 주므로, 자동 저장도 그때부터 시작합니다. 처음 저장하면
 알림이 뜹니다.
+
+바로 저장하려면 **Ctrl+S**(PC)나 터치 게임패드의 START 왼쪽 **SAVE**를 누르세요. 집 안 방에서도, 자동 저장을 꺼
+두었어도 됩니다. 저장했다는 알림이 뜨고, 아직 저장할 수 없을 때는 이유를 알려 줍니다(대화·메뉴 중, 동작 중, 섬,
+첫날 주민을 만나기 전).
 
 하니와에서 저장하는 것도 그대로 됩니다. 마을이 늘 저장되므로 저장하지 않고 꺼서 처음부터 다시 할 수는 없습니다.
 새로 시작하려면 **설정** → **게임** → **마을 데이터** → **마을 데이터 초기화...**를 쓰세요. 메모리 카드마다 있는
@@ -281,6 +286,7 @@ v0.1.6 이하는 스스로 업데이트하지 못하니 v1.0.0은 한 번 직접
 | Start | Enter |
 | 마을 지도 (열기 / 닫기) | M |
 | 채팅 (멀티플레이 중) | T |
+| 바로 저장 | Ctrl+S |
 | 일시정지 메뉴 | Esc |
 
 메뉴는 마우스(클릭, 휠), 방향키와 Enter·Esc, 또는 게임패드(십자키, A, B)로 씁니다. 조작은 일시정지 메뉴 → **설정**

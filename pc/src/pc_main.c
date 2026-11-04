@@ -377,6 +377,11 @@ int pc_platform_poll_events(void) {
                 if (g_pc_paused) {
                     break; /* swallow all keys while paused */
                 }
+                if (event.key.keysym.scancode == SDL_SCANCODE_S && (event.key.keysym.mod & KMOD_CTRL) &&
+                    !event.key.repeat && !pc_typing_takes_keys() && !pc_gui_chat_active()) {
+                    pc_autosave_request_save(); /* Ctrl+S: save now (pc_pad.c keeps S off the stick) */
+                    break;
+                }
                 if (event.key.keysym.sym == SDLK_F3 && !event.key.repeat) {
                     g_pc_no_framelimit ^= 1;
                     printf("[PC] Frame limiter %s\n", g_pc_no_framelimit ? "OFF" : "ON");

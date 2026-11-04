@@ -29,6 +29,7 @@
 #include "m_scene.h"
 #include "m_collision_bg.h"
 #include "m_weather_type.h"
+#include "m_item_name.h"
 #include "pc_ko.h"
 #include "pc_platform.h"
 #include "charmap.h"
@@ -69,6 +70,7 @@ typedef enum {
     SCRIPT_MENU,
     SCRIPT_VOICELOG,
     SCRIPT_ITEM,
+    SCRIPT_NAMES,
     SCRIPT_NOJOB,
     SCRIPT_JOBDONE,
     SCRIPT_BELLS,
@@ -275,6 +277,11 @@ int pc_input_script_load(const char* path) {
             ev.value[0] = fields >= 3 ? (u32)strtoul(arg, NULL, 10) : 1;
         } else if (strcmp(word, "ITEM") == 0) {
             ev.kind = SCRIPT_ITEM;
+        } else if (strcmp(word, "NAMES") == 0 && fields >= 3) {
+            /* NAMES first [count]: the names of items (hex ids) */
+            ev.kind = SCRIPT_NAMES;
+            ev.value[0] = (u32)strtoul(arg, NULL, 16);
+            ev.value[1] = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : 1;
         } else if (strcmp(word, "NOJOB") == 0) {
             ev.kind = SCRIPT_NOJOB;
         } else if (strcmp(word, "JOBDONE") == 0) {
@@ -1166,6 +1173,19 @@ static void debug_command(const ScriptEvent* ev) {
                                  menu_scratch);
             printf("[INPUT] frame %u: submenu %u (%u, %u)\n", (unsigned)s_frame, (unsigned)ev->value[0],
                    (unsigned)ev->value[1], (unsigned)ev->value[2]);
+        }
+    } else if (ev->kind == SCRIPT_NAMES) {
+        for (i = 0; i < (int)ev->value[1] && i < 4096; i++) {
+            mActor_name_t item = (mActor_name_t)(ev->value[0] + (u32)i);
+            u8 raw[mIN_ITEM_NAME_LEN];
+            const u8* str = raw;
+            char name[96];
+            int len;
+
+            mIN_copy_name_str(raw, item);
+            len = pc_ko_expand(raw, mIN_ITEM_NAME_LEN, 5, &str);
+            pc_mp_game_name_utf8(str, len, name, sizeof(name));
+            printf("[INPUT] frame %u: name %04X %s\n", (unsigned)s_frame, (unsigned)item, name);
         }
     } else if (ev->kind == SCRIPT_ITEM) {
         /* what a menu chose, e.g. the song a request to K.K. named */

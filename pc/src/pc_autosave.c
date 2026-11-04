@@ -17,6 +17,7 @@
 #include "m_private.h"
 #include "m_scene_table.h"
 #include "m_event.h"
+#include "m_flashrom.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,6 +25,7 @@
 
 extern int mCD_PC_AutoSaveSnapshot(Save* out, GAME_PLAY* play);
 extern int mCD_PC_FirstSave(void);
+extern void aMR_PC_StorageIntoCopy(const void* floor, void* copy, int size);
 extern int mCD_PC_PatchTraveller(Save* file_save);
 extern int mCD_PC_LandFileInfo(const char** name, int* file_size, int* save_ofs0, int* save_ofs1);
 extern const char* pc_card_dir(s32 chan);
@@ -90,19 +92,27 @@ static int town_card(u16 land_id, const u8* land_name) {
     return -1;
 }
 
-static int save_now(GAME_PLAY* play, const char* why) {
+/* save_now's results */
+#define SAVE_FAILED 0
+#define SAVE_DONE 1
+#define SAVE_NOT_ALLOWED (-1) /* the game would not save now (the gyroid neither) */
+
+/* force: a save asked for by hand (pc_autosave_request_save), also with the
+ * autosave off; room: the player is in a house's room, whose storage
+ * furniture holds its items out of the Save while the room is loaded */
+static int save_now(GAME_PLAY* play, const char* why, int force, int room) {
     Private_c* priv = Common_Get(now_private);
     int chan;
 
-    if (!g_pc_settings.autosave || s_stopped || (g_pc_deterministic && !g_pc_autosave_test) || priv == NULL ||
-        !buffers()) {
-        return 0;
+    if ((!g_pc_settings.autosave && !force) || s_stopped || (g_pc_deterministic && !g_pc_autosave_test) ||
+        priv == NULL || !buffers()) {
+        return SAVE_FAILED;
     }
     if (Common_Get(player_no) == mPr_FOREIGNER) {
         /* visiting another town (the multiplayer's trip): our own town as it
          * was left at the station, with our pockets and bells of now */
         chan = town_card(priv->player_ID.land_id, priv->player_ID.land_name);
-        if (chan < 0 || !mCD_PC_PatchTraveller(s_file) || !file_part(chan, 1, s_file, NULL)) return 0;
+        if (chan < 0 || !mCD_PC_PatchTraveller(s_file) || !file_part(chan, 1, s_file, NULL)) return SAVE_FAILED;
         printf("[AUTOSAVE] %s: the traveller's own town (card %c)\n", why, 'A' + chan);
     } else {
         if (!mCD_PC_AutoSaveSnapshot(s_buf, play)) {
@@ -110,7 +120,7 @@ static int save_now(GAME_PLAY* play, const char* why) {
              * make it the game's way, then write the town as it is now */
             if (!mCD_PC_FirstSave()) {
                 if (g_pc_verbose) printf("[AUTOSAVE] %s: not now (the gyroid would not save either)\n", why);
-                return 0;
+                return SAVE_NOT_ALLOWED;
             }
             printf("[AUTOSAVE] %s: the town's first save (a new town file)\n", why);
             if (!s_first_noted) {
@@ -120,27 +130,36 @@ static int save_now(GAME_PLAY* play, const char* why) {
             }
             if (!mCD_PC_AutoSaveSnapshot(s_buf, play)) {
                 s_last_ms = SDL_GetTicks();
-                return 1; /* (the first save is this one) */
+                return SAVE_DONE; /* (the first save is this one) */
             }
+        }
+        if (room) {
+            /* the items in the room's storage furniture, where leaving the
+             * room puts them back (afe-decomp ac_my_room.c) */
+            aMR_PC_StorageIntoCopy(&Common_Get(save).save, &s_buf->save, (int)sizeof(Save_t));
+            s_buf->save.save_check.checksum = 0;
+            s_buf->save.save_check.checksum = mFRm_GetFlatCheckSum((u16*)s_buf, sizeof(Save), 0);
         }
         chan = town_card(s_buf->save.land_info.id, s_buf->save.land_info.name);
         if (chan < 0 || s_file->save.copy_protect != s_buf->save.copy_protect) {
             if (g_pc_verbose) printf("[AUTOSAVE] %s: no file of this town (card %d)\n", why, chan);
-            return 0; /* not this save's file */
+            return SAVE_FAILED; /* not this save's file */
         }
-        if (!file_part(chan, 1, s_buf, NULL)) return 0;
+        if (!file_part(chan, 1, s_buf, NULL)) return SAVE_FAILED;
         printf("[AUTOSAVE] %s (card %c)\n", why, 'A' + chan);
     }
     s_last_ms = SDL_GetTicks();
-    return 1;
+    return SAVE_DONE;
 }
 
 /* where the town (or a shop, a villager's house) is the Save itself, and
  * nothing in hand or on the way: outdoors in a town, or a building that is
- * not a player's room (whose storage furniture holds items out of the Save) */
-static int s_why = 0; /* (the last reason for waiting, for the log) */
+ * not a player's room (whose storage furniture holds items out of the Save).
+ * A save by hand may also be in a room (save_now puts the items back into
+ * its copy) and needs no wait. */
+static int s_why = 0; /* (the last reason for waiting, for the log and the save by hand) */
 
-static int quiet_place(GAME_PLAY* play, int outdoors_only) {
+static int quiet_place(GAME_PLAY* play, int outdoors_only, int by_hand) {
     PLAYER_ACTOR* pl;
     int type, idx;
 
@@ -150,7 +169,7 @@ static int quiet_place(GAME_PLAY* play, int outdoors_only) {
     if (!mMsg_CHECK_MAINHIDE() || play->submenu.process_status != mSM_PROCESS_WAIT) return 0;
     s_why = 3;
     type = mFI_GET_TYPE(mFI_GetFieldId());
-    if (type == mFI_FIELD_PLAYER0_ROOM || mFI_CheckInIsland()) return 0;
+    if ((type == mFI_FIELD_PLAYER0_ROOM && !by_hand) || mFI_CheckInIsland()) return 0;
     if (outdoors_only && (Save_Get(scene_no) != SCENE_FG || type != mFI_FIELD_FG)) return 0;
     s_why = 4;
     pl = GET_PLAYER_ACTOR(play);
@@ -162,7 +181,43 @@ static int quiet_place(GAME_PLAY* play, int outdoors_only) {
         return 0;
     }
     s_why = 5;
-    return SDL_GetTicks() - s_quiet_since >= QUIET_MS;
+    return by_hand || SDL_GetTicks() - s_quiet_since >= QUIET_MS;
+}
+
+/* The save by hand (the touch pad's SAVE, Ctrl+S): now if it can be, or a
+ * notice saying why not */
+static int s_by_hand = 0;
+
+void pc_autosave_request_save(void) {
+    s_by_hand = 1;
+}
+
+static void save_by_hand(GAME_PLAY* play) {
+    int ko = pc_gui_korean();
+    const char* note;
+    int r;
+
+    if (!quiet_place(play, 0, 1)) {
+        switch (s_why) {
+            case 2: note = ko ? "대화나 메뉴를 닫은 뒤에 저장하세요." : "Close the conversation or menu first, then save."; break;
+            case 3: note = ko ? "섬에서는 저장할 수 없습니다." : "You cannot save on the island."; break;
+            case 4: note = ko ? "하던 동작을 끝낸 뒤에 저장하세요." : "Finish what you are doing first, then save."; break;
+            default: note = ko ? "지금은 저장할 수 없습니다. 게임 화면에서 다시 해 주세요." : "You cannot save right now."; break;
+        }
+        pc_gui_notify(note);
+        printf("[AUTOSAVE] by hand: not now (%d)\n", s_why);
+        return;
+    }
+    r = save_now(play, "by hand", 1, mFI_GET_TYPE(mFI_GetFieldId()) == mFI_FIELD_PLAYER0_ROOM);
+    if (r == SAVE_DONE) {
+        note = ko ? "저장했습니다." : "Saved.";
+    } else if (r == SAVE_NOT_ALLOWED) {
+        note = ko ? "지금은 게임이 저장을 허용하지 않습니다. 첫날은 주민과 인사한 뒤부터 저장됩니다."
+                  : "The game does not allow saving now. On the first day, saving starts once you have met a villager.";
+    } else {
+        note = ko ? "저장하지 못했습니다." : "Could not save.";
+    }
+    pc_gui_notify(note);
 }
 
 void pc_autosave_scene_end(void) {
@@ -175,7 +230,7 @@ void pc_autosave_scene_end(void) {
         return;
     }
     if (s_last_ms != 0 && SDL_GetTicks() - s_last_ms < SCENE_GAP_MS) return;
-    save_now(NULL, "between scenes");
+    save_now(NULL, "between scenes", 0, 0);
 }
 
 void pc_autosave_frame(struct game_s* game) {
@@ -183,20 +238,24 @@ void pc_autosave_frame(struct game_s* game) {
     u32 every = (u32)g_pc_settings.autosave_minutes * 60000u;
 
     s_play = play;
+    if (s_by_hand) {
+        s_by_hand = 0;
+        save_by_hand(play);
+    }
     if (play == NULL || !g_pc_settings.autosave) return;
     if (s_last_ms == 0) s_last_ms = SDL_GetTicks(); /* (from the start of play) */
     if (SDL_GetTicks() - s_last_ms < every) return;
-    if (!quiet_place(play, 1)) {
+    if (!quiet_place(play, 1, 0)) {
         if (g_pc_verbose && SDL_GetTicks() % 5000 < 20) printf("[AUTOSAVE] waiting for a quiet moment outside (%d)\n", s_why);
         return;
     }
-    if (!save_now(play, "on the timer")) s_last_ms = SDL_GetTicks() - every + 30000; /* again in 30 s */
+    if (save_now(play, "on the timer", 0, 0) != SAVE_DONE) s_last_ms = SDL_GetTicks() - every + 30000; /* again in 30 s */
 }
 
 void pc_autosave_quit(void) {
     /* the menu's Quit, the window closed: as things are now, if they can be */
-    if (s_play != NULL && quiet_place(s_play, 0)) {
-        save_now(s_play, "on quitting");
+    if (s_play != NULL && quiet_place(s_play, 0, 0)) {
+        save_now(s_play, "on quitting", 0, 0);
     }
 }
 

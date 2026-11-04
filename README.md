@@ -17,16 +17,16 @@
 ## Download
 
 <!-- When a new release is published, update the version in these links (here and in README.ko.md). -->
-Latest release: **[v1.4.5](https://github.com/cailet0422/afe-port/releases/tag/v1.4.5)**
+Latest release: **[v1.4.6](https://github.com/cailet0422/afe-port/releases/tag/v1.4.6)**
 
 | Platform | Download | Requirements |
 |---|---|---|
-| Windows 64-bit | [DobutsuNoMoriEPlus-v1.4.5-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.5/DobutsuNoMoriEPlus-v1.4.5-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
-| Windows 32-bit | [DobutsuNoMoriEPlus-v1.4.5-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.5/DobutsuNoMoriEPlus-v1.4.5-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.4.5-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.5/DobutsuNoMoriEPlus-v1.4.5-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.4.5-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.4.5/DobutsuNoMoriEPlus-v1.4.5-Android.apk) | Android 5.0+, ARM 32/64-bit |
+| Windows 64-bit | [DobutsuNoMoriEPlus-v1.4.6-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.6/DobutsuNoMoriEPlus-v1.4.6-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
+| Windows 32-bit | [DobutsuNoMoriEPlus-v1.4.6-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.6/DobutsuNoMoriEPlus-v1.4.6-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.4.6-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.6/DobutsuNoMoriEPlus-v1.4.6-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.4.6-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.4.6/DobutsuNoMoriEPlus-v1.4.6-Android.apk) | Android 5.0+, ARM 32/64-bit |
 
-Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.4.5/SHA256SUMS.txt) ·
+Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.4.6/SHA256SUMS.txt) ·
 Older versions and release notes: [all releases](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -91,7 +91,8 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
    apps pick the root of `Download`, so use a subfolder.)
 2. Install the APK (allow installing from unknown sources), open it, and pick that folder with
    **Choose folder**.
-3. Play with the on-screen touch gamepad or a physical controller.
+3. Play with the on-screen touch gamepad or a physical controller. **SAVE**, left of START on the touch gamepad,
+   saves right away.
 
 The APK is signed with a release key (certificate SHA-256
 `db6fc1ad60b6b6d980bee0990f120ef481f195f117729fa194b124d14752e8b7`), so new versions install over the
@@ -129,6 +130,10 @@ The game saves your town as the gyroid's "save and continue" would, without aski
 A new town is saved the same way: its first save creates the town file on the memory card, as a first save at the
 gyroid would. On the first day this starts once you have met a villager, as the gyroid itself only saves from then
 on; a notice says when the town has been saved for the first time.
+
+To save right away, press **Ctrl+S** (PC) or **SAVE** left of START on the touch gamepad. This also works in your
+house's rooms and with the autosave turned off; a notice says it saved, or why it cannot yet (in a conversation or a
+menu, in the middle of an action, on the island, or on the first day before you have met a villager).
 
 You can still save at the gyroid as usual. Since every town is saved, quitting without saving no longer starts you
 over: to start a new game, use **Settings** → **Gameplay** → **Town data** → **Delete town...**. It shows the town on
@@ -308,6 +313,7 @@ Hangul is typed with your computer's Korean input method (Han/Eng key).
 | Start | Enter |
 | Town map (open / close) | M |
 | Chat (in multiplayer) | T |
+| Save now | Ctrl+S |
 | Pause menu | Esc |
 
 In the menus, use the mouse (click, wheel), the arrow keys with Enter and Esc, or a gamepad (D-pad, A,
