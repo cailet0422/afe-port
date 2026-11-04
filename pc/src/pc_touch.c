@@ -3,6 +3,7 @@
 #include "pc_pause_menu.h"
 #include "pc_settings.h"
 #include "pc_typing.h"
+#include "pc_autosave.h"
 #include "pc_ko.h"
 #include "pc_minimap.h"
 #include "pc_gui.h"
@@ -27,6 +28,7 @@ enum {
     CTRL_R,
     CTRL_Z,
     CTRL_START,
+    CTRL_SAVE, /* not a pad button: saves (pc_autosave_request_save) */
     CTRL_UP,
     CTRL_DOWN,
     CTRL_LEFT,
@@ -56,6 +58,7 @@ static const Control s_controls[CTRL_COUNT] = {
     { PAD_TRIGGER_R, { 0x80, 0x80, 0x88 }, "R" },
     { PAD_TRIGGER_Z, { 0x70, 0x58, 0xC8 }, "Z" },
     { PAD_BUTTON_START, { 0x80, 0x80, 0x88 }, "START" },
+    { 0, { 0x40, 0x90, 0xC8 }, "SAVE" },
     { PAD_BUTTON_UP, { 0x70, 0x70, 0x78 }, NULL },
     { PAD_BUTTON_DOWN, { 0x70, 0x70, 0x78 }, NULL },
     { PAD_BUTTON_LEFT, { 0x70, 0x70, 0x78 }, NULL },
@@ -100,6 +103,7 @@ static void layout(void) {
     s_shapes[CTRL_R] = (Shape){ w - 0.17f * u, 0.08f * u, 0.13f * u, 0.05f * u };
     s_shapes[CTRL_Z] = (Shape){ w - 0.17f * u, 0.20f * u, 0.09f * u, 0.045f * u };
     s_shapes[CTRL_START] = (Shape){ w * 0.5f, 0.07f * u, 0.12f * u, 0.045f * u };
+    s_shapes[CTRL_SAVE] = (Shape){ w * 0.5f + 0.23f * u, 0.07f * u, 0.09f * u, 0.045f * u };
     s_shapes[CTRL_UP] = (Shape){ dx, dy - 0.08f * u, 0.045f * u, 0.045f * u };
     s_shapes[CTRL_DOWN] = (Shape){ dx, dy + 0.08f * u, 0.045f * u, 0.045f * u };
     s_shapes[CTRL_LEFT] = (Shape){ dx - 0.08f * u, dy, 0.045f * u, 0.045f * u };
@@ -192,7 +196,9 @@ void pc_touch_finger_down(s64 id, float x, float y) {
      * a thumb that lands there and moves steers */
     f->minimap_tap = f->ctrl == CTRL_NONE && pc_minimap_at(x, y);
 
-    if (f->ctrl != CTRL_NONE) {
+    if (f->ctrl == CTRL_SAVE) {
+        pc_autosave_request_save();
+    } else if (f->ctrl != CTRL_NONE) {
     } else if (in_stick_zone(f->x, f->y) && !stick_held()) {
         float r = s_stick_radius;
 
@@ -444,10 +450,12 @@ static void triangle(float x0, float y0, float x1, float y1, float x2, float y2,
 static const u8* glyph(char c) {
     static const u8 a[7] = { 0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11 };
     static const u8 b[7] = { 0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E };
+    static const u8 e[7] = { 0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F };
     static const u8 l[7] = { 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F };
     static const u8 r[7] = { 0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11 };
     static const u8 s[7] = { 0x0F, 0x10, 0x10, 0x0E, 0x01, 0x01, 0x1E };
     static const u8 t[7] = { 0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04 };
+    static const u8 v[7] = { 0x11, 0x11, 0x11, 0x11, 0x11, 0x0A, 0x04 };
     static const u8 x[7] = { 0x11, 0x11, 0x0A, 0x04, 0x0A, 0x11, 0x11 };
     static const u8 y[7] = { 0x11, 0x11, 0x0A, 0x04, 0x04, 0x04, 0x04 };
     static const u8 z[7] = { 0x1F, 0x01, 0x02, 0x04, 0x08, 0x10, 0x1F };
@@ -455,10 +463,12 @@ static const u8* glyph(char c) {
     switch (c) {
         case 'A': return a;
         case 'B': return b;
+        case 'E': return e;
         case 'L': return l;
         case 'R': return r;
         case 'S': return s;
         case 'T': return t;
+        case 'V': return v;
         case 'X': return x;
         case 'Y': return y;
         case 'Z': return z;

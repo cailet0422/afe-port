@@ -30,6 +30,9 @@ void pc_autosave_frame(struct game_s* game);
 void pc_autosave_scene_end(void);
 /* Before the game quits */
 void pc_autosave_quit(void);
+/* A save by hand (the touch pad's SAVE, Ctrl+S): done in the next frame, or
+ * a notice says why it cannot be (also with the autosave off) */
+void pc_autosave_request_save(void);
 /* An outdoor unit written (pc_mp_fg_written): the game busy with a unit */
 void pc_autosave_unit_written(unsigned short old_item, unsigned short new_item);
 /* afe-decomp m_card.c */

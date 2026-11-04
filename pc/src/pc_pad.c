@@ -109,6 +109,14 @@ u32 PADRead(PADStatus* status) {
      * the letter it types is not typed into the box */
     held &= ~(1u << PC_BIND_CHAT);
 
+    /* Ctrl+S saves (pc_main.c): S (the stick down by default) is left out
+     * while Ctrl is held, and then until it is let go */
+    if (keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_RCTRL]) {
+        for (int i = 0; i < PC_BIND_COUNT; i++) {
+            if (g_pc_keybindings.key[i] == SDL_SCANCODE_S) s_typed_held |= held & (1u << i);
+        }
+    }
+
     /* Keys type into the in-game text editor while it takes input, or into
      * the chat box while it is open; once they finish the keys still held
      * are ignored until let go (the Enter that sent a line is not Start) */

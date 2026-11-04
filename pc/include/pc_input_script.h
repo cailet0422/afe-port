@@ -25,6 +25,7 @@
  *                                     the town just loaded is one (Resetti comes)
  *     <frame> CATCH <id>              print a villager's catchphrase bytes
  *     <frame> ITEM                    print the item a menu chose (a song requested of K.K.)
+ *     <frame> NAMES <item> [<n>]      print the names of n items from that hex id
  *     <frame> NOJOB                   debug: end the part-time job for Nook (day one), so
  *                                     the shops, post office and houses act as later on
  *     <frame> JOBDONE                 debug: the part-time job finished as the game ends it
