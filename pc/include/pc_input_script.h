@@ -26,6 +26,9 @@
  *     <frame> CATCH <id>              print a villager's catchphrase bytes
  *     <frame> ITEM                    print the item a menu chose (a song requested of K.K.)
  *     <frame> NAMES <item> [<n>]      print the names of n items from that hex id
+ *     <frame> SOUND <kind> <id> <n> [<frames>]  play n sounds from that hex id, each for
+ *                                     frames (120): BGM, SE (system), HANIWA (a gyroid's
+ *                                     rhythm, 1-127), INST (a furniture instrument)
  *     <frame> NOJOB                   debug: end the part-time job for Nook (day one), so
  *                                     the shops, post office and houses act as later on
  *     <frame> JOBDONE                 debug: the part-time job finished as the game ends it
