@@ -30,6 +30,8 @@
 #include "m_collision_bg.h"
 #include "m_weather_type.h"
 #include "m_item_name.h"
+#include "m_melody.h"
+#include "audio.h"
 #include "pc_ko.h"
 #include "pc_platform.h"
 #include "charmap.h"
@@ -71,6 +73,7 @@ typedef enum {
     SCRIPT_VOICELOG,
     SCRIPT_ITEM,
     SCRIPT_NAMES,
+    SCRIPT_SOUND,
     SCRIPT_NOJOB,
     SCRIPT_JOBDONE,
     SCRIPT_BELLS,
@@ -196,6 +199,7 @@ int pc_input_script_load(const char* path) {
         char arg[128] = "";
         char arg2[32] = "";
         char arg3[32] = "";
+        char arg4[32] = "";
         char* hash = strchr(line, '#');
         unsigned long frame;
         int fields;
@@ -204,7 +208,7 @@ int pc_input_script_load(const char* path) {
         if (hash != NULL) {
             *hash = '\0';
         }
-        fields = sscanf(line, "%lu %63s %127s %31s %31s", &frame, word, arg, arg2, arg3);
+        fields = sscanf(line, "%lu %63s %127s %31s %31s %31s", &frame, word, arg, arg2, arg3, arg4);
         if (fields <= 0) {
             continue; /* blank or comment */
         }
@@ -277,6 +281,17 @@ int pc_input_script_load(const char* path) {
             ev.value[0] = fields >= 3 ? (u32)strtoul(arg, NULL, 10) : 1;
         } else if (strcmp(word, "ITEM") == 0) {
             ev.kind = SCRIPT_ITEM;
+        } else if (strcmp(word, "SOUND") == 0 && fields >= 5) {
+            /* SOUND kind first count [frames]: play sounds one after another
+             * (BGM, SE, HANIWA, INST; hex first, decimal count and frames) */
+            ev.kind = SCRIPT_SOUND;
+            ev.value[0] = strcmp(arg, "BGM") == 0 ? 0 : strcmp(arg, "SE") == 0 ? 1 : strcmp(arg, "HANIWA") == 0 ? 2 : 3;
+            ev.value[1] = (u32)strtoul(arg2, NULL, 16);
+            ev.value[2] = (u32)strtoul(arg3, NULL, 10);
+            ev.duration = 120;
+            if (fields >= 6) {
+                ev.duration = (u32)strtoul(arg4, NULL, 10);
+            }
         } else if (strcmp(word, "NAMES") == 0 && fields >= 3) {
             /* NAMES first [count]: the names of items (hex ids) */
             ev.kind = SCRIPT_NAMES;
@@ -1013,6 +1028,58 @@ static Animal_c* find_animal(u16 npc_id) {
 /* Debug commands for testing what the game only does now and then (a
  * villager asking for a new catchphrase, a stationery item in the pockets,
  * Resetti's later visits) */
+/* SOUND: one sound after another, each for some frames */
+static struct {
+    int active;
+    int kind; /* 0 BGM, 1 SE (system trigger), 2 HANIWA (a gyroid's rhythm), 3 INST (furniture instrument) */
+    u32 next, left, frames, timer, cur;
+} s_sweep;
+#define SWEEP_ID 0x7E570000u /* the rhythm and instrument owner id */
+
+static void sound_sweep_frame(void) {
+    GAME_PLAY* play = (GAME_PLAY*)gamePT;
+    PLAYER_ACTOR* pl;
+    xyz_t pos = { 0.0f, 0.0f, 0.0f };
+
+    if (!s_sweep.active) return; /* (no sweep: nothing to touch) */
+    if (play == NULL || play->game.exec != play_main) return;
+    pl = GET_PLAYER_ACTOR(play);
+    if (pl != NULL) pos = ((ACTOR*)pl)->world.position;
+    if (s_sweep.timer == 0) {
+        /* the one before ends */
+        if (s_sweep.cur != 0xFFFFFFFF) {
+            if (s_sweep.kind == 0) sAdo_BgmStop((u16)s_sweep.cur);
+            if (s_sweep.kind == 2) sAdo_RhythmStop(SWEEP_ID);
+        }
+        if (s_sweep.left == 0) {
+            printf("[INPUT] frame %u: sound sweep done\n", (unsigned)s_frame);
+            s_sweep.cur = 0xFFFFFFFF;
+            s_sweep.active = 0;
+            return;
+        }
+        s_sweep.cur = s_sweep.next++;
+        s_sweep.left--;
+        s_sweep.timer = s_sweep.frames;
+        printf("[INPUT] frame %u: sound %d %X\n", (unsigned)s_frame, s_sweep.kind, (unsigned)s_sweep.cur);
+        fflush(stdout);
+        switch (s_sweep.kind) {
+            case 0: sAdo_BgmStart((u16)s_sweep.cur); break;
+            case 1: sAdo_SysTrgStart((u16)s_sweep.cur); break;
+            case 2: sAdo_RhythmStart(SWEEP_ID, 1, 0); break;
+            default: break;
+        }
+    }
+    if (s_sweep.kind == 2) {
+        sAdo_RhythmPos(SWEEP_ID, (u8)s_sweep.cur, &pos);
+    } else if (s_sweep.kind == 3 && s_sweep.timer % 30 == 0) {
+        static u8 melody[16];
+
+        mMld_TransformMelodyData_u64_2_u8(melody, Save_Get(melody));
+        sAdo_FurnitureInst(SWEEP_ID + s_sweep.timer, (u8)s_sweep.cur, melody, &pos);
+    }
+    s_sweep.timer--;
+}
+
 static void debug_command(const ScriptEvent* ev) {
     GAME_PLAY* play = (GAME_PLAY*)gamePT;
     Animal_c* animal;
@@ -1174,6 +1241,21 @@ static void debug_command(const ScriptEvent* ev) {
             printf("[INPUT] frame %u: submenu %u (%u, %u)\n", (unsigned)s_frame, (unsigned)ev->value[0],
                    (unsigned)ev->value[1], (unsigned)ev->value[2]);
         }
+    } else if (ev->kind == SCRIPT_SOUND) {
+        if (s_sweep.active && s_sweep.cur != 0xFFFFFFFF) {
+            /* a sweep still going: end its sound first */
+            if (s_sweep.kind == 0) sAdo_BgmStop((u16)s_sweep.cur);
+            if (s_sweep.kind == 2) sAdo_RhythmStop(SWEEP_ID);
+        }
+        s_sweep.active = 1;
+        s_sweep.kind = (int)ev->value[0];
+        s_sweep.next = ev->value[1];
+        s_sweep.left = ev->value[2];
+        s_sweep.frames = ev->duration > 0 ? ev->duration : 120;
+        s_sweep.timer = 0;
+        s_sweep.cur = 0xFFFFFFFF;
+        printf("[INPUT] frame %u: sound sweep kind %d from %X, %u of them\n", (unsigned)s_frame, s_sweep.kind,
+               (unsigned)s_sweep.next, (unsigned)s_sweep.left);
     } else if (ev->kind == SCRIPT_NAMES) {
         for (i = 0; i < (int)ev->value[1] && i < 4096; i++) {
             mActor_name_t item = (mActor_name_t)(ev->value[0] + (u32)i);
@@ -1207,6 +1289,8 @@ static void debug_command(const ScriptEvent* ev) {
 
 int pc_input_script_frame(u32 real_frame) {
     int keep_running = 1;
+
+    sound_sweep_frame();
     int i;
     u32 frame;
     int again;

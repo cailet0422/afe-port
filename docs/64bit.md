@@ -104,6 +104,96 @@ Without `PC_ALLOW_64BIT`, CMake still refuses a 64-bit configuration (not every 
   struct on the stack that is only partly filled. It is invisible in the game but makes 32-bit and 64-bit saves
   differ, so the struct is zeroed before it is written.
 
+## Audit (v1.4.7)
+
+A pass over everything that could differ on 64-bit, after the 키다리팀바 gyroid crash of v1.4.6 (JAudio's sequence
+script call stack had room for 4 calls, that gyroid's melody calls 5 deep, and on 64-bit the extra entry
+overwrote the stack depth; it has room for 8).
+
+How:
+
+- **Warnings**: every compile command of the 64-bit configuration run again with clang's pointer/integer size
+  warnings (`-Wpointer-to-int-cast`, `-Wint-to-pointer-cast`, `-Wint-conversion`, `-Wvoid-pointer-to-int-cast`,
+  `-Wpointer-to-enum-cast`, `-Wincompatible-pointer-types`, `-Wshorten-64-to-32`), for Linux (LP64) and Windows
+  (LLP64, MinGW), and each one looked at.
+- **AddressSanitizer and UBSan bounds checks**: a gcc 64-bit build with
+  `-fsanitize=address,bounds -fsanitize-recover=address,bounds --param=asan-globals=0 -fno-omit-frame-pointer`
+  (without `asan-globals=0`, the REL overlay map made after linking cannot find the assets) run through every test
+  scenario below, the sound sweep, and a walk through all 30 blocks of a later town by day and by night (the
+  first-day scenarios do not pass rivers, waterfalls, gyroids or mailboxes).
+- **Sound**: every SE the game has (346), every BGM (384), the gyroid melodies and the instrument melodies, one
+  after another with the input-script command `SOUND` and `--audio-dump`, on 32-bit and 64-bit: the WAVs are
+  identical sample for sample.
+- **Screens**: every scenario on the gcc 32-bit and the gcc 64-bit build (gcc evaluates arguments in the same order
+  on both, so the random numbers match), comparing the screenshots pixel for pixel, the logged positions line for
+  line and the saves byte for byte: 35 scenarios and 815 screenshots, all identical, as are the logs and the saves.
+  The same with clang, the Android build's compiler, 32-bit against 64-bit: 14 scenarios, 491 screenshots and the
+  sound of the town walk, all identical.
+- **REL overlay map**: the disc objects each build overlays (`*.relmap`) are the same, except one table of
+  animation pointers (`m_player_lib.c`) that only the 32-bit build pairs with a disc object of the same size. The
+  copy keeps every pointer field, so nothing changes.
+- **Multiplayer**: packets are written field by field. The only structs copied whole are save structs
+  (`PersonalID_c`, `lbRTC_time_c`), which have the same layout on every build (`Save` is 140412 bytes on 32-bit and
+  64-bit), so 32-bit and 64-bit players can be in one room.
+- **Android**: the arm64-v8a libraries are aligned for 16 KB pages, and `char` is signed as on x86
+  (`-fsigned-char`).
+- **Windows x64** (Wine): placing the 키다리팀바 gyroid gives the same 5 screenshots as on Linux. The sound of the
+  town walk differed from Linux's before the `.bss` fix below (from the first fade, 68 seconds in) and is identical
+  to it, and to 32-bit, after.
+
+Fixed (all under `TARGET_PC`; the matching build is unchanged):
+
+- **emu64 combiners**: `replace_combine_to_tev` and `combine_manual` read a TEV combiner struct (12 bytes on 64-bit,
+  its second word at `w1`'s place) as a whole `Gfx` (16 bytes), reading 4 bytes past it (ASan). In
+  `replace_combine_to_tev` those stack bytes went into the top half of `w1`, which whole-`Gfx` comparisons of
+  combiners then saw. Both now copy a whole `Gfx`.
+- **Audio**: the sequence callback command checked `<= 4` on `seq_callbacks[4]` (index 4 is past the array: NULL
+  on the GameCube, other fields read as a function pointer on 64-bit; no disc sequence uses it). `Bank_GetInstVmap`
+  returned a pointer as an `int`, cut on 64-bit (no bank reaches it). The resampler saved its 8-entry history
+  starting 4 back, reading 3 past the array. `zelda_GetFreeArena` passed `size_t` pointers to a function that
+  writes `u32`s.
+- **SE priorities (every PC build)**: `Sou_TrgStart` looks up `TRGPRIO[]` (128 entries) with the low byte of the SE
+  id, and the game plays SEs whose low byte is 0x80 or more (0x8D, 0x97, 0x98, 0x9A, 0x9B, 0xA8, 0xB0, 0xCF,
+  0x42E6, ...). The GameCube reads the init tables that follow the table in rodata; the PC builds read what their
+  linker put there (on Linux, a `printf` format string; 0x8D got 82 instead of 128, 0x97 got 37 instead of 0).
+  The priority decides which SE replaces which when the 6 SE slots are full, so with these SEs that went
+  differently from the GameCube. The table now carries the DOL's 128 following bytes.
+- **JAudio's `.bss` arrays (every desktop build)**: the game writes past `sou_lev_se` (`Sou_SeFadeoutRoutine` and
+  `Sou_SeFadeinRoutine` set `sou_lev_se[8..14].volumeScale` when a level sound's fade ends) and reads past
+  `sou_lev_ongen_data` (`Na_OngenPos` looks through 50 entries of 4 when a river sounds near a waterfall). On the
+  GameCube both land in the arrays that follow in `.bss`. gcc pads each array to 32 bytes, so on Linux they hit
+  other fields; the 64-bit Windows build orders these globals by name, so there the writes landed in other sound
+  variables (an entry of the level-sound stack, and `sou_nobasu_count`, which stretches the vowels of the villagers'
+  voices). On Android, clang keeps them together. The eight arrays are now one struct in the
+  GameCube's order, checked at compile time, and the writes store the float's bytes field by field as the
+  big-endian GameCube does (1.0 puts 0x3F in a sound slot's id there, not 0).
+- **Photos saved to the SD card (every build)**: `JUTTiff::createIFD0` fills the strip offsets and sizes (4 bytes
+  per strip) from a 2-byte local, reading past it on the stack (ASan). They are placeholders that
+  `createMainImage` writes over, so they now come from a zeroed buffer; the file is the same.
+
+Original code that reads past an array, the same way on every build (left as is):
+
+- `Actor_ct` counts actors without a bank in `banks[-1]`, which is `current_scene_data` on 32-bit and 64-bit alike
+  (the high half on the GameCube); it is not read again before the next scene sets it.
+- `Player_actor_init_value` writes `item_shape_type[2]` and `[3]` of a 2-entry array, which are
+  `item_animation_idx[0]` and `[1]` on every build.
+- `mEv_check_schedule`/`mEv_check_status`/`mEv_check_run_today` take the address of `event_today[0xFF]` but test
+  the index before reading.
+- `decode_date` reads `dates[15]` of 8; the save layout is the same on every build.
+- `Kabu_manager` subtracts a week from the stalk market's date before it was ever set (month 0), reading
+  `days_month[][255]`; the year (0) already decides the comparison that follows.
+- `aHNW_actor_ct` and `aMBX_actor_ct` (gyroids, mailboxes) read `banks[-1].ram_start` for actors without a bank:
+  another field on each build, but the value is never used.
+- `mBGMPsComp_main_remove` makes a pointer to `ps[-1]` when the list is empty, without reading it.
+- `Nas_SubSeq` reads a sequence's table through a 2-entry array type (`dyn_tbl[0][97]`): bytes of the sequence data,
+  the same on every build.
+- With the save's weekly date still empty (0xFFFF), `decode_date` gets month 255 and reads `last_day[254]` and
+  `weekday1st[255]`. Both ends of that event's dates come from the same value, so they come out equal and the event
+  stays off.
+
+Not fixed: SE ids the game never plays (0x351 and others between the defined ones) make the sequence player read
+unrelated bank data and can crash or hang any build.
+
 ## How to check
 
 The default 32-bit build (gcc) and the 64-bit build (clang) give different screens even with the same
