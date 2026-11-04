@@ -33,7 +33,7 @@ SAVE = (["SR:80", "SD:40", "SR:80", "SR:30",               # east, to the next b
          "SEEK:E038:600", "A:6", "WAIT:30"]                 # say hello to Milk
         + ["B:6", "WAIT:30"] * 30                           # B ends the talk without starting another
         + ["SEEK:2128,1488:900", "SEEK:2085,1505:200", "SL:6"]  # back home, facing the haniwa
-        + ["A:6", "WAIT:30"] * 20 + ["WAIT:600"])           # save and quit
+        + ["A:6", "WAIT:30"] * 24 + ["WAIT:900"])           # save and quit (the last presses pick it)
 
 args = [a for a in sys.argv[1:] if not a.startswith("--")]
 korean = ["--korean"] if "--korean" in sys.argv else []
