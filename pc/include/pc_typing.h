@@ -45,9 +45,14 @@ extern "C" {
 extern int g_pc_typing_mode;
 extern int g_pc_editor_active;
 
-/* Called by the editor when it opens and closes. A latin field (the town
- * name in English) starts in English. */
-void pc_typing_editor_open(int latin);
+/* Called by the editor when it opens and closes, with the kind of field: a
+ * latin field (the town name in English) starts in English, and the keyboard
+ * types nothing into passwords (their own character set), where it stays the
+ * controller. */
+#define PC_TYPING_EDITOR_TEXT 0
+#define PC_TYPING_EDITOR_LATIN 1
+#define PC_TYPING_EDITOR_NO_TEXT 2
+void pc_typing_editor_open(int kind);
 void pc_typing_editor_close(void);
 
 /* Takes the next operation; returns 0 when the queue is empty. */
@@ -67,6 +72,9 @@ int pc_typing_editor_taking_input(void);
 /* Keyboard typing is on and the editor takes input: keys type instead of
  * pressing the buttons they are bound to (pc_pad.c) */
 int pc_typing_takes_keys(void);
+
+/* The editor takes input and text goes into it (not a password) */
+int pc_typing_editor_takes_text(void);
 
 /* Whether the editor uses the key of a binding (a PCInputCode) for typing: a
  * character, Enter, Backspace, Tab, the arrows, a modifier, a language key, or

@@ -456,7 +456,17 @@ drops you into the Reset Center).
   Tab, an arrow, a modifier, a language key or a mouse button; so Home, End, F1...) still press their buttons while
   it takes input. Start bound to Home finishes the text as the gamepad's Start does; before, it pressed nothing there
   and a player who had moved Start off Enter could not finish a notice without knowing Shift+Enter. The chat box
-  still keeps every key (Home and End move its cursor).
+  still keeps every key (Home and End move its cursor). The map key is not among them.
+- Keys already down when the keyboard starts typing (the stick key the player walked with, the A that opened the
+  editor) type nothing until they are let go: before, their key repeats typed the letter again and again
+  (`note_held_keys`).
+- Password editors (`mED_TYPE_PASSWORDMAKE`/`PASSWORDCHK`) take no typed text, so the editor opens them with
+  `PC_TYPING_EDITOR_NO_TEXT` and the keyboard stays the controller there; before, keyboard typing turned on in
+  Korean mode and the keyboard did nothing at all on those screens unless the player pressed Tab.
+- `keybindings.ini` writes a name that reads back as the same key for every key: SDL2 has no name for the Korean
+  keyboard's 한/영 and 한자 keys (`Hangul`, `Hanja`), the ISO keyboard's extra key and the Japanese keyboard's keys,
+  so a control bound to one was written with an empty value and lost on the next start. Others without a name are
+  written `Scancode<n>`. F3 (frame limit off/on) does nothing when a control is bound to it.
 - The patch puts its own Hangul input UI in place of the kana wheel and replaced the wheel's textures for that UI; this
   UI is not reproduced. In Korean mode, wheel input is turned off and an **on-screen keyboard** (`pc/src/pc_ko_editor.c`,
   layout and cursor in `pc/src/ko/ko_osk.c`, test `pc/tests/test_ko_osk.c`) is drawn in place of the wheel.

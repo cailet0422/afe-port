@@ -33,6 +33,7 @@ static void push(int op) {
 extern u32 pc_frame_counter;
 static u32 s_polled_frame = (u32)-8;
 static int s_polled = 0;    /* the editor has asked for operations since it opened */
+static int s_no_text = 0;   /* a password: nothing is typed, the keyboard is the controller */
 static int s_ime_shown = 0; /* system input method: text input is started */
 
 int pc_typing_editor_listening(void) {
@@ -43,8 +44,12 @@ int pc_typing_editor_taking_input(void) {
     return g_pc_editor_active && (!s_polled || pc_typing_editor_listening());
 }
 
+int pc_typing_editor_takes_text(void) {
+    return !s_no_text && pc_typing_editor_taking_input();
+}
+
 int pc_typing_takes_keys(void) {
-    return g_pc_typing_mode && pc_typing_editor_taking_input();
+    return g_pc_typing_mode && !s_no_text && pc_typing_editor_taking_input();
 }
 
 int pc_typing_key_types(int code) {
@@ -272,7 +277,10 @@ int pc_typing_osk_key(int key) {
     return 1;
 }
 
-void pc_typing_editor_open(int latin) {
+void pc_typing_editor_open(int kind) {
+    int latin = kind == PC_TYPING_EDITOR_LATIN;
+
+    s_no_text = kind == PC_TYPING_EDITOR_NO_TEXT;
     queue_clear();
     s_polled = 0;
     ko_ime_init(&s_ime);
@@ -285,7 +293,9 @@ void pc_typing_editor_open(int latin) {
         ko_ime_set_mode(&s_ime, latin ? KO_IME_MODE_EN : KO_IME_MODE_KO, unused);
         g_pc_typing_mode = 1;
     }
-    if (pc_typing_system_ime()) {
+    if (s_no_text) {
+        SDL_StopTextInput();
+    } else if (pc_typing_system_ime()) {
         g_pc_typing_mode = 1;
         SDL_StartTextInput(); /* shows the on-screen keyboard on phones */
         s_ime_shown = 1;
@@ -297,6 +307,7 @@ void pc_typing_editor_open(int latin) {
 
 void pc_typing_editor_close(void) {
     g_pc_editor_active = 0;
+    s_no_text = 0;
     queue_clear();
     drop_composition();
     if (pc_typing_system_ime()) {
@@ -305,10 +316,34 @@ void pc_typing_editor_close(void) {
     s_ime_shown = 0;
 }
 
+/* Keys already down when the keyboard starts typing (the key the player
+ * walked with, the A that opened the editor): their key repeats would type
+ * the letter again and again, so they type nothing until let go */
+static Uint8 s_held_before[SDL_NUM_SCANCODES];
+static int s_was_typing = 0;
+static int s_drop_text = 0; /* the text of a dropped key repeat (system input method) */
+
+static void note_held_keys(void) {
+    int typing = pc_typing_takes_keys();
+
+    if (typing && !s_was_typing) {
+        int n = 0;
+        const Uint8* keys = SDL_GetKeyboardState(&n);
+
+        memset(s_held_before, 0, sizeof(s_held_before));
+        for (int i = 0; i < n && i < SDL_NUM_SCANCODES; i++) {
+            s_held_before[i] = keys[i];
+        }
+        s_drop_text = 0;
+    }
+    s_was_typing = typing;
+}
+
 void pc_typing_frame(void) {
     int taking;
 
-    if (!g_pc_editor_active || !pc_typing_system_ime()) {
+    note_held_keys();
+    if (!g_pc_editor_active || !pc_typing_system_ime() || s_no_text) {
         return;
     }
     /* The on-screen keyboard goes away while another menu is over the editor
@@ -403,19 +438,33 @@ void pc_typing_handle_event(const SDL_Event* event) {
     Uint16 mod;
     int c;
 
-    if (!pc_typing_editor_taking_input()) {
+    if (!pc_typing_editor_taking_input() || s_no_text) {
         return; /* keys are the controller's, also over an editor that waits */
     }
+    note_held_keys();
     if (event->type == SDL_TEXTEDITING) {
         pc_typing_system_editing(event->edit.text);
         return;
     }
     if (event->type == SDL_TEXTINPUT) {
+        if (s_drop_text) {
+            s_drop_text = 0;
+            return;
+        }
         pc_typing_system_text(event->text.text);
         return;
     }
     if (event->type != SDL_KEYDOWN) {
         return;
+    }
+    if (event->key.keysym.scancode < SDL_NUM_SCANCODES) {
+        if (!event->key.repeat) {
+            s_held_before[event->key.keysym.scancode] = 0; /* pressed anew */
+            s_drop_text = 0;
+        } else if (s_held_before[event->key.keysym.scancode] && g_pc_typing_mode) {
+            s_drop_text = 1;
+            return;
+        }
     }
     sym = event->key.keysym.sym;
     mod = event->key.keysym.mod;

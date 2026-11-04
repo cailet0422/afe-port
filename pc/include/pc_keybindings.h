@@ -78,6 +78,9 @@ void pc_keybindings_pad_label(int action, char* buf, size_t n);
    that had it takes over action's previous one, so nothing ends up bound
    twice and nothing silently loses its control. */
 void pc_keybindings_set_key(int action, PCInputCode code);
+
+/* Whether a control is bound to this key (pc_main.c's own keys give way) */
+int pc_keybindings_uses_key(SDL_Scancode sc);
 void pc_keybindings_set_pad(int action, PCPadInput input);
 
 #ifdef __cplusplus

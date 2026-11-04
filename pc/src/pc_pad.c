@@ -135,7 +135,7 @@ u32 PADRead(PADStatus* status) {
             u32 pass = 0;
 
             if (editor) {
-                for (int i = 0; i < PC_BIND_COUNT; i++) {
+                for (int i = 0; i < PC_BIND_MAP; i++) { /* the pad's buttons and sticks, not the map */
                     if ((held & (1u << i)) && !pc_typing_key_types(g_pc_keybindings.key[i])) {
                         pass |= 1u << i;
                     }

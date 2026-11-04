@@ -1,6 +1,8 @@
 #include "pc_keybindings.h"
 #include "pc_platform.h"
 
+#include <stdlib.h>
+
 static const PCInputCode s_default_keys[PC_BIND_COUNT] = {
     /* buttons */
     [PC_BIND_A]     = SDL_SCANCODE_SPACE,
@@ -131,6 +133,45 @@ static void trim_end(char* s) {
     }
 }
 
+/* Names for keys SDL2 leaves unnamed (it has no name for them, so a binding
+   to one was written as an empty value and lost on the next start): the
+   Korean keyboard's 한/영 and 한자 keys, the extra key of ISO keyboards and the
+   Japanese keyboard's keys */
+static const struct {
+    SDL_Scancode sc;
+    const char* name;
+} s_key_names[] = {
+    { SDL_SCANCODE_LANG1, "Hangul" },
+    { SDL_SCANCODE_LANG2, "Hanja" },
+    { SDL_SCANCODE_LANG3, "Katakana" },
+    { SDL_SCANCODE_LANG4, "Hiragana" },
+    { SDL_SCANCODE_LANG5, "Zenkaku" },
+    { SDL_SCANCODE_NONUSBACKSLASH, "NonUSBackslash" },
+    { SDL_SCANCODE_INTERNATIONAL1, "International1" },
+    { SDL_SCANCODE_INTERNATIONAL2, "International2" },
+    { SDL_SCANCODE_INTERNATIONAL3, "International3" },
+    { SDL_SCANCODE_INTERNATIONAL4, "International4" },
+    { SDL_SCANCODE_INTERNATIONAL5, "International5" },
+};
+
+/* A key's name that reads back as the same key: SDL's, or ours when SDL has
+   none or gives the name of another key (Return2 is also "Return") */
+static const char* key_name(SDL_Scancode sc) {
+    static char buf[16];
+    const char* name = SDL_GetScancodeName(sc);
+
+    for (int i = 0; i < (int)(sizeof(s_key_names) / sizeof(s_key_names[0])); i++) {
+        if (s_key_names[i].sc == sc) {
+            return s_key_names[i].name;
+        }
+    }
+    if (name != NULL && name[0] != '\0' && SDL_GetScancodeFromName(name) == sc) {
+        return name;
+    }
+    snprintf(buf, sizeof(buf), "Scancode%d", (int)sc);
+    return buf;
+}
+
 /* get display name for an input code */
 static const char* input_code_name(PCInputCode code) {
     if (code < 0) {
@@ -143,7 +184,7 @@ static const char* input_code_name(PCInputCode code) {
         }
         return "Unknown";
     }
-    return SDL_GetScancodeName((SDL_Scancode)code);
+    return key_name((SDL_Scancode)code);
 }
 
 /* parse an input value string to a PCInputCode; -2 = invalid */
@@ -156,6 +197,20 @@ static PCInputCode parse_input_code(const char* value) {
     for (int i = 0; i < (int)NUM_MOUSE_BUTTONS; i++) {
         if (SDL_strcasecmp(value, s_mouse_buttons[i].name) == 0) {
             return s_mouse_buttons[i].code;
+        }
+    }
+
+    /* our names for keys SDL has none for, and "Scancode<n>" */
+    for (int i = 0; i < (int)(sizeof(s_key_names) / sizeof(s_key_names[0])); i++) {
+        if (SDL_strcasecmp(value, s_key_names[i].name) == 0) {
+            return (PCInputCode)s_key_names[i].sc;
+        }
+    }
+    if (SDL_strncasecmp(value, "Scancode", 8) == 0) {
+        int n = atoi(value + 8);
+
+        if (n > SDL_SCANCODE_UNKNOWN && n < SDL_NUM_SCANCODES) {
+            return (PCInputCode)n;
         }
     }
 
@@ -301,7 +356,7 @@ void pc_keybindings_save(void) {
     fprintf(f, "# Key names use SDL2 scancode names.\n");
     fprintf(f, "# Common names: Space, Left Shift, Right Shift, Left Ctrl, Right Ctrl,\n");
     fprintf(f, "#   Left Alt, Right Alt, Return, Escape, Tab, Backspace, Delete,\n");
-    fprintf(f, "#   A-Z, 0-9, F1-F12, Up, Down, Left, Right, etc.\n");
+    fprintf(f, "#   A-Z, 0-9, F1-F12, Up, Down, Left, Right, Hangul, Hanja, etc.\n");
     fprintf(f, "# Mouse buttons: Mouse1 (left), Mouse2 (right), Mouse3 (middle). none = unbound\n");
     fprintf(f, "# Full list: https://wiki.libsdl.org/SDL2/SDL_Scancode\n");
     fprintf(f, "\n");
@@ -395,9 +450,7 @@ void pc_keybindings_key_label(int action, char* buf, size_t n) {
     } else if (code & PC_INPUT_MOUSE_BIT) {
         snprintf(buf, n, "%s", input_code_name(code));
     } else {
-        const char* name = SDL_GetScancodeName((SDL_Scancode)code);
-
-        snprintf(buf, n, "%s", (name != NULL && name[0] != '\0') ? name : "?");
+        snprintf(buf, n, "%s", key_name((SDL_Scancode)code));
     }
 }
 
@@ -418,6 +471,15 @@ void pc_keybindings_pad_label(int action, char* buf, size_t n) {
     } else {
         snprintf(buf, n, "%s, %s", pad_label(in[0]), pad_label(in[1]));
     }
+}
+
+int pc_keybindings_uses_key(SDL_Scancode sc) {
+    for (int i = 0; i < PC_BIND_COUNT; i++) {
+        if (g_pc_keybindings.key[i] == (PCInputCode)sc) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 void pc_keybindings_set_key(int action, PCInputCode code) {
