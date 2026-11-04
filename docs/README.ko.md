@@ -300,7 +300,7 @@ ninja -C pc/build32strip
   같지만 사본에). 플레이어의 방(서랍 가구가 아이템을 Save 밖에 들고 있음)과 섬에서는 이렇게 저장하지 않는다.
 - 메뉴에서 끄거나 창을 닫을 때, 위와 같이 조용한 순간이면.
 - 직접 저장: Ctrl+S(`pc_main.c`. Ctrl을 누르는 동안 `pc_pad.c`가 S(스틱 아래)를 패드에서 뺀다)나 터치
-  게임패드의 START 옆 SAVE(`pc_touch.c`)가 `pc_autosave_request_save`를 부르고, 다음 프레임에 저장한다(자동
+  게임패드의 START 왼쪽 SAVE(`pc_touch.c`)가 `pc_autosave_request_save`를 부르고, 다음 프레임에 저장한다(자동
   저장을 꺼도 된다). 기다리지 않고, 집의 방에서도 된다: 그때는 방의 수납 가구 안 아이템을 사본에 넣고
   (`aMR_PC_StorageIntoCopy`) 체크섬을 다시 계산한다. 저장했는지, 못 했다면 이유를 알림으로 보여 준다.
 - 방문객(`player_no == mPr_FOREIGNER`, 멀티플레이의 여행)은 Private(주머니, 벨, 편지...; 집 파일의 대출금과 박물관

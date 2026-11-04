@@ -331,7 +331,7 @@ test `pc/tests/test_minimap.c`).
   this way (its storage furniture keeps items out of the Save) and neither is the island.
 - On quitting from the menu or closing the window, when the moment is quiet in the same way.
 - By hand: Ctrl+S (`pc_main.c`; `pc_pad.c` keeps S, the stick down, out of the pad while Ctrl is held) or SAVE
-  next to START on the touch gamepad (`pc_touch.c`) ask `pc_autosave_request_save`, which saves in the next frame,
+  left of START on the touch gamepad (`pc_touch.c`) ask `pc_autosave_request_save`, which saves in the next frame,
   also with the autosave off. It needs no wait and may be in a house's room: the snapshot then gets the items of the
   room's storage furniture (`aMR_PC_StorageIntoCopy`) and its checksum again. A notice says it saved, or why not.
 - A visitor (`player_no == mPr_FOREIGNER`, the multiplayer's trip) has its Private (pockets, bells, letters...,

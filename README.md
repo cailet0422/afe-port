@@ -91,7 +91,7 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
    apps pick the root of `Download`, so use a subfolder.)
 2. Install the APK (allow installing from unknown sources), open it, and pick that folder with
    **Choose folder**.
-3. Play with the on-screen touch gamepad or a physical controller. **SAVE**, next to START on the touch gamepad,
+3. Play with the on-screen touch gamepad or a physical controller. **SAVE**, left of START on the touch gamepad,
    saves right away.
 
 The APK is signed with a release key (certificate SHA-256
@@ -131,7 +131,7 @@ A new town is saved the same way: its first save creates the town file on the me
 gyroid would. On the first day this starts once you have met a villager, as the gyroid itself only saves from then
 on; a notice says when the town has been saved for the first time.
 
-To save right away, press **Ctrl+S** (PC) or **SAVE** next to START on the touch gamepad. This also works in your
+To save right away, press **Ctrl+S** (PC) or **SAVE** left of START on the touch gamepad. This also works in your
 house's rooms and with the autosave turned off; a notice says it saved, or why it cannot yet (in a conversation or a
 menu, in the middle of an action, on the island, or on the first day before you have met a villager).
 

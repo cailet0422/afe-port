@@ -103,7 +103,8 @@ static void layout(void) {
     s_shapes[CTRL_R] = (Shape){ w - 0.17f * u, 0.08f * u, 0.13f * u, 0.05f * u };
     s_shapes[CTRL_Z] = (Shape){ w - 0.17f * u, 0.20f * u, 0.09f * u, 0.045f * u };
     s_shapes[CTRL_START] = (Shape){ w * 0.5f, 0.07f * u, 0.12f * u, 0.045f * u };
-    s_shapes[CTRL_SAVE] = (Shape){ w * 0.5f + 0.23f * u, 0.07f * u, 0.09f * u, 0.045f * u };
+    /* left of Start: the chat button (pc_gui_mp.cpp) is on its right */
+    s_shapes[CTRL_SAVE] = (Shape){ w * 0.5f - 0.24f * u, 0.07f * u, 0.08f * u, 0.045f * u };
     s_shapes[CTRL_UP] = (Shape){ dx, dy - 0.08f * u, 0.045f * u, 0.045f * u };
     s_shapes[CTRL_DOWN] = (Shape){ dx, dy + 0.08f * u, 0.045f * u, 0.045f * u };
     s_shapes[CTRL_LEFT] = (Shape){ dx - 0.08f * u, dy, 0.045f * u, 0.045f * u };
