@@ -17,16 +17,16 @@
 ## Download
 
 <!-- When a new release is published, update the version in these links (here and in README.ko.md). -->
-Latest release: **[v1.4.4](https://github.com/cailet0422/afe-port/releases/tag/v1.4.4)**
+Latest release: **[v1.4.5](https://github.com/cailet0422/afe-port/releases/tag/v1.4.5)**
 
 | Platform | Download | Requirements |
 |---|---|---|
-| Windows 64-bit | [DobutsuNoMoriEPlus-v1.4.4-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.4/DobutsuNoMoriEPlus-v1.4.4-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
-| Windows 32-bit | [DobutsuNoMoriEPlus-v1.4.4-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.4/DobutsuNoMoriEPlus-v1.4.4-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.4.4-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.4/DobutsuNoMoriEPlus-v1.4.4-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.4.4-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.4.4/DobutsuNoMoriEPlus-v1.4.4-Android.apk) | Android 5.0+, ARM 32/64-bit |
+| Windows 64-bit | [DobutsuNoMoriEPlus-v1.4.5-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.5/DobutsuNoMoriEPlus-v1.4.5-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
+| Windows 32-bit | [DobutsuNoMoriEPlus-v1.4.5-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.5/DobutsuNoMoriEPlus-v1.4.5-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.4.5-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.5/DobutsuNoMoriEPlus-v1.4.5-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.4.5-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.4.5/DobutsuNoMoriEPlus-v1.4.5-Android.apk) | Android 5.0+, ARM 32/64-bit |
 
-Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.4.4/SHA256SUMS.txt) ·
+Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.4.5/SHA256SUMS.txt) ·
 Older versions and release notes: [all releases](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -58,7 +58,8 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
   the host's villagers, furniture, weather, shops and museum. The host can send players out
   ([Multiplayer](#multiplayer)).
 - **Autosave**: the game saves by itself every minute outdoors, between scenes (going in or out of a
-  building) and when you quit, so closing it or a crash loses about a minute at most. Mr. Resetti therefore stays
+  building) and when you quit, so closing it or a crash loses about a minute at most. A new town is saved too, as
+  soon as the gyroid could save it (on the first day, once you have met a villager). Mr. Resetti therefore stays
   away by default ([Saving](#saving)).
 - Korean fan patch support: install the patch zip from inside the game, switch between Korean and
   Japanese at any time, and type Hangul with a real keyboard (2-set layout) or an on-screen keyboard.
@@ -125,7 +126,14 @@ The game saves your town as the gyroid's "save and continue" would, without aski
 - when you go in or out of a building (at most once every 20 seconds);
 - when you quit from the menu or close the window.
 
-You can still save at the gyroid as usual. Turning the game off without saving no longer loses your play, so
+A new town is saved the same way: its first save creates the town file on the memory card, as a first save at the
+gyroid would. On the first day this starts once you have met a villager, as the gyroid itself only saves from then
+on; a notice says when the town has been saved for the first time.
+
+You can still save at the gyroid as usual. Since every town is saved, quitting without saving no longer starts you
+over: to start a new game, use **Settings** → **Gameplay** → **Town data** → **Delete town...**. It shows the town on
+each memory card (with its players), asks once more, deletes the chosen one and restarts the game, which then
+begins with a new game. This cannot be undone. Turning the game off without saving no longer loses your play, so
 **Mr. Resetti does not come by default**. **Settings** → **Gameplay** → **Autosave** turns the autosave off, and
 **Mr. Resetti** brings him back (`autosave = 0`, `autosave_every = 1` (minutes, 1-60) and `resetti = 1` in
 `settings.ini`). While you visit another town in multiplayer, your own town's file gets your pockets, bells and

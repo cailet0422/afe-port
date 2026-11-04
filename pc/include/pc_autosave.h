@@ -7,7 +7,9 @@
  * mCD_PC_AutoSaveSnapshot), and when the game is quit from the menu or its
  * window is closed. The town file on the card is written in place (the
  * main copy, then the backup), so turning the game off never loses more
- * than a minute or so. A player visiting another town by train (the
+ * than a minute or so. A new town, which has no file until its first save,
+ * gets that save the gyroid's way first (mCD_PC_FirstSave), wherever the
+ * gyroid would save (on day one, once the player has met a villager). A player visiting another town by train (the
  * multiplayer's trip) has their pockets, bells, letters... saved into their
  * own town's file, as the trip home would (mCD_PC_PatchTraveller).
  *
@@ -32,6 +34,15 @@ void pc_autosave_quit(void);
 void pc_autosave_unit_written(unsigned short old_item, unsigned short new_item);
 /* afe-decomp m_card.c */
 int pc_resetti_enabled(void);
+
+/* Settings > Gameplay > Town data (pc_gui_menu.cpp). The town file on card
+ * chan (0 = A, 1 = B): 1 with the town's name and its players' names
+ * ("A, B") in UTF-8, 0 if the card has none */
+int pc_autosave_town_info(int chan, char* town, int town_size, char* players, int players_size);
+/* Deletes the town file on card chan, so that the next start is a new game,
+ * and stops the autosave until then (the caller restarts the game). 1 if
+ * the file was deleted */
+int pc_autosave_delete_town(int chan);
 
 #ifdef __cplusplus
 }

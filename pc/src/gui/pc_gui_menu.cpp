@@ -46,6 +46,12 @@ static bool s_quit_open = false;
 static bool s_update_open = false;
 static bool s_update_resume = false; /* the update page opened by itself: closing it resumes the game */
 static bool s_patch_open = false;
+/* Settings > Gameplay > Town data: the list, then a town to delete (0 = card A, 1 = B) */
+static bool s_town_open = false;
+static int s_town_chan = -1;
+static bool s_town_have[2];
+static char s_town_name[2][64];
+static char s_town_players[2][160];
 static bool s_res_open = false;
 static Uint32 s_res_deadline = 0;
 static int s_res_old_w, s_res_old_h, s_res_old_fullscreen;
@@ -71,12 +77,14 @@ void MenuOpen() {
     s_page = PAGE_MAIN;
     s_focus_first = true;
     s_quit_open = false;
+    s_town_open = false;
     s_capture = -1;
 }
 
 void MenuClose() {
     s_capture = -1;
     s_quit_open = false;
+    s_town_open = false;
     s_update_open = false;
     s_update_resume = false;
     if (s_res_open) {
@@ -493,6 +501,19 @@ static void tab_gameplay() {
         }
     }
 #endif
+    row(T("Town data", "마을 데이터"),
+        T("Deletes a town from the memory card to start a new game. The autosave keeps every town, so this is the way "
+          "to start over.",
+          "메모리 카드에서 마을을 지우고 새 게임을 시작합니다. 자동 저장이 마을을 늘 저장해 두므로, 처음부터 다시 하려면 "
+          "이것을 씁니다."));
+    if (SmallButton(T("Delete town...", "마을 데이터 초기화..."))) {
+        for (int chan = 0; chan < 2; chan++) {
+            s_town_have[chan] = pc_autosave_town_info(chan, s_town_name[chan], sizeof(s_town_name[chan]),
+                                                      s_town_players[chan], sizeof(s_town_players[chan])) != 0;
+        }
+        s_town_chan = -1;
+        s_town_open = true;
+    }
 }
 
 static void tab_controls() {
@@ -770,6 +791,75 @@ static void popup_quit() {
     ImGui::EndPopup();
 }
 
+static void popup_town() {
+    char buf[320];
+
+    if (!begin_modal("##town", s_town_open)) {
+        return;
+    }
+    if (s_town_chan < 0) {
+        int n = 0;
+
+        title(T("Delete a town", "마을 데이터 초기화"));
+        for (int chan = 0; chan < 2; chan++) {
+            if (!s_town_have[chan]) continue;
+            n++;
+            snprintf(buf, sizeof(buf), T("Card %c: %s (%s)", "카드 %c: %s 마을 (%s)"), 'A' + chan,
+                     s_town_name[chan][0] ? s_town_name[chan] : "?",
+                     s_town_players[chan][0] ? s_town_players[chan] : "-");
+            centered_text(buf);
+            ImGui::PushID(chan);
+            if (buttons(T("Delete this town", "이 마을 지우기")) == 0) {
+                s_town_chan = chan;
+            }
+            ImGui::PopID();
+            ImGui::Spacing();
+        }
+        if (n == 0) {
+            centered_text(T("There is no town on the memory cards. A new game starts from the title screen.",
+                            "메모리 카드에 마을이 없습니다. 타이틀 화면에서 새 게임을 시작하면 됩니다."),
+                          ColMuted());
+            ImGui::Spacing();
+        }
+        if (buttons(T("Cancel", "취소")) == 0) {
+            s_town_open = false;
+            ImGui::CloseCurrentPopup();
+        }
+    } else {
+        int chan = s_town_chan;
+
+        if (pc_gui_korean()) {
+            snprintf(buf, sizeof(buf), "카드 %c의 %s 마을을 지울까요?", 'A' + chan,
+                     s_town_name[chan][0] ? s_town_name[chan] : "?");
+        } else {
+            snprintf(buf, sizeof(buf), "Delete %s on card %c?", s_town_name[chan][0] ? s_town_name[chan] : "the town",
+                     'A' + chan);
+        }
+        title(buf);
+        centered_text(T("Its players, houses, villagers and everything in it are deleted. This cannot be undone.",
+                        "플레이어, 집, 주민, 마을의 모든 것이 지워지며 되돌릴 수 없습니다."),
+                      ColWarn());
+        centered_text(T("The game then restarts; start a new game from the title screen.",
+                        "지우면 게임이 다시 시작됩니다. 타이틀 화면에서 새 게임을 시작하세요."),
+                      ColMuted());
+        ImGui::Spacing();
+        int b = buttons(T("Cancel", "취소"), T("Delete and restart", "지우고 다시 시작"));
+        if (b == 0) {
+            s_town_chan = -1;
+        } else if (b == 1) {
+            printf("[PAUSE] delete the town on card %c\n", 'A' + chan);
+            if (pc_autosave_delete_town(chan)) {
+                pc_request_restart();
+            } else {
+                pc_gui_notify(T("Could not delete the town file", "마을 파일을 지우지 못했습니다"));
+                s_town_open = false;
+                ImGui::CloseCurrentPopup();
+            }
+        }
+    }
+    ImGui::EndPopup();
+}
+
 static void popup_resolution() {
     if (s_res_open && SDL_TICKS_PASSED(SDL_GetTicks(), s_res_deadline)) {
         res_revert();
@@ -932,6 +1022,7 @@ void MenuDraw() {
         }
     }
     popup_quit();
+    popup_town();
     popup_resolution();
     popup_patch();
     popup_update();

@@ -310,12 +310,18 @@ test `pc/tests/test_minimap.c`).
 
 ### Autosave
 
-`pc/src/pc_autosave.c`, with afe-decomp `m_card.c` (`mCD_PC_AutoSaveSnapshot`, `mCD_PC_PatchTraveller`,
-`mCD_SetResetInfo`), `m_actor.c` (`Actor_info_PC_restore_fgdata_copy`) and `m_play.c` (`play_cleanup`).
+`pc/src/pc_autosave.c`, with afe-decomp `m_card.c` (`mCD_PC_AutoSaveSnapshot`, `mCD_PC_FirstSave`,
+`mCD_PC_PatchTraveller`, `mCD_SetResetInfo`), `m_actor.c` (`Actor_info_PC_restore_fgdata_copy`) and `m_play.c` (`play_cleanup`).
 
 - What is written is what the gyroid's "save and continue" writes (play time, travel time, version, check data,
   checksum), straight into the town file on the card (`save/card_X/DobutsunomoriE_MURA`: the main copy, then the
   backup), found by the town's id and name and checked against its copy-protect code.
+- A new town has no file until its first save. Then the autosave makes that save the gyroid's way:
+  `mCD_PC_FirstSave` runs `mCD_SaveHome_bg` ("save and continue") to its end at once, which creates the town file
+  on a card with room and writes all of it. The town is then written as above, and a notice says it was saved for
+  the first time. This happens only where the gyroid would save: the player in their own town, at their own house,
+  and on day one once they have met a villager. Before 1.4.5 the autosave waited for a save at the gyroid, so a new
+  town that was never saved there was lost.
 - Between scenes (`play_cleanup`, after `mFM_Field_dt` and before `mCD_toNextLand`: every actor has put its data
   back) at most every 20 s, not from the title demo, the player select or the opening.
 - Every `autosave_every` minutes (default 1; 1.3.0 wrote `autosave_minutes = 5`, read only when not 5) while the player is outdoors in the town, nothing fading, no menu or message,
@@ -326,7 +332,14 @@ test `pc/tests/test_minimap.c`).
 - On quitting from the menu or closing the window, when the moment is quiet in the same way.
 - A visitor (`player_no == mPr_FOREIGNER`, the multiplayer's trip) has its Private (pockets, bells, letters...,
   keeping the home file's loan and museum contacts) copied over its player in its own town's file.
-- Not with `--deterministic` (scripted runs leave the saves alone). Mr. Resetti's visit is decided in
+- Settings → Gameplay → Town data → Delete town... (`popup_town` in `pc_gui_menu.cpp`) lists the town file on each
+  card (`pc_autosave_town_info`: its name and players) and, after a confirmation, deletes the chosen one
+  (`pc_autosave_delete_town`: `CARDDelete` of `DobutsunomoriE_MURA` and of the first save's temporary
+  `DobutsunomoriE_MURA_d`), stops the autosave and restarts the game (`pc_request_restart`), which then starts a new
+  game. Other files on the card (NES game saves) are kept. With the autosave saving new towns, quitting without
+  saving no longer starts over, so this is the way to.
+- Not with `--deterministic` (scripted runs leave the saves alone) unless `--autosave` is given too; an input
+  script's `QUIT` saves as closing the window does. Mr. Resetti's visit is decided in
   `mCD_SetResetInfo`, which returns at once while `resetti = 0` (the default) in `settings.ini`.
 
 ### Scripted test input

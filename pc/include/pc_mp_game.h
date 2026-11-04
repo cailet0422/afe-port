@@ -54,6 +54,8 @@ int pc_mp_game_in_host_town(void);
 /* What the internet side does: "LAN only", "internet: 203.0.113.7:47070 (port open)" */
 void pc_mp_game_net_status(char* buf, size_t n);
 /* The town and the name as the game has them (UTF-8) */
+/* A name in the game's characters (n bytes) as UTF-8 */
+void pc_mp_game_name_utf8(const unsigned char* s, int n, char* out, size_t cap);
 void pc_mp_game_my_names(char* name, size_t n, char* town, size_t tn);
 
 /* A look's cloth (PcMpLook.cloth) that is a design of the player's own:
