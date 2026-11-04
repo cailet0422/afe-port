@@ -410,6 +410,10 @@ ninja -C pc/build32strip
   주소록이 위에 떠 있을 때도 열려 있는데, 그때는 키보드가 다시 게임패드다. 입력이 멈출 때 아직 누르고 있던 키
   (Shift+Enter의 Enter와 Shift)는 뗄 때까지 아무것도 누르지 않는다(`pc_pad.c`). 시스템 입력기는 그동안 화면
   키보드를 숨긴다(`pc_typing_frame`).
+- 편집기가 글자 입력에 쓰지 않는 키(`pc_typing_key_types`: 문자, Enter, Backspace, Tab, 방향키, 조합 키, 한/영 키,
+  마우스 버튼이 아닌 것. Home, End, F1 등)에 정한 조작은 입력 중에도 그 버튼을 누른다. Home에 정한 Start는
+  게임패드의 Start처럼 글을 끝낸다. 전에는 거기서 아무것도 누르지 않아서, Start를 Enter가 아닌 키로 옮긴 플레이어는
+  Shift+Enter를 모르면 게시판 글을 끝낼 수 없었다. 채팅창은 여전히 모든 키를 가져간다(Home·End는 커서 이동).
 - 패치는 가나 휠 대신 자체 한글 입력 UI를 넣고 휠의 텍스처를 그 UI용으로 바꿨는데, 이 UI는 재현하지
   않았다. 한국어 모드에서는 휠 입력을 끄고 휠 자리에 **화면 키보드**(`pc/src/pc_ko_editor.c`, 배치와 커서는
   `pc/src/ko/ko_osk.c`, 테스트 `pc/tests/test_ko_osk.c`)를 그린다.

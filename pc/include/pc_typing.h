@@ -68,6 +68,13 @@ int pc_typing_editor_taking_input(void);
  * pressing the buttons they are bound to (pc_pad.c) */
 int pc_typing_takes_keys(void);
 
+/* Whether the editor uses the key of a binding (a PCInputCode) for typing: a
+ * character, Enter, Backspace, Tab, the arrows, a modifier, a language key, or
+ * a mouse button (clicks on the on-screen keyboard). Bindings on other keys
+ * (Home, End, F1...) still press their buttons while typing, so Start on such
+ * a key finishes the text (pc_pad.c). */
+int pc_typing_key_types(int code);
+
 /* Every frame: with the system input method, hides the on-screen keyboard
  * while the editor waits and shows it again when it takes input */
 void pc_typing_frame(void);
