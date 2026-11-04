@@ -27,6 +27,7 @@ extern int mCD_PC_FirstSave(void);
 extern int mCD_PC_PatchTraveller(Save* file_save);
 extern int mCD_PC_LandFileInfo(const char** name, int* file_size, int* save_ofs0, int* save_ofs1);
 extern const char* pc_card_dir(s32 chan);
+extern s32 CARDDelete(s32 chan, const char* fileName);
 
 #define SCENE_GAP_MS 20000 /* at most one save per 20 s from scene changes */
 
@@ -37,6 +38,7 @@ static u32 s_quiet_since = 0; /* the player standing or walking since (an item i
 #define QUIET_MS 3000
 static GAME_PLAY* s_play = NULL;
 static int s_first_noted = 0; /* (the notice of a new town's first save, once) */
+static int s_stopped = 0;     /* a town file deleted: no saving until the game restarts */
 
 int pc_resetti_enabled(void) {
     return !g_pc_settings.disable_resetti;
@@ -92,7 +94,10 @@ static int save_now(GAME_PLAY* play, const char* why) {
     Private_c* priv = Common_Get(now_private);
     int chan;
 
-    if (!g_pc_settings.autosave || (g_pc_deterministic && !g_pc_autosave_test) || priv == NULL || !buffers()) return 0;
+    if (!g_pc_settings.autosave || s_stopped || (g_pc_deterministic && !g_pc_autosave_test) || priv == NULL ||
+        !buffers()) {
+        return 0;
+    }
     if (Common_Get(player_no) == mPr_FOREIGNER) {
         /* visiting another town (the multiplayer's trip): our own town as it
          * was left at the station, with our pockets and bells of now */
@@ -193,4 +198,43 @@ void pc_autosave_quit(void) {
     if (s_play != NULL && quiet_place(s_play, 0)) {
         save_now(s_play, "on quitting");
     }
+}
+
+int pc_autosave_town_info(int chan, char* town, int town_size, char* players, int players_size) {
+    int len = 0;
+
+    if (town_size > 0) town[0] = '\0';
+    if (players_size > 0) players[0] = '\0';
+    if (chan < 0 || chan > 1 || !buffers() || !file_part(chan, 0, NULL, s_file)) return 0;
+    pc_mp_game_name_utf8(s_file->save.land_info.name, LAND_NAME_SIZE, town, (size_t)town_size);
+    for (int i = 0; i < PLAYER_NUM; i++) {
+        Private_c* p = &s_file->save.private_data[i];
+        char name[48];
+
+        if (mPr_NullCheckPersonalID(&p->player_ID)) continue;
+        pc_mp_game_name_utf8(p->player_ID.player_name, PLAYER_NAME_LEN, name, sizeof(name));
+        if (name[0] == '\0') continue;
+        len += snprintf(players + len, len < players_size ? (size_t)(players_size - len) : 0, "%s%s",
+                        len > 0 ? ", " : "", name);
+        if (len >= players_size) break;
+    }
+    return 1;
+}
+
+int pc_autosave_delete_town(int chan) {
+    const char* name;
+    int size, o0, o1;
+    char dummy[40];
+
+    if (chan < 0 || chan > 1) return 0;
+    s_stopped = 1;
+    mCD_PC_LandFileInfo(&name, &size, &o0, &o1);
+    snprintf(dummy, sizeof(dummy), "%s_d", name); /* (a first save cut short leaves this) */
+    CARDDelete(chan, dummy);
+    if (CARDDelete(chan, name) != 0) {
+        printf("[AUTOSAVE] could not delete the town file on card %c\n", 'A' + chan);
+        return 0;
+    }
+    printf("[AUTOSAVE] deleted the town file on card %c\n", 'A' + chan);
+    return 1;
 }

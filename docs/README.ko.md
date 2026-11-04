@@ -281,12 +281,17 @@ ninja -C pc/build32strip
 
 ### 자동 저장
 
-`pc/src/pc_autosave.c`와 afe-decomp `m_card.c`(`mCD_PC_AutoSaveSnapshot`, `mCD_PC_PatchTraveller`,
-`mCD_SetResetInfo`), `m_actor.c`(`Actor_info_PC_restore_fgdata_copy`), `m_play.c`(`play_cleanup`).
+`pc/src/pc_autosave.c`와 afe-decomp `m_card.c`(`mCD_PC_AutoSaveSnapshot`, `mCD_PC_FirstSave`,
+`mCD_PC_PatchTraveller`, `mCD_SetResetInfo`), `m_actor.c`(`Actor_info_PC_restore_fgdata_copy`), `m_play.c`(`play_cleanup`).
 
 - 쓰는 것은 하니와의 "저장하고 계속하기"가 쓰는 것과 같다(플레이 시간, 여행 시간, 버전, 확인 데이터, 체크섬). 카드의
   마을 파일(`save/card_X/DobutsunomoriE_MURA`)에 바로 쓰고(본 사본, 그다음 백업), 파일은 마을 id와 이름으로 찾아
   복사 방지 코드로 확인한다.
+- 새 마을은 처음 저장할 때까지 파일이 없다. 그러면 자동 저장이 그 첫 저장을 하니와와 같은 방법으로 한다:
+  `mCD_PC_FirstSave`가 `mCD_SaveHome_bg`("저장하고 계속하기")를 한 번에 끝까지 돌려, 공간이 있는 카드에 마을 파일을
+  만들고 전부 쓴다. 그다음 위와 같이 마을을 쓰고, 처음 저장했다는 알림을 띄운다. 하니와가 저장해 주는 경우에만
+  한다: 플레이어가 자기 마을, 자기 집에 있고, 첫날은 주민을 한 명이라도 만난 뒤. 1.4.5 전에는 자동 저장이 하니와에서의
+  저장을 기다려서, 하니와에서 한 번도 저장하지 않은 새 마을은 사라졌다.
 - 장면 사이(`play_cleanup`에서 `mFM_Field_dt` 뒤, `mCD_toNextLand` 전: 모든 액터가 데이터를 돌려놓은 때), 20초에 한
   번까지. 타이틀 데모, 플레이어 선택, 오프닝에서는 하지 않는다.
 - `autosave_every`분(기본 1. 1.3.0이 쓴 `autosave_minutes = 5`는 5가 아닐 때만 읽음)마다, 플레이어가 마을 야외에 있고 페이드·메뉴·메시지가 없으며 3초 동안 서 있거나 걷거나
@@ -296,7 +301,14 @@ ninja -C pc/build32strip
 - 메뉴에서 끄거나 창을 닫을 때, 위와 같이 조용한 순간이면.
 - 방문객(`player_no == mPr_FOREIGNER`, 멀티플레이의 여행)은 Private(주머니, 벨, 편지...; 집 파일의 대출금과 박물관
   연락은 그대로)를 자기 마을 파일의 자기 플레이어 위에 복사한다.
-- `--deterministic`에서는 하지 않는다(자동 테스트는 세이브를 건드리지 않음). 도루묵씨 방문은 `mCD_SetResetInfo`가
+- 설정 → 게임 → 마을 데이터 → 마을 데이터 초기화...(`pc_gui_menu.cpp`의 `popup_town`)는 카드마다 있는 마을 파일을
+  보여 주고(`pc_autosave_town_info`: 마을 이름과 플레이어), 한 번 더 확인한 뒤 고른 것을 지운다
+  (`pc_autosave_delete_town`: `DobutsunomoriE_MURA`와 첫 저장의 임시 파일 `DobutsunomoriE_MURA_d`를 `CARDDelete`).
+  그다음 자동 저장을 멈추고 게임을 다시 시작해(`pc_request_restart`) 새 게임으로 시작하게 한다. 카드의 다른 파일
+  (패미컴 게임 세이브)은 남는다. 자동 저장이 새 마을도 저장하므로 저장하지 않고 꺼서 처음부터 다시 할 수 없어서
+  넣은 기능이다.
+- `--deterministic`에서는 `--autosave`를 함께 주지 않으면 하지 않는다(자동 테스트는 세이브를 건드리지 않음). 입력
+  스크립트의 `QUIT`은 창을 닫을 때처럼 저장한다. 도루묵씨 방문은 `mCD_SetResetInfo`가
   정하는데, `settings.ini`의 `resetti = 0`(기본)이면 바로 돌아간다.
 
 ### 자동 테스트 입력

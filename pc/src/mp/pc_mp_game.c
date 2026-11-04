@@ -237,6 +237,10 @@ static int in_shared_town(void) {
     return in_room() && s_my_town != 0 && s_my_town == room_town();
 }
 
+void pc_mp_game_name_utf8(const unsigned char* s, int n, char* out, size_t cap) {
+    game_to_utf8(s, n, out, cap);
+}
+
 void pc_mp_game_my_names(char* name, size_t n, char* town, size_t tn) {
     if (g_pc_settings.mp_name[0] != '\0') {
         snprintf(name, n, "%s", g_pc_settings.mp_name);
