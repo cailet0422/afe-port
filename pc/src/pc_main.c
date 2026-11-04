@@ -382,7 +382,8 @@ int pc_platform_poll_events(void) {
                     pc_autosave_request_save(); /* Ctrl+S: save now (pc_pad.c keeps S off the stick) */
                     break;
                 }
-                if (event.key.keysym.sym == SDLK_F3 && !event.key.repeat) {
+                if (event.key.keysym.sym == SDLK_F3 && !event.key.repeat &&
+                    !pc_keybindings_uses_key(event.key.keysym.scancode)) { /* F3 may be a control */
                     g_pc_no_framelimit ^= 1;
                     printf("[PC] Frame limiter %s\n", g_pc_no_framelimit ? "OFF" : "ON");
                 }
