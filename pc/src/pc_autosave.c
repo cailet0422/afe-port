@@ -5,6 +5,7 @@
 #include "pc_mp_game.h"
 #include "pc_rom_dir.h"
 #include "pc_pause_menu.h"
+#include "pc_gui.h"
 
 #include "game.h"
 #include "m_common_data.h"
@@ -22,6 +23,7 @@
 #include <string.h>
 
 extern int mCD_PC_AutoSaveSnapshot(Save* out, GAME_PLAY* play);
+extern int mCD_PC_FirstSave(void);
 extern int mCD_PC_PatchTraveller(Save* file_save);
 extern int mCD_PC_LandFileInfo(const char** name, int* file_size, int* save_ofs0, int* save_ofs1);
 extern const char* pc_card_dir(s32 chan);
@@ -34,6 +36,7 @@ static u32 s_last_ms = 0;
 static u32 s_quiet_since = 0; /* the player standing or walking since (an item in the air, a hole opening: done) */
 #define QUIET_MS 3000
 static GAME_PLAY* s_play = NULL;
+static int s_first_noted = 0; /* (the notice of a new town's first save, once) */
 
 int pc_resetti_enabled(void) {
     return !g_pc_settings.disable_resetti;
@@ -89,7 +92,7 @@ static int save_now(GAME_PLAY* play, const char* why) {
     Private_c* priv = Common_Get(now_private);
     int chan;
 
-    if (!g_pc_settings.autosave || g_pc_deterministic || priv == NULL || !buffers()) return 0;
+    if (!g_pc_settings.autosave || (g_pc_deterministic && !g_pc_autosave_test) || priv == NULL || !buffers()) return 0;
     if (Common_Get(player_no) == mPr_FOREIGNER) {
         /* visiting another town (the multiplayer's trip): our own town as it
          * was left at the station, with our pockets and bells of now */
@@ -98,8 +101,22 @@ static int save_now(GAME_PLAY* play, const char* why) {
         printf("[AUTOSAVE] %s: the traveller's own town (card %c)\n", why, 'A' + chan);
     } else {
         if (!mCD_PC_AutoSaveSnapshot(s_buf, play)) {
-            if (g_pc_verbose) printf("[AUTOSAVE] %s: not now (the gyroid would not save either)\n", why);
-            return 0;
+            /* a new town has no file until its first save (the gyroid's):
+             * make it the game's way, then write the town as it is now */
+            if (!mCD_PC_FirstSave()) {
+                if (g_pc_verbose) printf("[AUTOSAVE] %s: not now (the gyroid would not save either)\n", why);
+                return 0;
+            }
+            printf("[AUTOSAVE] %s: the town's first save (a new town file)\n", why);
+            if (!s_first_noted) {
+                s_first_noted = 1;
+                pc_gui_notify(pc_gui_korean() ? "자동 저장: 마을을 처음 저장했습니다. 이제 자동으로 저장됩니다."
+                                              : "Autosave: the town is saved for the first time; it now saves by itself.");
+            }
+            if (!mCD_PC_AutoSaveSnapshot(s_buf, play)) {
+                s_last_ms = SDL_GetTicks();
+                return 1; /* (the first save is this one) */
+            }
         }
         chan = town_card(s_buf->save.land_info.id, s_buf->save.land_info.name);
         if (chan < 0 || s_file->save.copy_protect != s_buf->save.copy_protect) {

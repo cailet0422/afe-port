@@ -1,5 +1,6 @@
 /* pc_input_script.c - see pc_input_script.h */
 #include "pc_input_script.h"
+#include "pc_autosave.h"
 #include "pc_mp_game.h"
 #include "pc_touch.h"
 #include "pc_typing.h"
@@ -1249,6 +1250,7 @@ int pc_input_script_frame(u32 real_frame) {
             debug_command(ev);
         } else if (ev->kind == SCRIPT_QUIT) {
             printf("[INPUT] frame %u: quit\n", frame);
+            pc_autosave_quit(); /* as closing the window */
             keep_running = 0;
         }
     }
