@@ -180,11 +180,17 @@ cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
   minutes per step; each saves at the gyroid and returns to the title). `plant` (work uniform: pick it up from the
   pockets → drop it on the player / plant 10 flower seeds and saplings — on the z 1260 row southeast of the shop;
   the first two spots are rejected, so it plants again on the row below), `hello` (greets six villagers and the
-  mayor D07F next to the shrine; villagers who are indoors at that time are visited in their houses), `furniture`
-  (furniture to E08C), `letter` (letter on Tom Nook's stationery to 루시 (Lucy) → Pelly), `carpet` (E09D),
-  `axe` (E09E), `notice` (posts on the bulletin board north of the houses, 2220,1580) → Tom Nook welcomes the player
-  as the shopkeeper (job finished). The receiving villager is shown by `first job N progress P to XXXX` in `POS`.
-  Conversations are waited on with `TALK`/`CHOOSE`/`TALKEND`.
+  mayor D07F next to the shrine; villagers who are indoors at that time (E043, E08C, E09D, E09E: `at home 1` in
+  `POS`) are visited in their houses; the mayor walks about, so he is approached and talked to twice), `furniture`
+  (furniture to E043 in his house, going up the right side of the room past the table), `letter` (letter on Tom
+  Nook's stationery to E015, the sixth in the address book, which lists the villagers in the save's order → Pelly),
+  `carpet` (E09D), `axe` (E015), `notice` (posts on the bulletin board north of the houses, 2220,1580) → Tom Nook
+  welcomes the player as the shopkeeper (job finished). The receiving villager is shown by
+  `first job N progress P to XXXX` in `POS`; for another save, give it to the step (`furniture E08C out`: the
+  villager, and `in` when they are in their house). A build made with clang draws other random numbers than gcc's
+  from the same save: there `furniture E015 out`, `letter E09E`, `carpet`, `axe E09E out`. Conversations are waited on with `TALK`/`CHOOSE`/`TALKEND`.
+  When a step misses (the next job is not given), the following steps run but do nothing: check that `first job`
+  goes up from step to step.
 - Multiple days (Korean-patched disc, save made with `--save`):
   `python3 pc/tools/make_days_script.py <scenario> > /tmp/n.txt`, then run as above (screenshots
   `shots/n_<scenario>_<n>_<step>.ppm`).
@@ -217,8 +223,9 @@ cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
     `island 0` (day 8): the boat and Kapp'n are only placed when the player `WARP`s to the block north of the dock and
     walks in (a `WARP` straight into the dock block leaves both missing; `ac_birth_control` places the boat on
     entering block E-5/F-4). Next to Kapp'n (3438,4230), at (3470,4240): "섬에 갈래" ("I want to go to the island")
-    → to the island while he sings → walk around the island → to Kapp'n at the island dock (south from 3660,5262)
-    → back to the town (about 5 minutes).
+    → to the island while he sings → walk around the island → to Kapp'n at the island dock (south from 3640,5312,
+    on the pier north of his boat, where the boat left the player; each town's island has its own layout, so for
+    another town check `npc D072` in `POS`) → back to the town (about 5 minutes).
   - `week` (`--days 1`, the `--save` save): a whole week in one run instead of a new run for each day. The
     input-script command `CLOCK h[:m[:s]]` moves the clock forward to that time (tomorrow if that time has already
     passed today), and since the game reads the clock every frame, it crosses midnight by itself

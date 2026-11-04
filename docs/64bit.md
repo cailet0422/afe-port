@@ -126,9 +126,10 @@ How:
   identical sample for sample.
 - **Screens**: every scenario on the gcc 32-bit and the gcc 64-bit build (gcc evaluates arguments in the same order
   on both, so the random numbers match), comparing the screenshots pixel for pixel, the logged positions line for
-  line and the saves byte for byte: 35 scenarios and 815 screenshots, all identical, as are the logs and the saves.
-  The same with clang, the Android build's compiler, 32-bit against 64-bit: 14 scenarios, 491 screenshots and the
-  sound of the town walk, all identical.
+  line and the saves byte for byte, and the same with clang, the Android build's compiler, 32-bit against 64-bit.
+  The counts first given here (35 scenarios and 815 screenshots; 14 and 491 with clang) came from runs whose
+  starting save was empty, so most of those scenarios stopped at the new-game prompt: see
+  [Further checks (v1.4.10)](#further-checks-v1410) for the runs done again.
 - **REL overlay map**: the disc objects each build overlays (`*.relmap`) are the same, except one table of
   animation pointers (`m_player_lib.c`) that only the 32-bit build pairs with a disc object of the same size. The
   copy keeps every pointer field, so nothing changes.
@@ -193,6 +194,72 @@ Original code that reads past an array, the same way on every build (left as is)
 
 Not fixed: SE ids the game never plays (0x351 and others between the defined ones) make the sequence player read
 unrelated bank data and can crash or hang any build.
+
+## Further checks (v1.4.10)
+
+The save most scenarios start from (`make_newgame_script.py --save`) had been made with too few presses at the end:
+the game never wrote it, and the runs of v1.4.7 that load it stayed at the "출발할까?" prompt of the train. The
+script now presses through to the end of the save, and everything was run again on the save it leaves. The
+scenarios were also checked for steps that miss what they are for (the logs' positions, jobs and loans, and the
+screenshots of each).
+
+- **gcc 32-bit against gcc 64-bit**: 36 scenarios, 845 screenshots, the logs and the saves identical (the saves
+  after the notice fix below).
+- **clang 32-bit against clang 64-bit** (the Android build's compiler): the same 36 scenarios and 845 screenshots
+  identical.
+- **The part-time job**: the test script's `hello` step missed a villager who is in his house at that hour in this
+  town, so Nook never gave the next job, and the steps after it ran without doing their errands (the same on every
+  build, so the comparison did not show it). The script now knows who is indoors, talks to the mayor again when he
+  has walked on, goes round a table, and addresses the letter to the job's villager; the job runs to its end, Nook
+  greeting the player as a shopkeeper: 76 screenshots on gcc and 75 on clang (whose town gives the errands to other
+  villagers), all identical, and the saves identical at every step.
+- **House expansion and the island** (`house-next` on days 4, 5 and 6, `island-buy`, `rooms`, `island`: the loan
+  paid each time, the bigger house, the basement, the upper floor, buying the island, the rooms upstairs and
+  downstairs, the boat to the island and back): 141 screenshots and the saves identical. The way back to Kapp'n on
+  the island's pier was set for another town's island, so the player stayed on the island; the script now stands
+  where the boat left the player.
+- **The town through the year** (the walk through all 30 blocks on Christmas Eve, New Year's Day, in January snow,
+  on Valentine's Day, in cherry-blossom time, in May, July, on the fireworks night, in September, at Halloween and
+  on a rainy night): 330 screenshots identical.
+- **Famicom**: 19 games, 304 screenshots and the sound of each identical.
+- **HD texture pack** (ACHD V25, the interiors and the town): 84 screenshots identical (the pack's 18858 textures
+  loaded; 65 of the 71 interior screenshots differ from those without it).
+- **Windows x64** (Wine) against Linux 64-bit: the save path (furniture, the museum, the shop, saving),
+  a letter and the house loan with the treasure notice: 84 screenshots and the saves identical, and the GBA files
+  are found at boot.
+- **Multiplayer**: a 32-bit host and a 64-bit guest: joining, the town sent to the guest (466944 bytes) and chat.
+- **AddressSanitizer and UBSan** through all of it (50 runs): no memory errors. Out-of-range reads in the original
+  code that these runs reach and the first did not, the same on every build:
+  - `aFSN_actor_ct` (the balloon) reads `banks[-1].ram_start` for an actor without a bank and never uses it;
+  - `mPr_GetMotherMailMonthlyNotSendNum` reads `monthly[2]` of 2 for September to December, which is the next byte
+    of the struct (`_pad`) on every build, as on the GameCube;
+  - `mEv_get_end_time` makes a pointer to `event_today[0xFF]` and tests the index before reading it;
+  - the mail carrier (`aPMAN_set_move_idx`) reads `move_idx[-1]` when there is nothing to deliver, and then flies
+    off without using it.
+- **Valgrind** (memcheck, the 64-bit build): the save path, the house loan on the day of the treasure notice and
+  the Korean letter: no use of uninitialised memory other than the harvest moon's year (below), and no uninitialised
+  byte written into a save.
+- **More warnings** (gcc's `-Wreturn-type`, `-Wimplicit-function-declaration`, `-Wuninitialized`, `-Warray-bounds`,
+  `-Wformat` and others over every source): the functions that end without returning a value are unused or their
+  callers ignore it, and the functions called without a declaration return `int` or nothing.
+- **Mail and notices built on the stack**: every `Mail_c` filled in a local before it goes into the save is cleared
+  first; one notice was not (below).
+
+Fixed:
+
+- **A villager's treasure notice** (every build): `mNtc_check_treasure` builds the notice in a post on the stack, and
+  the handbill fills only part of its message; the other 14 bytes went into the save as whatever the stack held (a
+  32-bit and a 64-bit build that played the same days wrote saves that differed in `noticeboard[5]`). Under
+  `TARGET_PC` the post is zeroed first, as `mNtc_set_auto_nwrite` already does for the automatic notices.
+- **Archive volume names on Windows and Android**: `JKRFileLoader::fetchVolumeName` lowercased the volume of a path
+  with `_tolower`, which the C libraries define for upper-case letters only: MinGW's subtracts `'A' - 'a'` from any
+  character and bionic's ORs in 0x20, which turns `_` into DEL. So `/agb_special/...` named no volume there, and at
+  boot the GBA design editor's files were not found in `agb_special.arc` ("AGB data file not found"; there is no GBA
+  to send them to on PC, so nothing showed). It uses `tolower` now, which leaves other characters alone.
+- **The harvest moon's year** (Valgrind): for the years of its table, `lbRk_HarvestMoonDay` fills in the month and
+  day only, and `update_event_rumor` copies the year too (an uninitialised stack value) into the date it steps back
+  with `lbRTC_Sub_DD`, whose leap-year test reads it at every town load. The month before a September or October
+  date never depends on the year, so the rumor's dates were right on every build; under `TARGET_PC` the year is set.
 
 ## How to check
 

@@ -1278,10 +1278,13 @@ static void debug_command(const ScriptEvent* ev) {
         sAdo_BgmStart((u16)ev->value[0]);
         printf("[INPUT] frame %u: music %02X\n", (unsigned)s_frame, (unsigned)ev->value[0]);
     } else if (ev->kind == SCRIPT_CATCH && (animal = find_animal((u16)ev->value[0])) != NULL) {
-        /* the field and the padding after it, where the Korean patch packs it */
+        /* the field and the padding after it, where the Korean patch packs it
+         * (read as bytes of the struct: the field itself is 4 long) */
+        const u8* bytes = (const u8*)animal + offsetof(Animal_c, catchphrase);
+
         printf("[INPUT] frame %u: catchphrase of %04X:", (unsigned)s_frame, (unsigned)ev->value[0]);
         for (i = 0; i < 7; i++) {
-            printf(" %02X", animal->catchphrase[i]);
+            printf(" %02X", bytes[i]);
         }
         printf("\n");
     }

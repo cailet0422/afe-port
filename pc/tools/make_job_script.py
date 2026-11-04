@@ -14,20 +14,24 @@ takes a little longer; POS prints Nook's job number and its progress
             rows south-east of his shop; back to him for the next job
   hello     job 9: hello to each villager and to Tortimer by the shrine, back
             to Nook (on plant's save)
-  furniture job 2: the furniture Nook gives to E08C, back to Nook
-  letter    job 3: a letter on Nook's stationery to Lucy, posted at the post
+  furniture job 2: the furniture Nook gives to E043, back to Nook
+  letter    job 3: a letter on Nook's stationery to E015, posted at the post
             office, back to Nook
   carpet    job 4: the carpet to E09D, back to Nook
-  axe       job 5: the axe to E09E, back to Nook
+  axe       job 5: the axe to E015, back to Nook
   notice    job 6: a notice on the message board, back to Nook: the job is
             over (Nook greets the player as a shopkeeper the next time)
 
 Run them in turn, each on the save the one before left (about a minute
 each; the whole job about seven): plant, hello, furniture, letter, carpet,
 axe, notice. Which villager each errand goes to and who is indoors depend on
-the town and the hour: POS shows Nook's job and its recipient.
+the town and the hour: POS shows Nook's job and its recipient. The defaults
+are those of the save make_newgame_script.py --save leaves; for another, give
+the errand's villager (and "in" when they are in their house) to the stage.
+When a stage misses, the next job is not given and the stages after it do
+nothing: check that POS's "first job" goes up from stage to stage.
 
-usage: make_job_script.py STAGE > script.txt
+usage: make_job_script.py STAGE [NPC [in|out]] > script.txt
 """
 import subprocess
 import sys
@@ -149,8 +153,14 @@ HOMES = {"E038": (2740, 1700), "E015": (3060, 1780), "E043": (3020, 2900),
          "E08C": (1140, 2380), "E09D": (780, 2780), "E09E": (1740, 3700)}
 
 
-# Villagers indoors at that hour (POS shows them on their house's spot)
-AT_HOME = ("E08C", "E09D", "E09E")
+# The town's villagers in the order of the save (POS "home" lines), which is
+# the order of the address book
+ANIMALS = ("E09E", "E038", "E08C", "E09D", "E043", "E015")
+
+
+# Villagers indoors at that hour (POS shows them on their house's spot, and
+# its "home" lines say "at home 1")
+AT_HOME = ("E043", "E08C", "E09D", "E09E")
 
 
 def hello():
@@ -173,11 +183,14 @@ def hello():
             do("SEEK 160,280 300", 310)
             do("SD 120", 130)
             do("TALKEND 900 100", 30)
-    # Tortimer, by the shrine while the job lasts (D07F, 2980,3620)
+    # Tortimer, by the shrine while the job lasts (D07F, 2980,3620). He walks
+    # about, so he can have stepped aside by the time the player stops: walk
+    # up to him and talk a second time (a second talk is only his chatter)
     do("WARP 2880,3520", 250)
-    do("SEEK D07F 900", 910)
-    do("A", 30)
-    do("TALKEND 4000 60", 30)
+    for _ in range(2):
+        do("SEEK D07F 900", 910)
+        do("A", 30)
+        do("TALKEND 4000 60", 30)
     shot("hello_tortimer", 0)
     into_shop()
     talk_nook()
@@ -193,6 +206,9 @@ def deliver(npc, indoors=False):
         do(f"WARP {x},{z - 8} 4", 250)
         do("A", 10)
         shot(f"house_{npc}", 360)
+        # up the right side of the room: a table in the middle can stand
+        # between the door and the villager
+        do("SEEK 250,260 120", 130)
         do(f"SEEK {npc} 300", 310)
     else:
         do(f"WARP {x},{z + 60} 4", 250)
@@ -207,17 +223,18 @@ def deliver(npc, indoors=False):
 
 
 def furniture():
-    """job 2: the furniture to E08C (by his house at that hour), back to Nook"""
-    deliver("E08C")
+    """job 2: the furniture to E043 (in his house at that hour), back to Nook"""
+    deliver(*recipient("E043", True))
     into_shop()
     talk_nook()
     out_of_shop()
     save_at_haniwa()
 
 
-def post_letter(paper_slot, up_to_top=True):
-    """Write a letter on the stationery in a pocket to the first in the
-    address book (Lucy, E09E in that town) and give it to Pelly"""
+def post_letter(paper_slot, to=0):
+    """Write a letter on the stationery in a pocket to the to-th villager of
+    the address book (the order of the town's villagers, ANIMALS) and give it
+    to Pelly"""
     do("START", 100)
     for _ in range(paper_slot % 5):
         do("SR 6", 30)
@@ -225,8 +242,11 @@ def post_letter(paper_slot, up_to_top=True):
     do("SD 6", 30)                              # 편지쓰기 (write a letter)
     do("A", 260)                                # the address first: the list
     do("A", 150)
-    for _ in range(6 if up_to_top else 0):
+    for _ in range(6):                          # to the top
         do("SU 6", 30)
+    for _ in range(to):
+        do("SD 6", 30)
+    shot("address", 0)
     do("A", 150)
     do("TYPE dkssud{SP}fntl!", 20)              # 안녕 루시!
     shot("letter", 0)
@@ -255,8 +275,9 @@ def post_letter(paper_slot, up_to_top=True):
 
 
 def letter():
-    """job 3: a letter to Lucy (E09E) on Nook's stationery, posted"""
-    post_letter(2)
+    """job 3: a letter to E015 on Nook's stationery, posted"""
+    npc, _ = recipient("E015", False)
+    post_letter(2, ANIMALS.index(npc))
     into_shop()
     talk_nook()
     out_of_shop()
@@ -265,7 +286,7 @@ def letter():
 
 def carpet():
     """job 4: the carpet to E09D, back to Nook"""
-    deliver("E09D")
+    deliver(*recipient("E09D", False))
     into_shop()
     talk_nook()
     out_of_shop()
@@ -273,8 +294,8 @@ def carpet():
 
 
 def axe():
-    """job 5: the axe to E09E, back to Nook"""
-    deliver("E09E", indoors="E09E" in ARGS)
+    """job 5: the axe to E015, back to Nook"""
+    deliver(*recipient("E015", False))
     into_shop()
     talk_nook()
     out_of_shop()
@@ -304,6 +325,16 @@ def notice():
 
 
 ARGS = sys.argv[2:]
+
+
+def recipient(npc, indoors):
+    """The villager an errand goes to and whether they are in their house:
+    this town's on the save make_newgame_script.py --save leaves, or the
+    stage's arguments (NPC [in|out]) where POS shows another"""
+    if ARGS:
+        npc = ARGS[0]
+        indoors = len(ARGS) > 1 and ARGS[1] == "in"
+    return npc, indoors
 STAGES = {"plant": plant, "hello": hello, "furniture": furniture, "letter": letter, "carpet": carpet, "axe": axe,
           "notice": notice}
 stage = sys.argv[1] if len(sys.argv) > 1 else ""

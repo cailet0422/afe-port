@@ -345,9 +345,11 @@ def island():
     for i, d in enumerate(("SL 120", "SL 120", "SU 120", "SL 120")):   # off the pier, west
         do(d, 130)
         shot(f"island_walk{i}", 0)
-    # back: north of Kapp'n on the island's pier (he waits in the boat), home
+    # back: north of Kapp'n on the island's pier (he waits in the boat, D072
+    # at 3643,5371 on this town's island; the boat left the player at
+    # 3627,5307), facing him, home
     do("SEEK 3420,5370 500", 510)
-    do("SEEK 3660,5262 300", 310)
+    do("SEEK 3640,5312 300", 310)
     do("SD 4", 30)
     shot("back_pier", 0)
     for c in ISLAND_CHOICES:
