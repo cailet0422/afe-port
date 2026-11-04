@@ -5,6 +5,7 @@
 #include "ko_ime.h"
 #include "pc_ko.h"
 #include "pc_settings.h"
+#include "pc_keybindings.h"
 
 int g_pc_typing_mode = 0;
 int g_pc_editor_active = 0;
@@ -44,6 +45,34 @@ int pc_typing_editor_taking_input(void) {
 
 int pc_typing_takes_keys(void) {
     return g_pc_typing_mode && pc_typing_editor_taking_input();
+}
+
+int pc_typing_key_types(int code) {
+    SDL_Scancode sc;
+    SDL_Keycode sym;
+
+    if (code < 0) {
+        return 0;
+    }
+    if (code & PC_INPUT_MOUSE_BIT) {
+        return 1; /* clicks press the on-screen keyboard's keys */
+    }
+    sc = (SDL_Scancode)code;
+    if ((sc >= SDL_SCANCODE_RIGHT && sc <= SDL_SCANCODE_UP) ||          /* the cursor */
+        (sc >= SDL_SCANCODE_KP_DIVIDE && sc <= SDL_SCANCODE_KP_PERIOD) ||  /* the keypad */
+        sc == SDL_SCANCODE_KP_EQUALS || sc == SDL_SCANCODE_KP_COMMA ||
+        (sc >= SDL_SCANCODE_KP_00 && sc <= SDL_SCANCODE_KP_HEXADECIMAL) ||
+        (sc >= SDL_SCANCODE_LCTRL && sc <= SDL_SCANCODE_RGUI) ||          /* Shift+Enter, Ctrl+Enter */
+        (sc >= SDL_SCANCODE_LANG1 && sc <= SDL_SCANCODE_LANG9) ||         /* 한/영 */
+        sc == SDL_SCANCODE_CAPSLOCK) {
+        return 1;
+    }
+    sym = SDL_GetKeyFromScancode(sc);
+    if (sym == SDLK_RETURN || sym == SDLK_BACKSPACE || sym == SDLK_TAB) {
+        return 1;
+    }
+    /* a character in this keyboard layout (Delete is 127, Escape 27) */
+    return !(sym & SDLK_SCANCODE_MASK) && sym >= ' ' && sym != SDLK_DELETE;
 }
 
 int pc_typing_pop(int* op) {

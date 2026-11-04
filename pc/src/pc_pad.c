@@ -124,11 +124,25 @@ u32 PADRead(PADStatus* status) {
         /* (and on the first read after: the Enter that sent a chat line
          * closes the box in the frame it is pressed, before this read) */
         static int s_typing_before = 0;
-        int typing = pc_typing_takes_keys() || pc_gui_chat_active();
+        int editor = pc_typing_takes_keys();
+        int typing = editor || pc_gui_chat_active();
 
         if (typing || s_typing_before) {
-            s_typed_held = held;
-            held = 0;
+            /* In the game's text editor, controls on keys that type nothing
+             * (Home, End, F1...) still press their buttons:
+             * Start on such a key finishes the text, as on a gamepad. The
+             * chat box keeps them all (Home and End move its cursor). */
+            u32 pass = 0;
+
+            if (editor) {
+                for (int i = 0; i < PC_BIND_COUNT; i++) {
+                    if ((held & (1u << i)) && !pc_typing_key_types(g_pc_keybindings.key[i])) {
+                        pass |= 1u << i;
+                    }
+                }
+            }
+            s_typed_held = held & ~pass;
+            held = pass;
         } else {
             s_typed_held &= held;
             held &= ~s_typed_held;
