@@ -84,6 +84,7 @@ typedef enum {
     SCRIPT_HANIWA,
     SCRIPT_WARP,
     SCRIPT_WEATHER,
+    SCRIPT_SPEVENT,
     SCRIPT_FG,
     SCRIPT_CLOCK,
     SCRIPT_BGM,
@@ -318,6 +319,15 @@ int pc_input_script_load(const char* path) {
                    sscanf(arg, "%f,%f", &ev.seek_pos[0], &ev.seek_pos[1]) == 2) {
             ev.kind = SCRIPT_FG;
             ev.value[0] = (u32)strtoul(arg2, NULL, 16);
+        } else if (strcmp(word, "SPEVENT") == 0 && fields >= 3) {
+            unsigned pbx, pbz, pux, puz;
+
+            ev.kind = SCRIPT_SPEVENT;
+            ev.value[0] = (u32)strtoul(arg, NULL, 10);
+            if (fields >= 4 && sscanf(arg2, "%u,%u,%u,%u", &pbx, &pbz, &pux, &puz) == 4 && pbx >= 1 &&
+                pbx <= FG_BLOCK_X_NUM && pbz >= 1 && pbz <= FG_BLOCK_Z_NUM && pux < UT_X_NUM && puz < UT_Z_NUM) {
+                ev.value[1] = (pbx << 24) | (pbz << 16) | (pux << 8) | puz;
+            }
         } else if (strcmp(word, "WEATHER") == 0 && fields >= 3) {
             ev.kind = SCRIPT_WEATHER;
             ev.value[0] = (u32)strtoul(arg, NULL, 10);
@@ -1233,6 +1243,94 @@ static void debug_command(const ScriptEvent* ev) {
 
         printf("[INPUT] frame %u: item %04X at %d,%d: %d\n", (unsigned)s_frame, (unsigned)ev->value[0],
                (int)wpos.x, (int)wpos.z, mFI_SetFG_common((mActor_name_t)ev->value[0], wpos, TRUE));
+    } else if (ev->kind == SCRIPT_SPEVENT) {
+        /* the week's visitor (a mEv_EVENT_* number: the artist, the broker,
+         * Gracie ...) set for today and tomorrow and made new, as the game
+         * starts one (its save data cleared, then set up by the event
+         * manager), and today's events made again; the town has it from the
+         * next scene. 68 is Gulliver, the weekday's visitor. */
+        lbRTC_time_c* t = Common_GetPointer(time.rtc_time);
+        u16 today = (u16)((t->month << 8) | t->day);
+        u16 tomorrow;
+        GAME_PLAY* play = (GAME_PLAY*)gamePT;
+        int type = (int)ev->value[0];
+
+        if (t->day < lbRTC_GetDaysByMonth(t->year, t->month)) {
+            tomorrow = today + 1;
+        } else {
+            tomorrow = (u16)(((t->month % 12 + 1) << 8) | 1);
+        }
+        if (type == mEv_EVENT_DOZAEMON) {
+            Save_Get(event_save_common).weekly_event.type = mEv_EVENT_DOZAEMON;
+            Save_Get(event_save_common).dates[mEv_SAVE_DATE_WEEKLY] = today;
+            Save_Get(event_save_common).dozaemon_completed = FALSE;
+            if (t->weekday == lbRTC_SATURDAY || t->weekday == lbRTC_SUNDAY) {
+                printf("[INPUT] frame %u: Gulliver comes on weekdays only\n", (unsigned)s_frame);
+            }
+        } else {
+            mEv_ClearSpecialEvent(&Save_Get(event_save_data).special);
+            Save_Get(event_save_common).special_event.type = (s16)type;
+            Save_Get(event_save_common).special_event.flags = 1; /* (the event manager sets it up) */
+            Save_Get(event_save_common).dates[mEv_SAVE_DATE_SPECIAL0] = today;
+            Save_Get(event_save_common).dates[mEv_SAVE_DATE_SPECIAL1] = today;
+            Save_Get(event_save_common).dates[mEv_SAVE_DATE_SPECIAL2] = tomorrow;
+            Save_Get(event_save_common).dates[mEv_SAVE_DATE_SPECIAL3] = 6;
+        }
+        Save_Set(event_year, t->year);
+        if (play != NULL && play->game.exec == play_main) {
+            mEv_init_force(&play->event);
+        }
+        printf("[INPUT] frame %u: special event %d today\n", (unsigned)s_frame, type);
+        /* the town's free lots (where a visitor's tent or car is put) */
+        for (int bz = 1; bz < FG_BLOCK_Z_NUM + 1; bz++) {
+            for (int bx = 1; bx < FG_BLOCK_X_NUM + 1; bx++) {
+                for (int u = 0; u < UT_TOTAL_NUM; u++) {
+                    mActor_name_t item = EMPTY_NO;
+
+                    if (mFI_GetBlockUtNum2FG(&item, bx, bz, u % UT_X_NUM, u / UT_X_NUM) && mNT_IS_RESERVE(item)) {
+                        printf("[INPUT] frame %u: lot block %d,%d unit %d,%d\n", (unsigned)s_frame, bx, bz,
+                               u % UT_X_NUM, u / UT_X_NUM);
+                    }
+                }
+            }
+        }
+        if (ev->value[1] != 0) {
+            /* SPEVENT type bx,bz,ux,uz: the tent or car of a visitor who
+             * comes to a lot (the broker, Gracie, the fortune teller), put
+             * on the lot there instead of one the game picks; only before
+             * the game has placed it (it moves no tent or car already set) */
+            static const struct {
+                int type;
+                mActor_name_t structure;
+            } lot_visitor[] = {
+                { mEv_EVENT_BROKER_SALE, BROKER_TENT },
+                { mEv_EVENT_DESIGNER, DESIGNER_CAR },
+                { mEv_EVENT_GYPSY, FORTUNE_TENT },
+            };
+            mActor_name_t structure = EMPTY_NO;
+
+            for (int i = 0; i < (int)ARRAY_COUNT(lot_visitor); i++) {
+                if (lot_visitor[i].type == type) {
+                    structure = lot_visitor[i].structure;
+                }
+            }
+            if (structure == EMPTY_NO) {
+                printf("[INPUT] frame %u: visitor %d does not come to a lot\n", (unsigned)s_frame, type);
+            } else if (mEv_get_common_place(type, 0x51) != NULL) {
+                printf("[INPUT] frame %u: visitor %d is placed already\n", (unsigned)s_frame, type);
+            } else {
+                mEv_place_data_c* place = mEv_reserve_common_place(type, 0x51);
+
+                if (place != NULL) {
+                    place->actor_name = structure;
+                    place->flag = 0;
+                    place->block.x = (u8)(ev->value[1] >> 24);
+                    place->block.z = (u8)(ev->value[1] >> 16);
+                    place->unit.x = (u8)(ev->value[1] >> 8);
+                    place->unit.z = (u8)ev->value[1];
+                }
+            }
+        }
     } else if (ev->kind == SCRIPT_WEATHER) {
         /* today's weather, as the game decides it at the start of a day (the
          * town shows it from the next scene on, e.g. after a WARP); while

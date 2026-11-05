@@ -261,6 +261,29 @@ Fixed:
   with `lbRTC_Sub_DD`, whose leap-year test reads it at every town load. The month before a September or October
   date never depends on the year, so the rumor's dates were right on every build; under `TARGET_PC` the year is set.
 
+## Forced talks (v1.4.14)
+
+An NPC that has to go on talking after a talk, without the player pressing A (Gracie's "준비, 시작!!" once the player
+stands at her car, Gulliver getting up, the islander who wakes, the golden axe's fairy, a snowman once it is
+finished, the town tune board after its GBA choice), sets a label on the player: the actor that may start the next
+talk by itself (`mPlib_Set_able_force_speak_label`, also set by `mPlib_request_main_demo_wait_from_submenu`).
+`mDemo_Request` lets a forced talk (`mDemo_TYPE_SPEAK`) start only for that actor, through
+`Player_actor_Check_able_force_speak_label`.
+
+On PC the label is a `uintptr_t` (it holds an actor's address), and the check read it into a `u32` before comparing
+it with the whole address. On a 32-bit build both are the same; on a 64-bit build (Windows x64, Linux x86_64 and
+Android's arm64, where actors are above 4GB) they never were, so the forced talk was refused for good and the player
+was left with no control: in Gracie's car wash, the player stayed at the car in the first wiping pose and she never
+said the next line; Gulliver got up and never spoke. The scenarios compared 32 and 64-bit before did not go through a
+forced talk with a label, so they did not show it. Under `TARGET_PC` the check now compares the whole label.
+
+Checked: Gracie's car wash (the town's scripted play with the `SPEVENT` debug command, seamless acres on and off)
+froze on the 64-bit build before the fix, as in the report; after it, the 64-bit build gives the same positions,
+screenshots and present as the 32-bit build. Gulliver (`SPEVENT 68`): before the fix the 64-bit build froze when he
+got up; after it, the same screenshots, positions and present as 32-bit. A search of the PC sources for other values
+that hold an address and are cut to 32 bits found none (the other labels, the net's catch, the doors, the snowball
+and the mosquito, compare whole addresses; the menu's shutter label cuts both sides the same way).
+
 ## How to check
 
 The default 32-bit build (gcc) and the 64-bit build (clang) give different screens even with the same

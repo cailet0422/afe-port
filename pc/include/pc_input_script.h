@@ -49,6 +49,10 @@
  *     <frame> FG <x>,<z> <item>       debug: an item (hex id) on the ground in the unit at x,z,
  *                                     as the game sets one (008D Resetti's hole: walking in
  *                                     falls into the Reset Center)
+ *     <frame> SPEVENT <type> [<bx>,<bz>,<ux>,<uz>]  debug: the week's visitor (mEv_EVENT_* number,
+ *                                     76 Gracie; 68 Gulliver, the weekday's) today, shown from the
+ *                                     next scene (WARP); prints the town's free lots, and puts the
+ *                                     visitor's tent or car on the lot at that block and unit
  *     <frame> WEATHER <type> [<n>]    debug: today's weather (1 rain, 2 snow ...) and its
  *                                     intensity (0-3), shown from the next scene (WARP)
  *     <frame> MENU <name> [<a0> [<a1>]] debug: open a submenu by its mSM_OVL_ name without the
