@@ -513,6 +513,7 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_render.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gfx/pc_gfx.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gfx/pc_gfx_vk.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gfx/pc_gfx_d3d12.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_keybindings.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_nes_fixnes.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_stubs.c
@@ -692,6 +693,15 @@ option(PC_VULKAN "Build the Vulkan renderer" ON)
 if(PC_VULKAN)
     target_compile_definitions(afe_pc PRIVATE PC_GFX_VULKAN_BUILT)
     target_include_directories(afe_pc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/vulkan/include)
+endif()
+# Direct3D 12 (pc_gfx_d3d12.c, Windows 10 or later): d3d12.dll, dxgi.dll and
+# d3dcompiler_47.dll are opened at run time, so the game still starts on older
+# Windows (with OpenGL)
+if(WIN32)
+    option(PC_D3D12 "Build the Direct3D 12 renderer" ON)
+    if(PC_D3D12)
+        target_compile_definitions(afe_pc PRIVATE PC_GFX_D3D12_BUILT)
+    endif()
 endif()
 
 if(PC_GLES)

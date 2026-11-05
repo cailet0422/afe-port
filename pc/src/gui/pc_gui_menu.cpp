@@ -236,6 +236,7 @@ static void save() {
 
 static bool restart_needed() {
     return g_pc_settings.msaa != s_startup.msaa || g_pc_settings.preload_textures != s_startup.preload_textures ||
+           g_pc_settings.renderer != s_startup.renderer ||
            pc_rom_dir_changed() || g_pc_settings.korean != s_startup.korean ||
            strcmp(g_pc_settings.ko_image, s_startup.ko_image) != 0;
 }
@@ -364,7 +365,36 @@ static void draw_main() {
 
 /* --- Settings tabs -------------------------------------------------------- */
 
+/* The graphics API (the ones this build has); from the next start */
+static void video_api() {
+    PCGfxApi apis[3];
+    const char* names[3];
+    int n = 0, idx = 0;
+    char in_use[200];
+
+    for (int a = PC_GFX_OPENGL; a <= PC_GFX_D3D12; a++) {
+        if (!pc_gfx_api_built((PCGfxApi)a)) continue;
+        if (g_pc_settings.renderer == a) idx = n;
+        apis[n] = (PCGfxApi)a;
+        names[n++] = pc_gfx_api_name((PCGfxApi)a);
+    }
+    if (n < 2) return;
+    row(T("Graphics API", "그래픽 API"), T("Takes effect after a restart", "다시 시작하면 적용"));
+    if (ImGui::Combo("##api", &idx, names, n) && apis[idx] != g_pc_settings.renderer) {
+        g_pc_settings.renderer = apis[idx];
+        save();
+    }
+    snprintf(in_use, sizeof(in_use), "%s: %s", T("In use", "사용 중"), pc_gfx_device_name());
+    Help(in_use);
+    if ((g_pc_renderer_override >= 0 ? g_pc_renderer_override : s_startup.renderer) != (int)g_pc_gfx_api) {
+        /* asked for at this start, but it could not start here */
+        Help(T("The chosen API could not start on this device, so OpenGL is used.",
+               "선택한 API를 이 기기에서 시작할 수 없어 OpenGL을 사용합니다."));
+    }
+}
+
 static void tab_video() {
+    video_api();
 #ifndef __ANDROID__
     {
         const char* modes[] = { T("Windowed", "창 모드"), T("Fullscreen", "전체 화면"),
@@ -432,8 +462,8 @@ static void tab_video() {
             save();
         }
     }
-    Help(T("Anti-aliasing changes take effect after a restart. HD textures are under \"HD textures\".",
-           "안티에일리어싱은 다시 시작하면 적용됩니다. HD 텍스처는 [HD 텍스처] 탭에 있습니다."));
+    Help(T("The graphics API and anti-aliasing take effect after a restart. HD textures are under \"HD textures\".",
+           "그래픽 API와 안티에일리어싱은 다시 시작하면 적용됩니다. HD 텍스처는 [HD 텍스처] 탭에 있습니다."));
 }
 
 static void tab_audio() {

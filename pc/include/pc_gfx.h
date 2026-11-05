@@ -43,6 +43,9 @@ void pc_gfx_drawable_size(int* w, int* h);
 void pc_gfx_set_vsync(int on);
 /* shows what was drawn since the last present */
 void pc_gfx_present(void);
+/* there while a start with Vulkan or Direct3D 12 has not shown its first
+ * seconds yet: the next start uses OpenGL if it stays (a crashing driver) */
+#define PC_GFX_START_MARK "graphics_starting.txt"
 /* window and app events the backend has to follow (Android's background) */
 void pc_gfx_handle_event(const SDL_Event* e);
 /* "OpenGL", "Vulkan", "Direct3D 12" */

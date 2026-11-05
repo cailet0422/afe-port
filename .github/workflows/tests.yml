@@ -8,7 +8,8 @@ on:
 
 jobs:
   unit-tests:
-    runs-on: ubuntu-latest
+    # (24.04: the glslang and spirv-cross the committed shaders were made with)
+    runs-on: ubuntu-24.04
     steps:
     - name: Checkout
       uses: actions/checkout@v5
@@ -16,8 +17,11 @@ jobs:
         submodules: true # the decomp, for the SDK types the card test uses
 
     - name: Install
-      # gcc-multilib and pyelftools: the save swap table check below
-      run: sudo apt-get update && sudo apt-get install -y ninja-build gcc-multilib python3-pyelftools
+      # gcc-multilib and pyelftools: the save swap table check below; glslang-tools
+      # and spirv-cross: the shader check
+      run: >
+        sudo apt-get update && sudo apt-get install -y ninja-build gcc-multilib python3-pyelftools
+        glslang-tools spirv-cross
 
     - name: Build
       run: |

@@ -81,6 +81,19 @@ def spirv(fn, stage, prelude, tmp):
     return [int.from_bytes(data[i:i + 4], "little") for i in range(0, len(data), 4)]
 
 
+def hlsl(fn, stage, prelude, tmp):
+    """HLSL (shader model 5.0) of pc/shaders/fn: SPIR-V with the prelude, through spirv-cross"""
+    words = spirv(fn, stage, prelude, tmp)
+    spv = Path(tmp) / f"{fn}.d3d12.spv"
+    out = Path(tmp) / f"{fn}.hlsl"
+    spv.write_bytes(b"".join(w.to_bytes(4, "little") for w in words))
+    r = subprocess.run(["spirv-cross", "--hlsl", "--shader-model", "50", str(spv), "--output", str(out)],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        sys.exit(f"{fn}: spirv-cross: {r.stdout}{r.stderr}")
+    return out.read_text()
+
+
 def c_words(name, words):
     out = [f"static const unsigned int {name}[{len(words)}] = {{"]
     for i in range(0, len(words), 8):
@@ -116,6 +129,13 @@ def generate():
         for name, fn, stage in GLSL:
             words = spirv(fn, stage, vk_prelude(name.startswith("gx")), tmp)
             parts.append(c_words(f"pc_shader_{name}_spv", words))
+            parts.append("\n")
+    if shutil.which("spirv-cross") is None:
+        sys.exit("spirv-cross is needed (apt install spirv-cross)")
+    parts.append("/* Direct3D 12: HLSL for D3DCompile (SPIRV_CROSS_CONSTANT_ID_<n> as above) */\n")
+    with tempfile.TemporaryDirectory() as tmp:
+        for name, fn, stage in GLSL:
+            parts.append(c_string(f"pc_shader_{name}_hlsl", hlsl(fn, stage, vk_prelude(name.startswith("gx"), True), tmp)))
             parts.append("\n")
     parts.append("#endif\n")
     return "".join(parts)

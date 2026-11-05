@@ -275,6 +275,7 @@ static GLuint s_gx_vao = 0, s_gx_vbo = 0, s_gx_ebo = 0;
 
 void pc_gfx_close_window(void) {
     if (g_gfx_backend != NULL) {
+        remove(PC_GFX_START_MARK); /* (ended without a crash) */
         for (int i = 0; i < s_tex_cap; i++) {
             if (s_tex[i].used && s_tex[i].impl != NULL) g_gfx_backend->tex_free(&s_tex[i]);
         }
@@ -318,11 +319,14 @@ void pc_gfx_set_vsync(int on) {
     }
 }
 
+static int s_presents = 0;
+
 void pc_gfx_present(void) {
     if (GL_ON) {
         SDL_GL_SwapWindow(g_pc_window);
     } else {
         g_gfx_backend->present();
+        if (++s_presents == 300) remove(PC_GFX_START_MARK); /* it works here */
     }
 }
 

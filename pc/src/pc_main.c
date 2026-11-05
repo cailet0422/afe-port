@@ -201,6 +201,23 @@ void pc_platform_init(void) {
 #endif
         if (g_pc_renderer_override >= 0) {
             api = (PCGfxApi)g_pc_renderer_override;
+        } else if (api != PC_GFX_OPENGL) {
+            /* a driver that crashes the game as it starts would keep it from
+             * reaching the settings: the mark stays when the last start with
+             * this API ended before it showed its first seconds (pc_gfx.c) */
+            FILE* mark = fopen(PC_GFX_START_MARK, "rb");
+
+            if (mark != NULL) {
+                fclose(mark);
+                remove(PC_GFX_START_MARK);
+                printf("[PC] %s stopped the last start: using OpenGL\n", pc_gfx_api_name(api));
+                api = PC_GFX_OPENGL;
+                g_pc_settings.renderer = PC_GFX_OPENGL;
+                pc_settings_save();
+            } else if ((mark = fopen(PC_GFX_START_MARK, "wb")) != NULL) {
+                fprintf(mark, "%s\n", pc_gfx_api_name(api));
+                fclose(mark);
+            }
         }
         /* the graphics API chosen in the settings, or OpenGL when that one
          * cannot be used here (no driver, an old GPU) */
