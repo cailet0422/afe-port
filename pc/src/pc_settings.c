@@ -1,6 +1,7 @@
 /* pc_settings.c - runtime settings loaded from settings.ini */
 #include "pc_settings.h"
 #include "pc_platform.h"
+#include <limits.h>
 
 PCSettings g_pc_settings = {
     .window_width  = PC_SCREEN_WIDTH,
@@ -51,26 +52,62 @@ static void trim_end(char* s) {
     }
 }
 
+/* Settings that take text */
+static const struct {
+    const char* key;
+    char* field;
+    size_t size;
+} s_text_settings[] = {
+    { "rom_dir", g_pc_settings.rom_dir, sizeof(g_pc_settings.rom_dir) },
+    { "ko_image", g_pc_settings.ko_image, sizeof(g_pc_settings.ko_image) },
+    { "update_skip", g_pc_settings.update_skip, sizeof(g_pc_settings.update_skip) },
+    { "mp_name", g_pc_settings.mp_name, sizeof(g_pc_settings.mp_name) },
+};
+
+/* Settings that take a number in a range (others are left as they are) */
+static const struct {
+    const char* key;
+    int* field;
+    int min, max;
+} s_number_settings[] = {
+    { "korean", &g_pc_settings.korean, 0, 1 },
+    { "window_width", &g_pc_settings.window_width, 640, INT_MAX },
+    { "window_height", &g_pc_settings.window_height, 480, INT_MAX },
+    { "fullscreen", &g_pc_settings.fullscreen, 0, 2 },
+    { "vsync", &g_pc_settings.vsync, 0, 1 },
+    { "autosave", &g_pc_settings.autosave, 0, 1 },
+    { "autosave_every", &g_pc_settings.autosave_minutes, 1, 60 },
+    { "nes_aspect", &g_pc_settings.nes_aspect, 0, 1 },
+    { "master_volume", &g_pc_settings.master_volume, 0, 100 },
+    { "text_input", &g_pc_settings.text_input, 0, 1 },
+    { "touch_controls", &g_pc_settings.touch_controls, 0, 1 },
+    { "minimap", &g_pc_settings.minimap, 0, 1 },
+    { "auto_update", &g_pc_settings.auto_update, 0, 1 },
+    { "ui_language", &g_pc_settings.ui_language, 0, 2 },
+    { "hd_textures", &g_pc_settings.hd_textures, 0, 1 },
+    { "hd_quality", &g_pc_settings.hd_quality, 0, 1 },
+    { "mp_port", &g_pc_settings.mp_port, 1024, 65535 },
+};
+
 static void apply_setting(const char* key, const char* value) {
     int val = atoi(value);
 
-    if (strcmp(key, "rom_dir") == 0) {
-        snprintf(g_pc_settings.rom_dir, sizeof(g_pc_settings.rom_dir), "%s", value);
-    } else if (strcmp(key, "ko_image") == 0) {
-        snprintf(g_pc_settings.ko_image, sizeof(g_pc_settings.ko_image), "%s", value);
-    } else if (strcmp(key, "korean") == 0) {
-        if (val == 0 || val == 1) g_pc_settings.korean = val;
-    } else if (strcmp(key, "window_width") == 0) {
-        if (val >= 640) g_pc_settings.window_width = val;
-    } else if (strcmp(key, "window_height") == 0) {
-        if (val >= 480) g_pc_settings.window_height = val;
-    } else if (strcmp(key, "fullscreen") == 0) {
-        if (val >= 0 && val <= 2) g_pc_settings.fullscreen = val;
-    } else if (strcmp(key, "vsync") == 0) {
-        if (val == 0 || val == 1) g_pc_settings.vsync = val;
-    } else if (strcmp(key, "msaa") == 0) {
-        if (val == 0 || val == 2 || val == 4 || val == 8)
-            g_pc_settings.msaa = val;
+    for (size_t i = 0; i < sizeof(s_text_settings) / sizeof(s_text_settings[0]); i++) {
+        if (strcmp(key, s_text_settings[i].key) == 0) {
+            snprintf(s_text_settings[i].field, s_text_settings[i].size, "%s", value);
+            return;
+        }
+    }
+    for (size_t i = 0; i < sizeof(s_number_settings) / sizeof(s_number_settings[0]); i++) {
+        if (strcmp(key, s_number_settings[i].key) == 0) {
+            if (val >= s_number_settings[i].min && val <= s_number_settings[i].max) {
+                *s_number_settings[i].field = val;
+            }
+            return;
+        }
+    }
+    if (strcmp(key, "msaa") == 0) {
+        if (val == 0 || val == 2 || val == 4 || val == 8) g_pc_settings.msaa = val;
     } else if (strcmp(key, "preload_textures") == 0) {
         if (val >= 0 && val <= 2) g_pc_settings.preload_textures = val ? 1 : 0;
     } else if (strcmp(key, "resetti") == 0) {
@@ -78,40 +115,12 @@ static void apply_setting(const char* key, const char* value) {
     } else if (strcmp(key, "disable_resetti") == 0) {
         /* (the key before 1.3.0, written as 0 by default: only a 1 means something) */
         if (val == 1) g_pc_settings.disable_resetti = 1;
-    } else if (strcmp(key, "autosave") == 0) {
-        if (val == 0 || val == 1) g_pc_settings.autosave = val;
-    } else if (strcmp(key, "autosave_every") == 0) {
-        if (val >= 1 && val <= 60) g_pc_settings.autosave_minutes = val;
     } else if (strcmp(key, "autosave_minutes") == 0) {
         /* (the key of 1.3.0, written as 5 by default: only another value
          * was chosen; now every minute by default) */
         if (val >= 1 && val <= 60 && val != 5) g_pc_settings.autosave_minutes = val;
-    } else if (strcmp(key, "nes_aspect") == 0) {
-        if (val == 0 || val == 1) g_pc_settings.nes_aspect = val;
-    } else if (strcmp(key, "master_volume") == 0) {
-        if (val >= 0 && val <= 100) g_pc_settings.master_volume = val;
-    } else if (strcmp(key, "text_input") == 0) {
-        if (val == 0 || val == 1) g_pc_settings.text_input = val;
-    } else if (strcmp(key, "touch_controls") == 0) {
-        if (val == 0 || val == 1) g_pc_settings.touch_controls = val;
-    } else if (strcmp(key, "minimap") == 0) {
-        if (val == 0 || val == 1) g_pc_settings.minimap = val;
-    } else if (strcmp(key, "auto_update") == 0) {
-        if (val == 0 || val == 1) g_pc_settings.auto_update = val;
-    } else if (strcmp(key, "update_skip") == 0) {
-        snprintf(g_pc_settings.update_skip, sizeof(g_pc_settings.update_skip), "%s", value);
-    } else if (strcmp(key, "ui_language") == 0) {
-        if (val >= 0 && val <= 2) g_pc_settings.ui_language = val;
     } else if (strcmp(key, "ui_scale") == 0) {
         if (val == 0 || (val >= 50 && val <= 300)) g_pc_settings.ui_scale = val;
-    } else if (strcmp(key, "hd_textures") == 0) {
-        if (val == 0 || val == 1) g_pc_settings.hd_textures = val;
-    } else if (strcmp(key, "hd_quality") == 0) {
-        if (val == 0 || val == 1) g_pc_settings.hd_quality = val;
-    } else if (strcmp(key, "mp_port") == 0) {
-        if (val >= 1024 && val <= 65535) g_pc_settings.mp_port = val;
-    } else if (strcmp(key, "mp_name") == 0) {
-        snprintf(g_pc_settings.mp_name, sizeof(g_pc_settings.mp_name), "%s", value);
     }
 }
 

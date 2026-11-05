@@ -678,10 +678,76 @@ static void decode_gc_texture(const void* src, u8* dst_rgba, int w, int h, u32 f
     }
 }
 
+static GLenum gl_wrap(u32 wrap) {
+    return wrap == 2 ? GL_MIRRORED_REPEAT : wrap == 0 ? GL_CLAMP_TO_EDGE : GL_REPEAT;
+}
+
+/* On the bound texture */
+static void set_wrap(u32 wrap_s, u32 wrap_t) {
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, gl_wrap(wrap_s));
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, gl_wrap(wrap_t));
+}
+
+static void set_filter(u32 filter_mode) {
+    GLenum gl_filter = filter_mode ? GL_LINEAR : GL_NEAREST;
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter);
+}
+
+/* The loaded palette (g_gx.tlut) a C4/C8 texture object names, or -1 */
+static int obj_tlut(const u32* o, u32 format) {
+    int name = (int)o[TEXOBJ_TLUT_NAME];
+
+    if ((format == GX_TF_C4 || format == GX_TF_C8) && name >= 0 && name < 16 && g_gx.tlut[name].data) {
+        return name;
+    }
+    return -1;
+}
+
+/* The texture is what texture map id draws with */
+static void use_texture(u32* o, u32 id, GLuint tex, int width, int height, u32 format) {
+    o[TEXOBJ_GL_TEX] = tex;
+    g_gx.gl_textures[id] = tex;
+    g_gx.tex_obj_w[id] = width;
+    g_gx.tex_obj_h[id] = height;
+    g_gx.tex_obj_fmt[id] = (int)format;
+    DIRTY(PC_GX_DIRTY_TEXTURES);
+}
+
+/* A new GL texture from the GameCube texture (a white texel when it has none) */
+static GLuint decode_new_texture(const void* image_ptr, int width, int height, u32 format, int tlut) {
+    static const u8 white[4] = { 255, 255, 255, 255 };
+    u8* rgba = NULL;
+    GLuint tex;
+
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    if (image_ptr && width > 0 && height > 0 && width <= 1024 && height <= 1024) {
+        rgba = (u8*)malloc(width * height * 4);
+    }
+    if (rgba) {
+        u8 palette[256][4];
+
+        if (tlut >= 0) {
+            build_palette(g_gx.tlut[tlut].data, g_gx.tlut[tlut].format, g_gx.tlut[tlut].n_entries, palette,
+                          g_gx.tlut[tlut].is_be);
+        } else {
+            build_palette(NULL, 0, 0, palette, 0);
+        }
+        decode_gc_texture(image_ptr, rgba, width, height, format, palette);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+        PC_GL_CHECK("glTexImage2D");
+        free(rgba);
+    } else {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, white);
+    }
+    return tex;
+}
+
 void GXLoadTexObj(void* obj, u32 id) {
     pc_gx_flush_if_begin_complete();
 
-    if (id >= 8 && id != 0xFF && id < 0x100) return;
     if (id >= 8) return;
 
     u32* o = (u32*)obj;
@@ -690,37 +756,24 @@ void GXLoadTexObj(void* obj, u32 id) {
     int height = (int)o[TEXOBJ_HEIGHT];
     u32 format = o[TEXOBJ_FORMAT];
     u32 wrap_s = o[TEXOBJ_WRAP_S], wrap_t = o[TEXOBJ_WRAP_T];
-    u32 tlut_key = (format == GX_TF_C4 || format == GX_TF_C8) ? o[TEXOBJ_TLUT_NAME] : 0xFFFFFFFF;
-    uintptr_t tlut_ptr_key = 0;
-    u32 tlut_hash_key = 0;
     u32 filter_mode = o[TEXOBJ_MIN_FILTER];
-
-    if (format == GX_TF_C4 || format == GX_TF_C8) {
-        int tlut_name = (int)o[TEXOBJ_TLUT_NAME];
-        if (tlut_name >= 0 && tlut_name < 16 && g_gx.tlut[tlut_name].data) {
-            tlut_ptr_key = (uintptr_t)g_gx.tlut[tlut_name].data;
-            tlut_hash_key = tlut_content_hash(g_gx.tlut[tlut_name].data,
-                                              g_gx.tlut[tlut_name].format,
-                                              g_gx.tlut[tlut_name].n_entries,
-                                              g_gx.tlut[tlut_name].is_be);
-        }
-    }
+    int tlut = obj_tlut(o, format);
+    /* the cache tells C4/C8 textures apart by palette: its name, where it is and what it holds */
+    u32 tlut_key = (format == GX_TF_C4 || format == GX_TF_C8) ? o[TEXOBJ_TLUT_NAME] : 0xFFFFFFFF;
+    uintptr_t tlut_ptr_key = tlut >= 0 ? (uintptr_t)g_gx.tlut[tlut].data : 0;
+    u32 tlut_hash_key = tlut >= 0 ? tlut_content_hash(g_gx.tlut[tlut].data, g_gx.tlut[tlut].format,
+                                                      g_gx.tlut[tlut].n_entries, g_gx.tlut[tlut].is_be)
+                                  : 0;
 
 #ifdef PC_ENHANCEMENTS
     /* EFB capture bypass: use full-res FBO texture instead of re-decoding */
     {
         GLuint efb_tex = pc_gx_efb_capture_find((uintptr_t)image_ptr);
+
         if (efb_tex) {
             glBindTexture(GL_TEXTURE_2D, efb_tex);
-            GLenum gl_filter = filter_mode ? GL_LINEAR : GL_NEAREST;
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter);
-            o[TEXOBJ_GL_TEX] = efb_tex;
-            g_gx.gl_textures[id] = efb_tex;
-            g_gx.tex_obj_w[id] = width;
-            g_gx.tex_obj_h[id] = height;
-            g_gx.tex_obj_fmt[id] = (int)format;
-            DIRTY(PC_GX_DIRTY_TEXTURES);
+            set_filter(filter_mode);
+            use_texture(o, id, efb_tex, width, height, format);
             return;
         }
     }
@@ -728,161 +781,64 @@ void GXLoadTexObj(void* obj, u32 id) {
 
     /* detect when emu64 reuses the same buffer with different data */
     u32 hash = tex_content_hash(image_ptr, width, height, format);
+    TexCacheEntry* entry = tex_cache_find((uintptr_t)image_ptr, width, height, format, tlut_key, tlut_ptr_key,
+                                          tlut_hash_key, hash);
 
-    /* cache lookup */
-    TexCacheEntry* cached = tex_cache_find((uintptr_t)image_ptr, width, height, format, tlut_key,
-                                           tlut_ptr_key, tlut_hash_key, hash);
-    if (cached) {
+    if (entry) {
         tex_cache_hits++;
-        GLuint tex = cached->gl_tex;
-        if (cached->hd_index >= 0) {
-            pc_texture_pack_touch(cached->hd_index);
+        if (entry->hd_index >= 0) {
+            pc_texture_pack_touch(entry->hd_index);
         }
-        glBindTexture(GL_TEXTURE_2D, tex);
-
-        /* update wrap/filter if changed */
-        if (cached->wrap_s != wrap_s || cached->wrap_t != wrap_t) {
-            GLenum gl_ws = (wrap_s == 2) ? GL_MIRRORED_REPEAT :
-                           (wrap_s == 0) ? GL_CLAMP_TO_EDGE : GL_REPEAT;
-            GLenum gl_wt = (wrap_t == 2) ? GL_MIRRORED_REPEAT :
-                           (wrap_t == 0) ? GL_CLAMP_TO_EDGE : GL_REPEAT;
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, gl_ws);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, gl_wt);
-            cached->wrap_s = wrap_s;
-            cached->wrap_t = wrap_t;
+        glBindTexture(GL_TEXTURE_2D, entry->gl_tex);
+        if (entry->wrap_s != wrap_s || entry->wrap_t != wrap_t) {
+            set_wrap(wrap_s, wrap_t);
+            entry->wrap_s = wrap_s;
+            entry->wrap_t = wrap_t;
         }
-        if (cached->min_filter != filter_mode) {
-            GLenum gl_filter = filter_mode ? GL_LINEAR : GL_NEAREST;
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter);
-            cached->min_filter = filter_mode;
+        if (entry->min_filter != filter_mode) {
+            set_filter(filter_mode);
+            entry->min_filter = filter_mode;
         }
-
-        o[TEXOBJ_GL_TEX] = tex;
-        g_gx.gl_textures[id] = tex;
-        g_gx.tex_obj_w[id] = width;
-        g_gx.tex_obj_h[id] = height;
-        g_gx.tex_obj_fmt[id] = (int)format;
-        DIRTY(PC_GX_DIRTY_TEXTURES);
+        use_texture(o, id, entry->gl_tex, width, height, format);
         return;
     }
-
-    /* cache miss */
     tex_cache_misses++;
 
-    /* try texture pack replacement before decoding */
+    /* a texture pack's replacement instead of the decoded texture */
     unsigned long long hd_pending = 0;
     if (pc_texture_pack_active()) {
-        const void* tp_tlut = NULL;
-        int tp_tlut_entries = 0;
-        int tp_tlut_is_be = 1;
-        if ((format == GX_TF_C4 || format == GX_TF_C8)) {
-            int tlut_name = (int)o[TEXOBJ_TLUT_NAME];
-            if (tlut_name >= 0 && tlut_name < 16 && g_gx.tlut[tlut_name].data) {
-                tp_tlut = g_gx.tlut[tlut_name].data;
-                tp_tlut_entries = g_gx.tlut[tlut_name].n_entries;
-                tp_tlut_is_be = g_gx.tlut[tlut_name].is_be;
-            }
-        }
         int data_size = (width * height * gc_format_bpp(format)) / 8;
         int hd_w = 0, hd_h = 0, hd_index = -1;
-        GLuint hd_tex = pc_texture_pack_lookup(image_ptr, data_size,
-                                               width, height, format,
-                                               tp_tlut, tp_tlut_entries, tp_tlut_is_be,
+        GLuint hd_tex = pc_texture_pack_lookup(image_ptr, data_size, width, height, format,
+                                               tlut >= 0 ? g_gx.tlut[tlut].data : NULL,
+                                               tlut >= 0 ? g_gx.tlut[tlut].n_entries : 0,
+                                               tlut >= 0 ? g_gx.tlut[tlut].is_be : 1,
                                                &hd_w, &hd_h, &hd_index, &hd_pending);
         if (hd_tex) {
             glBindTexture(GL_TEXTURE_2D, hd_tex);
-            GLenum gl_ws = (wrap_s == 2) ? GL_MIRRORED_REPEAT :
-                           (wrap_s == 0) ? GL_CLAMP_TO_EDGE : GL_REPEAT;
-            GLenum gl_wt = (wrap_t == 2) ? GL_MIRRORED_REPEAT :
-                           (wrap_t == 0) ? GL_CLAMP_TO_EDGE : GL_REPEAT;
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, gl_ws);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, gl_wt);
-
-            TexCacheEntry* entry = tex_cache_insert((uintptr_t)image_ptr, width, height, format,
-                                                    tlut_key, tlut_ptr_key, tlut_hash_key, hash, hd_tex);
+            set_wrap(wrap_s, wrap_t);
+            entry = tex_cache_insert((uintptr_t)image_ptr, width, height, format, tlut_key, tlut_ptr_key,
+                                     tlut_hash_key, hash, hd_tex);
             entry->wrap_s = wrap_s;
             entry->wrap_t = wrap_t;
             entry->min_filter = filter_mode;
             entry->external = 1;
             entry->hd_index = hd_index;
-
-            o[TEXOBJ_GL_TEX] = hd_tex;
-            g_gx.gl_textures[id] = hd_tex;
-            g_gx.tex_obj_w[id] = width;
-            g_gx.tex_obj_h[id] = height;
-            g_gx.tex_obj_fmt[id] = (int)format;
-            DIRTY(PC_GX_DIRTY_TEXTURES);
+            use_texture(o, id, hd_tex, width, height, format);
             return;
         }
     }
 
-    GLuint tex;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-
-    if (image_ptr && width > 0 && height > 0 && width <= 1024 && height <= 1024) {
-        u8* rgba = (u8*)malloc(width * height * 4);
-        if (rgba) {
-            u8 palette[256][4];
-            if (format == GX_TF_C4 || format == GX_TF_C8) {
-                int tlut_name = (int)o[TEXOBJ_TLUT_NAME];
-                if (tlut_name >= 0 && tlut_name < 16 && g_gx.tlut[tlut_name].data) {
-                    build_palette(g_gx.tlut[tlut_name].data,
-                                  g_gx.tlut[tlut_name].format,
-                                  g_gx.tlut[tlut_name].n_entries,
-                                  palette,
-                                  g_gx.tlut[tlut_name].is_be);
-                } else {
-                    build_palette(NULL, 0, 0, palette, 0);
-                }
-            } else {
-                build_palette(NULL, 0, 0, palette, 0);
-            }
-
-            decode_gc_texture(image_ptr, rgba, width, height, format, palette);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
-                         GL_RGBA, GL_UNSIGNED_BYTE, rgba);
-            PC_GL_CHECK("glTexImage2D");
-            free(rgba);
-        } else {
-            u8 white[4] = {255, 255, 255, 255};
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, white);
-        }
-    } else {
-        u8 white[4] = {255, 255, 255, 255};
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, white);
-    }
-
-    {
-        GLenum gl_filter = filter_mode ? GL_LINEAR : GL_NEAREST;
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter);
-    }
-
-    {
-        GLenum gl_ws = (wrap_s == 2) ? GL_MIRRORED_REPEAT :
-                       (wrap_s == 0) ? GL_CLAMP_TO_EDGE : GL_REPEAT;
-        GLenum gl_wt = (wrap_t == 2) ? GL_MIRRORED_REPEAT :
-                       (wrap_t == 0) ? GL_CLAMP_TO_EDGE : GL_REPEAT;
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, gl_ws);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, gl_wt);
-    }
-
-    /* insert into cache */
-    TexCacheEntry* entry = tex_cache_insert((uintptr_t)image_ptr, width, height, format, tlut_key,
-                                            tlut_ptr_key, tlut_hash_key, hash, tex);
+    GLuint tex = decode_new_texture(image_ptr, width, height, format, tlut);
+    set_filter(filter_mode);
+    set_wrap(wrap_s, wrap_t);
+    entry = tex_cache_insert((uintptr_t)image_ptr, width, height, format, tlut_key, tlut_ptr_key, tlut_hash_key,
+                             hash, tex);
     entry->wrap_s = wrap_s;
     entry->wrap_t = wrap_t;
     entry->min_filter = filter_mode;
     entry->hd_pending = hd_pending;
-
-    o[TEXOBJ_GL_TEX] = tex;
-    g_gx.gl_textures[id] = tex;
-    g_gx.tex_obj_w[id] = width;
-    g_gx.tex_obj_h[id] = height;
-    g_gx.tex_obj_fmt[id] = (int)format;
-    DIRTY(PC_GX_DIRTY_TEXTURES);
+    use_texture(o, id, tex, width, height, format);
 }
 
 u32 GXGetTexBufferSize(u16 width, u16 height, u32 format, GXBool mipmap, u8 max_lod) {
