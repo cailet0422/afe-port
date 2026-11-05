@@ -29,6 +29,7 @@ PCSettings g_pc_settings = {
     .touch_controls = 0,
 #endif
     .minimap = 1,
+    .seamless_blocks = 1,
     .auto_update = 1,
     .hd_textures = 1,
 #ifdef __ANDROID__
@@ -82,6 +83,7 @@ static const struct {
     { "text_input", &g_pc_settings.text_input, 0, 1 },
     { "touch_controls", &g_pc_settings.touch_controls, 0, 1 },
     { "minimap", &g_pc_settings.minimap, 0, 1 },
+    { "seamless_blocks", &g_pc_settings.seamless_blocks, 0, 1 },
     { "auto_update", &g_pc_settings.auto_update, 0, 1 },
     { "ui_language", &g_pc_settings.ui_language, 0, 2 },
     { "hd_textures", &g_pc_settings.hd_textures, 0, 1 },
@@ -178,6 +180,10 @@ void pc_settings_save(void) {
     fprintf(f, "\n");
     fprintf(f, "# Map of the town in the bottom left corner outside: 0 = off, 1 = on\n");
     fprintf(f, "minimap = %d\n", g_pc_settings.minimap);
+    fprintf(f, "\n");
+    fprintf(f, "# Outside, walk on into the next acre with the camera following, with no stop at its edge:\n");
+    fprintf(f, "# 0 = no (as on the GameCube), 1 = yes\n");
+    fprintf(f, "seamless_blocks = %d\n", g_pc_settings.seamless_blocks);
     fprintf(f, "\n");
     fprintf(f, "[Audio]\n");
     fprintf(f, "# Master output volume as a percentage (0-100)\n");
@@ -403,4 +409,8 @@ void pc_settings_load(void) {
            SETTINGS_FILE, g_pc_settings.window_width, g_pc_settings.window_height,
            g_pc_settings.fullscreen, g_pc_settings.vsync, g_pc_settings.msaa,
            g_pc_settings.preload_textures);
+}
+
+int pc_seamless_blocks(void) {
+    return g_pc_settings.seamless_blocks;
 }

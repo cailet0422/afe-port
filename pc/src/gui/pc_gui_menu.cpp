@@ -465,6 +465,13 @@ static void tab_gameplay() {
                  "마을 밖에서 구석에 작은 지도를 띄웁니다. M 키로 전체 지도"))) {
         save();
     }
+    if (Switch(T("Seamless acres", "구역 이어 걷기"), &g_pc_settings.seamless_blocks,
+               T("Outside, you walk on into the next acre and the camera follows you, with no stop at its edge "
+                 "(off: as on the GameCube)",
+                 "마을 밖에서 다음 구역으로 멈추지 않고 걸어가고 카메라가 따라옵니다(끄면 게임큐브처럼 경계에서 "
+                 "잠깐 멈춤)"))) {
+        save();
+    }
     {
         const char* names[] = { T("Stretch", "늘이기"), "4:3" };
         row(T("NES games", "패미컴 화면 비율"));
