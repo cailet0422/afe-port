@@ -25,6 +25,8 @@
 #include "m_msg.h"
 #include "m_time.h"
 #include "m_actor.h"
+#include "ac_insect.h"
+#include "ac_gyoei.h"
 #include "m_player.h"
 #include "m_scene.h"
 #include "m_collision_bg.h"
@@ -878,6 +880,29 @@ static void log_block(u32 frame) {
     printf("[INPUT] frame %u: block %d,%d player %d,%d wade %d x %.0f z %.0f\n", (unsigned)frame,
            (int)play->block_table.block_x, (int)play->block_table.block_z, bx, bz, mFI_GetPlayerWade(),
            player->world.position.x, player->world.position.z);
+
+    /* the blocks around the player's with insects (I) and fish (F) out, and the
+     * villager and other NPC actors (seamless crossing's area) */
+    {
+        char area[160];
+        int len = 0;
+        int x;
+        int z;
+
+        for (z = bz - 1; z <= bz + 1; z++) {
+            for (x = bx - 1; x <= bx + 1; x++) {
+                int insect = CLIP(insect_clip) != NULL && CLIP(insect_clip)->chk_live_insect_proc != NULL &&
+                             CLIP(insect_clip)->chk_live_insect_proc(x, z, gamePT);
+                int fish = CLIP(gyo_clip) != NULL && CLIP(gyo_clip)->chk_live_gyoei_proc != NULL &&
+                           CLIP(gyo_clip)->chk_live_gyoei_proc(x, z, gamePT);
+
+                len += snprintf(area + len, sizeof(area) - len, " %d,%d%s%s", x, z, insect ? "I" : "",
+                                fish ? "F" : "");
+            }
+        }
+        printf("[INPUT] frame %u: area%s npcs %d\n", (unsigned)frame, area,
+               (int)play->actor_info.list[ACTOR_PART_NPC].num_actors);
+    }
 }
 
 /* Where the player and the villagers are (outside, x/z in world units; one
