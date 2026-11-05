@@ -302,26 +302,40 @@ title demo or on the first day's arrival, whose own wall keeps the player by the
   (`Camera2_OpenSeamlessBorders`), so the player stays in the middle of the screen over the edge.
 - **The acre change.** Once the player stands in another acre, `Player_actor_SeamlessBlockChange` moves the game's
   acre there as the scroll's setup does (at the player's own position) and counts the scroll's 38 frames, which the
-  rest of the game takes for the scroll: `mFI_SetPlayerWade` reports its start, progress and end, so the new acre's
-  insects and fish come out, villagers walk in, and events and the music follow; the end position asked for
-  (`Player_actor_Get_WadeEndPos`) is where the player is, and the sunburn shows at the same point. A fade out of the
+  rest of the game takes for the scroll: `mFI_SetPlayerWade` reports its start, progress and end, so events and the
+  music follow; the end position asked for (`Player_actor_Get_WadeEndPos`) is where the player is, and the sunburn
+  shows at the same point. The acre's own world is out already (the area, below). A fade out of the
   scene (going into a building) cuts it short once its progress has been reported, so that its end is too, and none
   starts during one; a scroll starting (pushing a snowball over the edge still scrolls) has its end reported first.
   Stepping back within those frames moves the acre back right after them.
 - **What only the scroll stops.** The ball does not react to bumps and bees hang still during the scroll, as the
   world waits for it; they read `mFI_GetPlayerWadeScroll`, which is none during this acre change, so they go on.
-- **The acres in view.** The camera now sees well into the next acres, so the structures and props of the acres
-  around the player's (houses, the shops, mailboxes, gyroids, snowmen...) are made into actors there too, as
-  `aBC_setupActor` makes the player's (`aBC_setupSeamlessBlocks`), each as it comes near the screen: within the
-  smallest culling area of those actors less `Actor_SEAMLESS_CULL_MARGIN`, by the last frame's camera. The game takes
-  those of other acres away once off screen (`Actor_delete_check`); it now waits until they are out by the same margin
-  more, so none comes and goes on the edge. The structures that went once the player was in another acre outside the
-  scroll (the dump, the stalls, the event tents...: `mDemo_CHECK_SCROLL`) stay as through a scroll, and the next acre
-  change takes away those of acres out of the way (`aBC_deleteActor_part`), as for the others.
-- With the setting off nothing changes: the scripted runs give the same screenshots, positions and saves as v1.4.11.
-  Villagers and insects of the next acre still come out when the player steps in, as at the scroll's start.
+- **The area.** The camera now sees well into the next acres, so the game keeps up its world in the 3 × 3 acres around
+  the player's own (`mFI_SeamlessNear`, around the acre the player stands in), not just in the player's acre. The sea
+  between the town and the island is not part of it, and there is none while the player is out on it (the island has
+  its own season, set during the boat trip):
+  - its structures, props and objects (houses, the shops, mailboxes, gyroids, snowmen, balls...) and its own movers
+    (Tortimer and the like) are made as when the acre is walked into (`aBC_setupActor`, `aBC_setupMvActor`, with the
+    game's acre standing for each while they are made: `aBC_setupSeamlessBlocks`); the boat stays in view (and is not
+    put back in its unit while it is out), and Kapp'n comes once the player is in its acre;
+  - each acre that comes into the area gets its insects and fish as walking into it gives them, once while it stays in
+    the area (`aSetMgr_seamless_set`); the acre a scene starts in gets none, as on the GameCube, and the acre the player
+    then walks into has had them. The PC keeps room for them (32 insects, 9 fish), and the GameCube's 8 and 2 with the
+    setting off. On the Wisp's day the game keeps its own way (a spirit left behind moves on);
+  - the villagers out in its acres become actors there as in the acre walked into (`aSNMgr_set_npc_seamless`), up to
+    6 NPC actors (they share 10 sets of clothes), not on the day of a gathering of villagers (an event, which needs the
+    actors), and the game no longer sends a villager home into the area (it never did into the player's acre), where it
+    would be seen to appear;
+  - the game leaves everything of the area alone when it takes away what is off screen (`Actor_delete_check`), at an
+    acre change (`aBC_deleteActor_part`) and for insects, ants and fish far away; what leaves the area goes as before. The
+    structures that went once the player was in another acre outside the scroll (the dump, the stalls, the event
+    tents...: `mDemo_CHECK_SCROLL`) stay as through a scroll and go with the others.
+
+  Acres come into the area one acre away from the player's, so out of sight. Event visitors (the travelling sellers
+  and the like) still come out by the game's own rules.
+- With the setting off nothing changes: the scripted runs give the same screenshots, positions and saves as v1.4.12.
 - The input script command `BLOCK` prints the acre the game counts the player in, the player's own and the acre
-  change's state.
+  change's state, and the acres around with insects (`I`) and fish (`F`) out and the number of NPC actors.
 
 ### Updates (release builds)
 

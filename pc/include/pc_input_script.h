@@ -71,7 +71,9 @@
  *     <frame> MAP                     open the town map, or close it, as the Map control
  *                                     (M) does (pc_minimap.c)
  *     <frame> BLOCK                   print the block the game counts the player in, the player's
- *                                     own, and the block change's state (seamless block crossing)
+ *                                     own, and the block change's state (seamless block crossing),
+ *                                     then the blocks around with insects (I) and fish (F) out and
+ *                                     the number of NPC actors
  *
  * <frame> counts VI retraces (60 per second) from boot. <inputs> joins any of
  * A B X Y START Z L R UP DOWN LEFT RIGHT (D-pad) and SU SD SL SR (main stick)

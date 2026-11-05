@@ -17,16 +17,16 @@
 ## 다운로드
 
 <!-- 새 릴리즈를 내면 아래 링크의 버전을 바꾼다(README.md도 함께). -->
-최신 릴리즈: **[v1.4.12](https://github.com/cailet0422/afe-port/releases/tag/v1.4.12)**
+최신 릴리즈: **[v1.4.13](https://github.com/cailet0422/afe-port/releases/tag/v1.4.13)**
 
 | 플랫폼 | 다운로드 | 필요 사항 |
 |---|---|---|
-| Windows 64비트 | [DobutsuNoMoriEPlus-v1.4.12-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.12/DobutsuNoMoriEPlus-v1.4.12-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` 포함) |
-| Windows 32비트 | [DobutsuNoMoriEPlus-v1.4.12-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.12/DobutsuNoMoriEPlus-v1.4.12-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.4.12-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.12/DobutsuNoMoriEPlus-v1.4.12-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.4.12-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.4.12/DobutsuNoMoriEPlus-v1.4.12-Android.apk) | Android 5.0 이상, ARM 32·64비트 |
+| Windows 64비트 | [DobutsuNoMoriEPlus-v1.4.13-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.13/DobutsuNoMoriEPlus-v1.4.13-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` 포함) |
+| Windows 32비트 | [DobutsuNoMoriEPlus-v1.4.13-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.13/DobutsuNoMoriEPlus-v1.4.13-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.4.13-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.13/DobutsuNoMoriEPlus-v1.4.13-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.4.13-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.4.13/DobutsuNoMoriEPlus-v1.4.13-Android.apk) | Android 5.0 이상, ARM 32·64비트 |
 
-체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.4.12/SHA256SUMS.txt) ·
+체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.4.13/SHA256SUMS.txt) ·
 이전 버전과 릴리즈 노트: [전체 릴리즈](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -63,7 +63,8 @@
   **M** 키로 언제든 게임의 전체 지도를 열고 닫을 수 있고(파출소에서 지도를 받기 전에도), Android에서는
   미니맵을 터치하면 열립니다. **Settings** → **Gameplay** → **Minimap**에서 끌 수 있습니다.
 - 구역 이어 걷기: 마을 야외에서 한 구역에서 다음 구역으로 경계에서 멈추지 않고 그대로 걸어가고, 카메라가 따라
-  넘어옵니다. **Settings** → **Gameplay** → **Seamless acres**(구역 이어 걷기)에서 끄면 게임큐브처럼 넘어갑니다.
+  넘어옵니다. 둘레 구역도 이미 살아 있어서 집, 돌아다니는 주민, 곤충, 물고기 등이 도착하기 전부터 그 자리에 있습니다.
+  **Settings** → **Gameplay** → **Seamless acres**(구역 이어 걷기)에서 끄면 게임큐브처럼 넘어갑니다.
 - 자동 업데이트: v1.0.0부터 게임을 켤 때 새 릴리즈가 있는지 확인하고 설치를 제안합니다(세이브, 설정,
   디스크, 한글패치는 그대로). **Settings** → **Gameplay** → **Updates**에서 끌 수 있습니다.
 - 패미컴 가구 게임(최고 점수 저장 포함)과 부팅 징글도 동작합니다.
