@@ -275,6 +275,9 @@ static GLuint s_gx_vao = 0, s_gx_vbo = 0, s_gx_ebo = 0;
 
 void pc_gfx_close_window(void) {
     if (g_gfx_backend != NULL) {
+        for (int i = 0; i < s_tex_cap; i++) {
+            if (s_tex[i].used && s_tex[i].impl != NULL) g_gfx_backend->tex_free(&s_tex[i]);
+        }
         g_gfx_backend->shutdown();
         g_gfx_backend = NULL;
     } else {
@@ -321,6 +324,13 @@ void pc_gfx_present(void) {
     } else {
         g_gfx_backend->present();
     }
+}
+
+void pc_gfx_handle_event(const SDL_Event* e) {
+#ifdef PC_GFX_VULKAN_BUILT
+    if (g_pc_gfx_api == PC_GFX_VULKAN) pc_gfx_vk_event(e);
+#endif
+    (void)e;
 }
 
 const char* pc_gfx_device_name(void) {

@@ -49,5 +49,6 @@ void main() {
 #endif
 #ifdef CLIP_FLIP_Y
     gl_Position.y = -gl_Position.y; /* Vulkan's y points down */
+    gl_PointSize = 1.0; /* (Vulkan draws points only at the size the shader gives) */
 #endif
 }

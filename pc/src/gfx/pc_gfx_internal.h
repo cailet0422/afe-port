@@ -66,7 +66,11 @@ extern PCGfxBackend* g_gfx_backend; /* NULL on OpenGL */
 
 /* the backends' window and device; 0 when the API cannot be used */
 int pc_gfx_vk_open(const char* title, int w, int h, Uint32 sdl_flags, int msaa);
+void pc_gfx_vk_event(const SDL_Event* e);
 int pc_gfx_d3d12_open(const char* title, int w, int h, Uint32 sdl_flags, int msaa);
+
+/* two triangles for each of the quads of PC_GX_MAX_VERTS vertices: 0 1 2, 0 2 3, ... */
+const unsigned short* pc_gfx_quad_indices(void);
 
 /* RGB565 with red in the low bits (FixNES) to RGBA8 */
 void pc_gfx_rgb565_to_rgba(const unsigned short* src, unsigned char* dst, int count);

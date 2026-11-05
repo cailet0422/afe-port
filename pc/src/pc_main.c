@@ -302,6 +302,7 @@ int pc_platform_poll_events(void) {
     pc_typing_frame();
 
     while (SDL_PollEvent(&event)) {
+        pc_gfx_handle_event(&event);
         if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_AC_BACK) {
             event.key.keysym.sym = SDLK_ESCAPE; /* Android's back button */
         }

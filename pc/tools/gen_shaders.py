@@ -40,6 +40,55 @@ def config_names():
     return re.findall(r"X\((\w+)\)", glob) + [f"S{s}_{n}" for s in range(3) for n in stage_names]
 
 
+def vk_prelude(gx, d3d12=False):
+    """The Vulkan prelude (d3d12: the same for spirv-cross to HLSL, y not flipped)."""
+    p = ["#version 450",
+         "#define VS_IN(n) layout(location = n) in",
+         "#define VARYING_OUT(n) layout(location = n) out",
+         "#define VARYING_IN(n) layout(location = n) in",
+         "#define FRAG_OUT layout(location = 0) out",
+         "#define CLIP_DEPTH_ZERO_ONE 1"]
+    if not d3d12:
+        p.append("#define CLIP_FLIP_Y 1")
+    if gx:
+        names = config_names()
+        p += ["#define DATA_BLOCK(b, name, type, var, n) layout(std140, set = 0, binding = b) uniform name { type var[n]; }",
+              "#define TEXTURE(b) layout(set = 1, binding = b) uniform sampler2D",
+              f"#define GX_CFG_VEC4S {len(names) // 4}",
+              f"#define GX_CFG_SWAP_VEC4 {names.index('SWAP0_R') // 4}",
+              f"#define GX_CFG_STAGE_VEC4 {names.index('S0_CA') // 4}",
+              "layout(constant_id = 0) const int SC_UBER = 1;",
+              "#define GX_UBER SC_UBER"]
+        for i, n in enumerate(names):
+            p.append(f"layout(constant_id = {i + 1}) const int SC_{n} = 0;")
+            p.append(f"#define C_{n} ((SC_UBER != 0) ? gx_cfg[{i // 4}].{'xyzw'[i % 4]} : SC_{n})")
+    else:
+        p += ["#define DATA_BLOCK(b, name, type, var, n) layout(push_constant) uniform name { type var[n]; }",
+              "#define TEXTURE(b) layout(set = 0, binding = b) uniform sampler2D"]
+    return "\n".join(p) + "\n"
+
+
+def spirv(fn, stage, prelude, tmp):
+    """SPIR-V words of pc/shaders/fn with the prelude"""
+    src = Path(tmp) / f"{fn}.{stage}"
+    out = Path(tmp) / f"{fn}.spv"
+    src.write_text(prelude + "#line 1\n" + (SHADERS / fn).read_text())
+    r = subprocess.run(["glslangValidator", "-V", "--target-env", "vulkan1.0", "-S", stage, "-o", str(out), str(src)],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        sys.exit(f"{fn}: {r.stdout}{r.stderr}")
+    data = out.read_bytes()
+    return [int.from_bytes(data[i:i + 4], "little") for i in range(0, len(data), 4)]
+
+
+def c_words(name, words):
+    out = [f"static const unsigned int {name}[{len(words)}] = {{"]
+    for i in range(0, len(words), 8):
+        out.append("    " + ", ".join(f"0x{w:08x}" for w in words[i:i + 8]) + ",")
+    out.append("};")
+    return "\n".join(out) + "\n"
+
+
 def c_string(name, text):
     out = [f"static const char {name}[] ="]
     for line in text.splitlines(keepends=True):
@@ -60,6 +109,14 @@ def generate():
     for name, fn, _stage in GLSL:
         parts.append(c_string(f"pc_shader_{name}_glsl", (SHADERS / fn).read_text()))
         parts.append("\n")
+    if shutil.which("glslangValidator") is None:
+        sys.exit("glslangValidator is needed (apt install glslang-tools)")
+    parts.append("/* Vulkan: SPIR-V (constant_id 0 = uber, n + 1 = configuration value n) */\n")
+    with tempfile.TemporaryDirectory() as tmp:
+        for name, fn, stage in GLSL:
+            words = spirv(fn, stage, vk_prelude(name.startswith("gx")), tmp)
+            parts.append(c_words(f"pc_shader_{name}_spv", words))
+            parts.append("\n")
     parts.append("#endif\n")
     return "".join(parts)
 

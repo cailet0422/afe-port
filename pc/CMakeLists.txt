@@ -512,6 +512,7 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_mp.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_render.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gfx/pc_gfx.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gfx/pc_gfx_vk.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_keybindings.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_nes_fixnes.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_stubs.c
@@ -683,6 +684,14 @@ if(TARGET SDL2::SDL2)
 else()
     list(FILTER SDL2_LIBRARIES EXCLUDE REGEX "SDL2main")
     target_link_libraries(afe_pc ${SDL2_LIBRARIES})
+endif()
+
+# Vulkan (pc_gfx_vk.c): the loader is opened at run time through SDL, so the
+# build needs only the headers (pc/lib/vulkan)
+option(PC_VULKAN "Build the Vulkan renderer" ON)
+if(PC_VULKAN)
+    target_compile_definitions(afe_pc PRIVATE PC_GFX_VULKAN_BUILT)
+    target_include_directories(afe_pc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/vulkan/include)
 endif()
 
 if(PC_GLES)
