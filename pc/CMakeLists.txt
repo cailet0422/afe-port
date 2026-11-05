@@ -510,6 +510,8 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_menu.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_textures.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_mp.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_render.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gfx/pc_gfx.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_keybindings.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_nes_fixnes.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_stubs.c
@@ -544,7 +546,6 @@ set(IMGUI_SOURCES
     ${IMGUI_DIR}/imgui_tables.cpp
     ${IMGUI_DIR}/imgui_widgets.cpp
     ${IMGUI_DIR}/backends/imgui_impl_sdl2.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_impl_opengl3.cpp
 )
 
 # =============================================================================
@@ -630,7 +631,7 @@ set_property(SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_texture_pack.c ${CMAKE_CU
 set_source_files_properties(${IMGUI_SOURCES} PROPERTIES COMPILE_OPTIONS "-O2;-w")
 set_property(SOURCE ${IMGUI_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_menu.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_textures.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_mp.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_mp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_render.cpp
     APPEND PROPERTY INCLUDE_DIRECTORIES ${IMGUI_DIR})
 set_property(SOURCE ${IMGUI_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_menu.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_textures.cpp

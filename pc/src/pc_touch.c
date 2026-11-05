@@ -310,103 +310,12 @@ void pc_touch_read(u16* buttons, s8* stick_x, s8* stick_y) {
 
 /* --- Drawing --------------------------------------------------------- */
 
-typedef struct {
-    float x, y;   /* pixels */
-    float lx, ly; /* position inside an ellipse, -1 to 1 */
-    u8 color[4];
-    float kind;   /* 0 solid, 1 ellipse, 2 ring */
-    float inner;  /* ring: inner radius, 0 to 1 */
-} Vertex;
+/* x, y pixels; lx, ly the position inside an ellipse, -1 to 1; kind 0
+ * solid, 1 ellipse, 2 ring; inner: a ring's inner radius, 0 to 1 */
+typedef PCGfxUIVertex Vertex;
 
 static Vertex s_vertices[MAX_VERTICES];
 static int s_vertex_count;
-static GLuint s_program, s_vao, s_vbo;
-static GLint s_size_uniform;
-
-static const char* s_vertex_shader =
-    "#version 330 core\n"
-    "layout(location = 0) in vec2 a_pos;\n"
-    "layout(location = 1) in vec2 a_local;\n"
-    "layout(location = 2) in vec4 a_color;\n"
-    "layout(location = 3) in vec2 a_shape;\n"
-    "uniform vec2 u_size;\n"
-    "out vec2 v_local;\n"
-    "out vec4 v_color;\n"
-    "out vec2 v_shape;\n"
-    "void main() {\n"
-    "    gl_Position = vec4(a_pos.x / u_size.x * 2.0 - 1.0, 1.0 - a_pos.y / u_size.y * 2.0, 0.0, 1.0);\n"
-    "    v_local = a_local;\n"
-    "    v_color = a_color;\n"
-    "    v_shape = a_shape;\n"
-    "}\n";
-
-static const char* s_fragment_shader =
-    "#version 330 core\n"
-    "in vec2 v_local;\n"
-    "in vec4 v_color;\n"
-    "in vec2 v_shape;\n"
-    "out vec4 frag_color;\n"
-    "void main() {\n"
-    "    float a = 1.0;\n"
-    "    if (v_shape.x > 0.5) {\n"
-    "        float d = length(v_local);\n"
-    "        float aa = max(fwidth(d), 0.001);\n"
-    "        a = 1.0 - smoothstep(1.0 - aa, 1.0, d);\n"
-    "        if (v_shape.x > 1.5) {\n"
-    "            a *= smoothstep(v_shape.y - aa, v_shape.y, d);\n"
-    "        }\n"
-    "    }\n"
-    "    frag_color = vec4(v_color.rgb, v_color.a * a);\n"
-    "}\n";
-
-static GLuint compile(GLenum type, const char* source) {
-    GLuint shader = glCreateShader(type);
-    GLint ok = 0;
-
-    pc_gl_shader_source(shader, source);
-    glCompileShader(shader);
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
-    if (!ok) {
-        char log[512];
-
-        glGetShaderInfoLog(shader, sizeof(log), NULL, log);
-        fprintf(stderr, "[TOUCH] shader: %s\n", log);
-    }
-    return shader;
-}
-
-static int init_gl(void) {
-    GLuint vs = compile(GL_VERTEX_SHADER, s_vertex_shader);
-    GLuint fs = compile(GL_FRAGMENT_SHADER, s_fragment_shader);
-    GLint ok = 0;
-
-    s_program = glCreateProgram();
-    glAttachShader(s_program, vs);
-    glAttachShader(s_program, fs);
-    glLinkProgram(s_program);
-    glDeleteShader(vs);
-    glDeleteShader(fs);
-    glGetProgramiv(s_program, GL_LINK_STATUS, &ok);
-    if (!ok) {
-        fprintf(stderr, "[TOUCH] cannot build the on-screen pad's shader\n");
-        return 0;
-    }
-    s_size_uniform = glGetUniformLocation(s_program, "u_size");
-
-    glGenVertexArrays(1, &s_vao);
-    glGenBuffers(1, &s_vbo);
-    glBindVertexArray(s_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, s_vbo);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, x));
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, lx));
-    glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(Vertex), (void*)offsetof(Vertex, color));
-    glEnableVertexAttribArray(3);
-    glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, kind));
-    return 1;
-}
 
 static void vertex(float x, float y, float lx, float ly, const u8* color, float kind, float inner) {
     Vertex* v;
@@ -415,6 +324,7 @@ static void vertex(float x, float y, float lx, float ly, const u8* color, float 
         return;
     }
     v = &s_vertices[s_vertex_count++];
+    memset(v, 0, sizeof(*v));
     v->x = x;
     v->y = y;
     v->lx = lx;
@@ -571,35 +481,22 @@ static void build(void) {
 extern void pc_gx_restore_after_nes(void); /* rebinds the game's GL state after foreign drawing */
 
 void pc_touch_draw(void) {
-    static int gl_state = 0; /* 0 not built, 1 ready, -1 failed */
-
     if (!enabled() || s_hidden || PC_DRAW_SKIPPED() || g_pc_paused || pc_gui_chat_active()) {
         return; /* (the menus take the fingers while paused, the chat box while it is open) */
-    }
-    if (gl_state == 0) {
-        gl_state = init_gl() ? 1 : -1;
-    }
-    if (gl_state < 0) {
-        return;
     }
     layout();
     build();
 
-    glViewport(0, 0, g_pc_window_w, g_pc_window_h);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_SCISSOR_TEST);
-    glDisable(GL_CULL_FACE);
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    glEnable(GL_BLEND);
-    glBlendEquation(GL_FUNC_ADD);
+    pc_gfx_viewport(0, 0, g_pc_window_w, g_pc_window_h);
+    pc_gfx_depth_test(0);
+    pc_gfx_scissor_test(0);
+    pc_gfx_cull(PC_CULL_NONE);
+    pc_gfx_color_write(1, 1);
+    pc_gfx_blend(1);
+    pc_gfx_blend_subtract(0);
     /* keep the frame's alpha: some Android surfaces show it through */
-    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
-    glUseProgram(s_program);
-    glUniform2f(s_size_uniform, (float)g_pc_window_w, (float)g_pc_window_h);
-    glBindVertexArray(s_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, s_vbo);
-    glBufferData(GL_ARRAY_BUFFER, s_vertex_count * sizeof(Vertex), s_vertices, GL_STREAM_DRAW);
-    glDrawArrays(GL_TRIANGLES, 0, s_vertex_count);
+    pc_gfx_blend_func_separate(PC_BF_SRC_ALPHA, PC_BF_ONE_MINUS_SRC_ALPHA, PC_BF_ZERO, PC_BF_ONE);
+    pc_gfx_draw_ui(0, s_vertices, s_vertex_count, NULL, 0, (float)g_pc_window_w, (float)g_pc_window_h);
 
     pc_gx_restore_after_nes();
 }

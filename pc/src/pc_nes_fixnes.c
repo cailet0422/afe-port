@@ -33,7 +33,7 @@
 
 /* Now include GL via SDL2 (avoid pc_platform.h which pulls in game types.h) */
 #include <SDL.h>
-#include "pc_gl.h"
+#include "pc_gfx.h"
 #include "fm2play.h"
 #include "audio.h"
 
@@ -85,80 +85,10 @@ extern uint8_t inValReads[8];
 
 
 /* ======================================================================
- * GL rendering state
+ * Drawing: the frame as a texture, through pc_gfx's UI drawing
  * ====================================================================== */
-static GLuint fixnes_shader = 0;
-static GLuint fixnes_vao = 0;
-static GLuint fixnes_vbo = 0;
-static GLuint fixnes_texture = 0;
-static GLint fixnes_tex_uniform = -1;
+static PCTex fixnes_texture = 0;
 static int fixnes_initialized = 0;
-
-static GLuint fixnes_compile_shader(GLenum type, const char *src) {
-    GLuint s = glCreateShader(type);
-    pc_gl_shader_source(s, src);
-    glCompileShader(s);
-    GLint ok;
-    glGetShaderiv(s, GL_COMPILE_STATUS, &ok);
-    if (!ok) {
-        char buf[512];
-        glGetShaderInfoLog(s, sizeof(buf), NULL, buf);
-        printf("[fixNES] Shader error: %s\n", buf);
-    }
-    return s;
-}
-
-static void fixnes_init_gl(void) {
-    const char *vs =
-        "#version 330 core\n"
-        "layout(location=0) in vec2 pos;\n"
-        "layout(location=1) in vec2 uv;\n"
-        "out vec2 v_uv;\n"
-        "void main() { gl_Position = vec4(pos, 0, 1); v_uv = uv; }\n";
-    const char *fs =
-        "#version 330 core\n"
-        "in vec2 v_uv;\n"
-        "out vec4 fragColor;\n"
-        "uniform sampler2D tex;\n"
-        "void main() { fragColor = texture(tex, v_uv); }\n";
-
-    GLuint v = fixnes_compile_shader(GL_VERTEX_SHADER, vs);
-    GLuint f = fixnes_compile_shader(GL_FRAGMENT_SHADER, fs);
-    fixnes_shader = glCreateProgram();
-    glAttachShader(fixnes_shader, v);
-    glAttachShader(fixnes_shader, f);
-    glLinkProgram(fixnes_shader);
-    glDeleteShader(v);
-    glDeleteShader(f);
-
-    float quad[] = {
-        -1, -1,  0, 1,
-         1, -1,  1, 1,
-         1,  1,  1, 0,
-        -1, -1,  0, 1,
-         1,  1,  1, 0,
-        -1,  1,  0, 0,
-    };
-    glGenVertexArrays(1, &fixnes_vao);
-    glGenBuffers(1, &fixnes_vbo);
-    glBindVertexArray(fixnes_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, fixnes_vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 16, (void*)0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 16, (void*)8);
-    glBindVertexArray(0);
-
-    fixnes_tex_uniform = glGetUniformLocation(fixnes_shader, "tex");
-
-    glGenTextures(1, &fixnes_texture);
-    glBindTexture(GL_TEXTURE_2D, fixnes_texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-}
 
 /* ======================================================================
  * Sound: like the original's EmuSound (jaudio_NES emusound_hvc), the NES
@@ -466,30 +396,10 @@ void pc_fixnes_cleanup(void) {
 }
 
 void pc_fixnes_render_frame(uint16_t *fb) {
-    if (!fixnes_shader) fixnes_init_gl();
-
-    /* Upload framebuffer — fixNES outputs RGB565 with COL_TEX_BSWAP
-     * (R in low bits) — upload with GL_UNSIGNED_SHORT_5_6_5_REV.
+    /* fixNES outputs RGB565 with COL_TEX_BSWAP (red in the low bits).
      * Skip top 8 rows (often garbage), show 224 lines. */
-    glBindTexture(GL_TEXTURE_2D, fixnes_texture);
-#ifdef PC_GLES
-    {
-        /* ES has no 5_6_5_REV: swap red and blue into 5_6_5 */
-        static uint16_t rgb565[256 * 224];
-        const uint16_t* src = fb + 256 * 8;
-        int i;
-
-        for (i = 0; i < 256 * 224; i++) {
-            uint16_t v = src[i];
-
-            rgb565[i] = (uint16_t)(((v & 0x1F) << 11) | (v & 0x07E0) | (v >> 11));
-        }
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 256, 224, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, rgb565);
-    }
-#else
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 256, 224, 0,
-                 GL_RGB, GL_UNSIGNED_SHORT_5_6_5_REV, fb + 256 * 8);
-#endif
+    if (!fixnes_texture) fixnes_texture = pc_gfx_tex_new();
+    pc_gfx_tex_upload(fixnes_texture, 256, 224, PC_TEXF_RGB565, fb + 256 * 8, 256 * 224 * 2, PC_FILTER_NEAREST);
 
     /* 0 = stretch to window, 1 = centered 4:3 with pillar/letterbox. */
     int win_w = g_pc_window_w;
@@ -510,21 +420,28 @@ void pc_fixnes_render_frame(uint16_t *fb) {
     }
 
     /* Clear full window first so the bars are black, not stale pixels. */
-    glDisable(GL_SCISSOR_TEST);
-    glViewport(0, 0, win_w, win_h);
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
+    {
+        static const float black[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+        PCGfxUIVertex q[6];
+        const float x[6] = { 0, 1, 1, 0, 1, 0 }, y[6] = { 1, 1, 0, 1, 0, 0 };
 
-    glViewport(vp_x, vp_y, vp_w, vp_h);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_BLEND);
-    glUseProgram(fixnes_shader);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, fixnes_texture);
-    glUniform1i(fixnes_tex_uniform, 0);
-    glBindVertexArray(fixnes_vao);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-    glBindVertexArray(0);
+        pc_gfx_scissor_test(0);
+        pc_gfx_viewport(0, 0, win_w, win_h);
+        pc_gfx_clear(1, 0, black, 1.0f);
 
-    glViewport(0, 0, win_w, win_h);
+        pc_gfx_viewport(vp_x, vp_y, vp_w, vp_h);
+        pc_gfx_depth_test(0);
+        pc_gfx_blend(0);
+        memset(q, 0, sizeof(q));
+        for (int i = 0; i < 6; i++) { /* the viewport's corners, the texture upright */
+            q[i].x = x[i] * vp_w;
+            q[i].y = y[i] * vp_h;
+            q[i].u = x[i];
+            q[i].v = y[i];
+            memset(q[i].color, 255, 4);
+        }
+        pc_gfx_draw_ui(fixnes_texture, q, 6, NULL, 0, (float)vp_w, (float)vp_h);
+    }
+
+    pc_gfx_viewport(0, 0, win_w, win_h);
 }

@@ -38,7 +38,7 @@ static int stage_count(void) {
 }
 
 /* the GL texture a stage samples, or 0 */
-static GLuint stage_texture(int s) {
+static PCTex stage_texture(int s) {
     int tex_map;
 
     if (s >= g_gx.num_tev_stages) return 0;
@@ -46,7 +46,7 @@ static GLuint stage_texture(int s) {
     return tex_map >= 0 && tex_map < 8 ? g_gx.gl_textures[tex_map] : 0;
 }
 
-void pc_gx_shader_textures(GLuint tex[5]) {
+void pc_gx_shader_textures(PCTex tex[5]) {
     for (int s = 0; s < PC_GX_MAX_TEV_STAGES; s++) {
         tex[s] = stage_texture(s);
     }

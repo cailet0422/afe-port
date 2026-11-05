@@ -244,57 +244,12 @@ int pc_minimap_touch(float x, float y) {
 
 /* --- Drawing --------------------------------------------------------- */
 
-typedef struct {
-    float x, y; /* pixels */
-    float u, v; /* atlas */
-    u8 color[4];
-} Vertex;
+typedef PCGfxUIVertex Vertex; /* x, y pixels; u, v atlas */
 
 static Vertex s_vertices[MAX_VERTICES];
 static int s_vertex_count;
-static GLuint s_program, s_vao, s_vbo, s_texture;
-static GLint s_size_uniform, s_tex_uniform;
+static PCTex s_texture;
 static u8 s_atlas[ATLAS_SIZE * ATLAS_SIZE * 4];
-
-static const char* s_vertex_shader =
-    "#version 330 core\n"
-    "layout(location = 0) in vec2 a_pos;\n"
-    "layout(location = 1) in vec2 a_uv;\n"
-    "layout(location = 2) in vec4 a_color;\n"
-    "uniform vec2 u_size;\n"
-    "out vec2 v_uv;\n"
-    "out vec4 v_color;\n"
-    "void main() {\n"
-    "    gl_Position = vec4(a_pos.x / u_size.x * 2.0 - 1.0, 1.0 - a_pos.y / u_size.y * 2.0, 0.0, 1.0);\n"
-    "    v_uv = a_uv;\n"
-    "    v_color = a_color;\n"
-    "}\n";
-
-static const char* s_fragment_shader =
-    "#version 330 core\n"
-    "in vec2 v_uv;\n"
-    "in vec4 v_color;\n"
-    "uniform sampler2D u_tex;\n"
-    "out vec4 frag_color;\n"
-    "void main() {\n"
-    "    frag_color = texture(u_tex, v_uv) * v_color;\n"
-    "}\n";
-
-static GLuint compile(GLenum type, const char* source) {
-    GLuint shader = glCreateShader(type);
-    GLint ok = 0;
-
-    pc_gl_shader_source(shader, source);
-    glCompileShader(shader);
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
-    if (!ok) {
-        char log[512];
-
-        glGetShaderInfoLog(shader, sizeof(log), NULL, log);
-        fprintf(stderr, "[MINIMAP] shader: %s\n", log);
-    }
-    return shader;
-}
 
 /* The parts of the atlas that do not change: a white square and a disc
  * with a soft edge */
@@ -319,49 +274,14 @@ static void atlas_fixed_parts(void) {
 }
 
 static int init_gl(void) {
-    GLuint vs = compile(GL_VERTEX_SHADER, s_vertex_shader);
-    GLuint fs = compile(GL_FRAGMENT_SHADER, s_fragment_shader);
-    GLint ok = 0;
-
-    s_program = glCreateProgram();
-    glAttachShader(s_program, vs);
-    glAttachShader(s_program, fs);
-    glLinkProgram(s_program);
-    glDeleteShader(vs);
-    glDeleteShader(fs);
-    glGetProgramiv(s_program, GL_LINK_STATUS, &ok);
-    if (!ok) {
-        fprintf(stderr, "[MINIMAP] cannot build the minimap's shader\n");
-        return 0;
-    }
-    s_size_uniform = glGetUniformLocation(s_program, "u_size");
-    s_tex_uniform = glGetUniformLocation(s_program, "u_tex");
-
-    glGenVertexArrays(1, &s_vao);
-    glGenBuffers(1, &s_vbo);
-    glBindVertexArray(s_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, s_vbo);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, x));
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, u));
-    glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(Vertex), (void*)offsetof(Vertex, color));
-
     atlas_fixed_parts();
-    glGenTextures(1, &s_texture);
-    glBindTexture(GL_TEXTURE_2D, s_texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    s_texture = pc_gfx_tex_new();
     s_tiles_dirty = 1;
     return 1;
 }
 
 /* The 30 acre pictures side by side as on the map, top left of the atlas */
 static void upload_atlas(void) {
-    GLint row_length = 0, alignment = 4;
     int i;
 
     for (i = 0; i < PC_MINIMAP_ACRES; i++) {
@@ -371,13 +291,7 @@ static void upload_atlas(void) {
 
         pc_minimap_decode_tile(s_textures[s_tile_tex[i]], s_tile_pal[i], dst, ATLAS_SIZE * 4);
     }
-    glGetIntegerv(GL_UNPACK_ROW_LENGTH, &row_length);
-    glGetIntegerv(GL_UNPACK_ALIGNMENT, &alignment);
-    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ATLAS_SIZE, ATLAS_SIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, s_atlas);
-    glPixelStorei(GL_UNPACK_ROW_LENGTH, row_length);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
+    pc_gfx_tex_upload(s_texture, ATLAS_SIZE, ATLAS_SIZE, PC_TEXF_RGBA8, s_atlas, sizeof(s_atlas), PC_FILTER_LINEAR);
     s_tiles_dirty = 0;
 }
 
@@ -388,6 +302,7 @@ static void vertex(float x, float y, float u, float v, const u8* color) {
         return;
     }
     p = &s_vertices[s_vertex_count++];
+    memset(p, 0, sizeof(*p));
     p->x = x;
     p->y = y;
     p->u = u / ATLAS_SIZE;
@@ -490,7 +405,6 @@ extern void pc_gx_restore_after_nes(void); /* rebinds the game's GL state after 
 void pc_minimap_draw(void) {
     static int gl_state = 0; /* 0 not built, 1 ready, -1 failed */
     PcMinimapRect r;
-    GLint active_texture = GL_TEXTURE0, bound_texture = 0;
 
     if (s_visible && !g_pc_paused) {
         s_fade = s_fade + FADE_STEP > 1.0f ? 1.0f : s_fade + FADE_STEP;
@@ -507,10 +421,6 @@ void pc_minimap_draw(void) {
         return;
     }
 
-    glGetIntegerv(GL_ACTIVE_TEXTURE, &active_texture);
-    glActiveTexture(GL_TEXTURE0);
-    glGetIntegerv(GL_TEXTURE_BINDING_2D, &bound_texture);
-    glBindTexture(GL_TEXTURE_2D, s_texture);
     if (s_tiles_dirty) {
         upload_atlas();
     }
@@ -518,24 +428,15 @@ void pc_minimap_draw(void) {
     layout(&r);
     build(&r);
 
-    glViewport(0, 0, g_pc_window_w, g_pc_window_h);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_SCISSOR_TEST);
-    glDisable(GL_CULL_FACE);
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    glEnable(GL_BLEND);
-    glBlendEquation(GL_FUNC_ADD);
+    pc_gfx_viewport(0, 0, g_pc_window_w, g_pc_window_h);
+    pc_gfx_depth_test(0);
+    pc_gfx_scissor_test(0);
+    pc_gfx_cull(PC_CULL_NONE);
+    pc_gfx_color_write(1, 1);
+    pc_gfx_blend(1);
+    pc_gfx_blend_subtract(0);
     /* keep the frame's alpha: some Android surfaces show it through */
-    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
-    glUseProgram(s_program);
-    glUniform2f(s_size_uniform, (float)g_pc_window_w, (float)g_pc_window_h);
-    glUniform1i(s_tex_uniform, 0);
-    glBindVertexArray(s_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, s_vbo);
-    glBufferData(GL_ARRAY_BUFFER, s_vertex_count * sizeof(Vertex), s_vertices, GL_STREAM_DRAW);
-    glDrawArrays(GL_TRIANGLES, 0, s_vertex_count);
-
-    glBindTexture(GL_TEXTURE_2D, (GLuint)bound_texture);
-    glActiveTexture((GLenum)active_texture);
+    pc_gfx_blend_func_separate(PC_BF_SRC_ALPHA, PC_BF_ONE_MINUS_SRC_ALPHA, PC_BF_ZERO, PC_BF_ONE);
+    pc_gfx_draw_ui(s_texture, s_vertices, s_vertex_count, NULL, 0, (float)g_pc_window_w, (float)g_pc_window_h);
     pc_gx_restore_after_nes();
 }

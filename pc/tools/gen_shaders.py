@@ -28,7 +28,8 @@ SHADERS = PC / "shaders"
 OUT = PC / "src" / "gen" / "pc_shaders.h"
 
 # (name, file, stage)
-GLSL = [("gx_vert", "gx.vert", "vert"), ("gx_frag", "gx.frag", "frag")]
+GLSL = [("gx_vert", "gx.vert", "vert"), ("gx_frag", "gx.frag", "frag"),
+        ("ui_vert", "ui.vert", "vert"), ("ui_frag", "ui.frag", "frag")]
 
 
 def config_names():

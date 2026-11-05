@@ -4,6 +4,7 @@
 
 #include "pc_platform.h"
 #include "pc_gx_config.h"
+#include "pc_gfx.h"
 
 /* Define PC_GL_DEBUG to check for GL errors after significant calls */
 #ifdef PC_GL_DEBUG
@@ -63,7 +64,7 @@ typedef struct {
 
 /* A vertex as the GPU takes it (36 bytes): the game only ever sets color 0
  * and texture coordinate 0 (emu64 makes the others with texture matrices) */
-typedef struct {
+typedef struct PCGXVertex {
     float position[3];
     float normal[3];
     unsigned char color0[4];
@@ -147,7 +148,7 @@ typedef struct {
     int tex_gen_type[8];
     int tex_gen_src[8];
     int tex_gen_mtx[8];
-    GLuint gl_textures[8];
+    PCTex gl_textures[8];
     int tex_obj_w[8];
     int tex_obj_h[8];
     int tex_obj_fmt[8];
@@ -218,11 +219,7 @@ typedef struct {
     /* Deferred vertex commit: position starts vertex, commit on next position or GXEnd */
     int vertex_pending;
 
-    /* GL objects */
-    GLuint vao;
-    GLuint vbo;
-    GLuint ebo;
-    GLuint current_shader;
+    GLuint current_shader; /* OpenGL: the program in use (pc_gx_tev.c, pc_gfx.c) */
 
     /* The shader's uniform blocks and configuration, kept up to date from
      * the state groups that change (pc_gx_shader.c) */
@@ -264,7 +261,7 @@ void pc_gx_flush_if_begin_complete(void);
 #define PC_GX_BLOCK_CONFIG 4u
 unsigned pc_gx_shader_update(unsigned int dirty);
 /* the GL texture of each sampler: stages 0-2, indirect stages 0-1 */
-void pc_gx_shader_textures(GLuint tex[5]);
+void pc_gx_shader_textures(PCTex tex[5]);
 
 /* TEV shader programs (pc_gx_tev.c): makes the program for the current
  * configuration current (the uber program while a specialized one is not
@@ -275,7 +272,7 @@ void   pc_gx_tev_shutdown(void);
 void   pc_gx_tev_frame(void);
 
 /* Texture cache */
-GLuint pc_gx_texture_upload(void* data, int width, int height, int format, int ci_format,
+PCTex  pc_gx_texture_upload(void* data, int width, int height, int format, int ci_format,
                             void* tlut, int tlut_format, int tlut_count);
 void   pc_gx_texture_init(void);
 void   pc_gx_texture_shutdown(void);
@@ -283,12 +280,12 @@ void   pc_gx_texture_cache_invalidate(void);
 /* The texture pack (pc_texture_pack.c): a replacement that was loading is
  * there / one of its textures was freed */
 void   pc_gx_texture_hd_ready(unsigned long long key);
-void   pc_gx_texture_forget(GLuint tex);
+void   pc_gx_texture_forget(PCTex tex);
 
 #ifdef PC_ENHANCEMENTS
 /* EFB capture: store full-res GL texture from GXCopyTex, retrieve on texture load */
-void   pc_gx_efb_capture_store(uintptr_t dest_ptr, GLuint gl_tex);
-GLuint pc_gx_efb_capture_find(uintptr_t data_ptr);
+void   pc_gx_efb_capture_store(uintptr_t dest_ptr, PCTex gl_tex);
+PCTex  pc_gx_efb_capture_find(uintptr_t data_ptr);
 void   pc_gx_efb_capture_cleanup(void);
 #endif
 
