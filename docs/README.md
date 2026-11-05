@@ -480,11 +480,16 @@ frames played a second.
   draws; uploading a texture again gives it a new image (the old one is freed when the frames using it are done), as an
   OpenGL driver renames it. Images share 64 MB blocks of device memory. Mipmaps by blits, RGB565 converted to RGBA.
   The frame's first render pass clears; a clear at the start of a pass becomes its load op, otherwise
-  `vkCmdClearAttachments` in the scissor box. `glReadPixels` (the scene behind a submenu, screenshots) copies the
+  `vkCmdClearAttachments` in the scissor box. A frame is normally one pass, so depth and the MSAA samples are not
+  stored at its end (on a tiled GPU they never leave the chip): only a frame that copies the screen keeps them
+  (`g_pc_frame_copies`, raised by `pc_vi_frame_needs_draw` while the game builds the frame), and if a pass ends where
+  none was expected, the next 120 frames keep them too. `glReadPixels` (the scene behind a submenu, screenshots) copies the
   picture to a buffer and waits; a draw that has to wait for the GPU in the middle (a full buffer or pool) sets itself
   up again in the next pass. FIFO present mode with VSync, MAILBOX or IMMEDIATE without; MSAA through a resolve
   attachment. Android: the surface is let go at `SDL_APP_WILLENTERBACKGROUND` and made again when the app returns
-  (`pc_gfx_handle_event`); a lost surface or an out-of-date swapchain is made again.
+  (`pc_gfx_handle_event`); a lost surface or an out-of-date swapchain is made again. There is no pre-rotation (the
+  system turns the picture), and Android then answers `VK_SUBOPTIMAL_KHR` at every present: the swapchain is made
+  again only when the surface's size or turn changed.
 - Direct3D 12 (`pc_gfx_d3d12.c`): D3D's clip space is OpenGL's but for depth (changed in the shader). Flip-model
   swapchain of 3 buffers (tearing allowed with VSync off where DXGI supports it); the three blocks are root constant
   buffer views into the frame's upload buffer; tables of 5 shader resource views and 5 samplers are kept across frames

@@ -436,10 +436,14 @@ afe-decomp(`TARGET_PC`). `[Gameplay]`의 `seamless_blocks`(Settings → Gameplay
   프레임의 그리기보다 먼저 제출하는 커맨드 버퍼로 하고, 텍스처를 다시 올리면 새 이미지를 받는다(옛것은 쓰던 프레임이
   끝나면 놓는다. OpenGL 드라이버가 이름을 바꾸어 주는 것과 같다). 이미지는 64MB 장치 메모리 블록을 나눠 쓴다.
   밉맵은 블릿, RGB565는 RGBA로 바꾼다. 프레임의 첫 렌더 패스가 지우고, 패스를 시작할 때의 지우기는 그 패스의 load op가
-  되며 그 밖에는 시저 상자 안에 `vkCmdClearAttachments`. `glReadPixels`(서브메뉴 뒤의 장면, 스크린샷)은 그림을 버퍼로
+  되며 그 밖에는 시저 상자 안에 `vkCmdClearAttachments`. 프레임은 보통 패스 하나이므로 깊이와 MSAA 샘플은 끝에서
+  저장하지 않는다(타일 GPU에서는 칩 밖으로 나가지 않는다). 화면을 복사하는 프레임만 저장하고(`pc_vi_frame_needs_draw`가 게임이
+  프레임을 만드는 동안 올리는 `g_pc_frame_copies`), 생각지 않은 곳에서 패스가 끝나면 다음 120프레임도 저장한다. `glReadPixels`(서브메뉴 뒤의 장면, 스크린샷)은 그림을 버퍼로
   복사하고 기다린다. 그리기 중간에 GPU를 기다려야 하면(버퍼나 풀이 가득 참) 그 그리기는 다음 패스에서 다시 준비한다.
   VSync면 FIFO, 아니면 MAILBOX나 IMMEDIATE. MSAA는 리졸브 첨부로. Android: `SDL_APP_WILLENTERBACKGROUND`에서 표면을
   놓고 앱이 돌아오면 다시 만든다(`pc_gfx_handle_event`). 표면을 잃거나 스왑체인이 맞지 않게 되면 다시 만든다.
+  미리 회전하지 않으므로(시스템이 그림을 돌린다) Android는 표시할 때마다 `VK_SUBOPTIMAL_KHR`을 돌려주는데, 스왑체인은 표면의
+  크기나 방향이 바뀌었을 때만 다시 만든다.
 - Direct3D 12(`pc_gfx_d3d12.c`): D3D의 클립 공간은 깊이(셰이더에서 바꾼다) 말고는 OpenGL과 같다. 버퍼 3개의 플립 모델
   스왑체인(DXGI가 지원하면 VSync를 끈 동안 티어링 허용). 블록 3개는 프레임의 업로드 버퍼를 가리키는 루트 상수 버퍼 뷰,
   셰이더 리소스 뷰 5개와 샘플러 5개의 테이블은 프레임을 넘어 둔다(셰이더에서 보이는 힙에 테이블 8,192개, 샘플러 테이블은
