@@ -475,6 +475,7 @@ set(PC_SOURCES
     ${DATA_FIXUPS_C}
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_gx.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_gx_tev.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_gx_shader.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_gx_texture.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_os.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_dvd.c
@@ -720,14 +721,7 @@ else()
     )
 endif()
 
-add_custom_command(TARGET afe_pc POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${PC_DATA_DIR}/shaders"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/shaders/default.vert"
-        "${CMAKE_CURRENT_SOURCE_DIR}/shaders/default.frag"
-        "${PC_DATA_DIR}/shaders/"
-    COMMENT "Copying shader files to ${PC_DATA_DIR}/shaders/"
-)
+# (the shaders are in the executable: pc/src/gen/pc_shaders.h, pc/tools/gen_shaders.py)
 # Notices of what the game carries: the menu font (SIL OFL) and the libraries
 add_custom_command(TARGET afe_pc POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${PC_DATA_DIR}/licenses"
@@ -774,7 +768,6 @@ if(PC_STRIP_ASSETS AND NOT ANDROID)
         COMMAND ${CMAKE_COMMAND} -E rm -rf "${CMAKE_BINARY_DIR}/dist"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${PC_DIST_DIR}"
         COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:afe_pc>" "${PC_DATA_DIR}/${PC_RELMAP_NAME}" "${PC_DIST_DIR}/"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${PC_DATA_DIR}/shaders" "${PC_DIST_DIR}/shaders"
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${PC_DATA_DIR}/licenses" "${PC_DIST_DIR}/licenses"
         COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE" "${PC_DIST_DIR}/LICENSE.txt")
     if(WIN32 AND SDL2_DLL_PATH)

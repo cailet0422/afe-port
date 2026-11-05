@@ -38,3 +38,7 @@ jobs:
     # The minimap's acre tables are copied from the decomp's m_map_ovl.c
     - name: Minimap tables
       run: python3 pc/tools/gen_minimap_tables.py --check
+
+    # The shaders every backend takes are generated from pc/shaders
+    - name: Shaders
+      run: python3 pc/tools/gen_shaders.py --check

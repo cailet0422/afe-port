@@ -22,8 +22,6 @@
 #include <unwind.h>
 
 static const char* const asset_files[] = {
-    "shaders/default.vert",
-    "shaders/default.frag",
     PC_RELMAP_NAME, /* DobutsuNoMoriEPlus-<ABI>.relmap */
 };
 
@@ -182,7 +180,6 @@ void pc_android_prepare(void) {
 
     mkdir("rom", 0755);
     mkdir("save", 0755);
-    mkdir("shaders", 0755);
     for (i = 0; i < sizeof(asset_files) / sizeof(asset_files[0]); i++) {
         copy_asset(asset_files[i]);
     }

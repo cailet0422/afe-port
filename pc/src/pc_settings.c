@@ -32,6 +32,7 @@ PCSettings g_pc_settings = {
     .seamless_blocks = 1,
     .auto_update = 1,
     .hd_textures = 1,
+    .specialized_shaders = 1,
 #ifdef __ANDROID__
     .hd_quality = 1,
 #endif
@@ -88,6 +89,7 @@ static const struct {
     { "ui_language", &g_pc_settings.ui_language, 0, 2 },
     { "hd_textures", &g_pc_settings.hd_textures, 0, 1 },
     { "hd_quality", &g_pc_settings.hd_quality, 0, 1 },
+    { "specialized_shaders", &g_pc_settings.specialized_shaders, 0, 1 },
     { "mp_port", &g_pc_settings.mp_port, 1024, 65535 },
 };
 
@@ -145,6 +147,9 @@ void pc_settings_save(void) {
     fprintf(f, "\n");
     fprintf(f, "# Anti-aliasing samples: 0 = off, 2, 4, or 8\n");
     fprintf(f, "msaa = %d\n", g_pc_settings.msaa);
+    fprintf(f, "\n");
+    fprintf(f, "# GX shader: 1 = one made for each way the game draws (less work for the GPU), 0 = one for all\n");
+    fprintf(f, "specialized_shaders = %d\n", g_pc_settings.specialized_shaders);
     fprintf(f, "\n");
     fprintf(f, "[Enhancements]\n");
     fprintf(f, "# Load HD textures: 0 = while playing (on a thread), 1 = all at startup\n");
