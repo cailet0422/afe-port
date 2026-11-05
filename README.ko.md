@@ -17,16 +17,16 @@
 ## 다운로드
 
 <!-- 새 릴리즈를 내면 아래 링크의 버전을 바꾼다(README.md도 함께). -->
-최신 릴리즈: **[v1.4.15](https://github.com/cailet0422/afe-port/releases/tag/v1.4.15)**
+최신 릴리즈: **[v1.5.0](https://github.com/cailet0422/afe-port/releases/tag/v1.5.0)**
 
 | 플랫폼 | 다운로드 | 필요 사항 |
 |---|---|---|
-| Windows 64비트 | [DobutsuNoMoriEPlus-v1.4.15-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.15/DobutsuNoMoriEPlus-v1.4.15-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` 포함) |
-| Windows 32비트 | [DobutsuNoMoriEPlus-v1.4.15-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.15/DobutsuNoMoriEPlus-v1.4.15-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.4.15-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.15/DobutsuNoMoriEPlus-v1.4.15-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.4.15-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.4.15/DobutsuNoMoriEPlus-v1.4.15-Android.apk) | Android 5.0 이상, ARM 32·64비트 |
+| Windows 64비트 | [DobutsuNoMoriEPlus-v1.5.0-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.5.0/DobutsuNoMoriEPlus-v1.5.0-Windows-x64.zip) | OpenGL 3.3, Vulkan 1.0 또는 Direct3D 12 (`SDL2.dll` 포함) |
+| Windows 32비트 | [DobutsuNoMoriEPlus-v1.5.0-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.5.0/DobutsuNoMoriEPlus-v1.5.0-Windows-x86.zip) | OpenGL 3.3, Vulkan 1.0 또는 Direct3D 12 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.5.0-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.5.0/DobutsuNoMoriEPlus-v1.5.0-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 또는 Vulkan 1.0 |
+| Android | [DobutsuNoMoriEPlus-v1.5.0-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.5.0/DobutsuNoMoriEPlus-v1.5.0-Android.apk) | Android 5.0 이상, ARM 32·64비트. OpenGL ES 3.0, Android 7.0 이상은 Vulkan도 |
 
-체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.4.15/SHA256SUMS.txt) ·
+체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.5.0/SHA256SUMS.txt) ·
 이전 버전과 릴리즈 노트: [전체 릴리즈](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -40,8 +40,8 @@
 
 ## 특징
 
-- SDL2와 OpenGL 3.3 / OpenGL ES 3.0으로 Windows(32·64비트), Linux, Android(ARM 32·64비트)에서
-  에뮬레이터 없이 직접 실행됩니다.
+- SDL2로 Windows(32·64비트), Linux, Android(ARM 32·64비트)에서 에뮬레이터 없이 직접 실행되고, OpenGL 3.3 /
+  OpenGL ES 3.0, Vulkan, (Windows에서는) Direct3D 12로 그립니다([그래픽 API](#그래픽-api)).
 - 디스크 이미지에서 바로 읽으며, 원래 이미지는 바꾸지 않습니다.
 - 포트 전용 일시정지·설정 메뉴: 게임 위에 뜨는 창으로, PC는 마우스·키보드(또는 게임패드), Android는 손가락으로
   조작합니다. 한국어/영어. 화면 설정, 음량, 키보드·게임패드 키 바꾸기, 디스크 폴더, 한글패치, HD 텍스처, 멀티플레이.
@@ -110,6 +110,24 @@ v1.0.0부터는 위의 다운로드가 스스로 업데이트됩니다. 게임�
 업데이트는 이 저장소의 릴리즈에서만 받고, 소스에서 빌드한 게임은 스스로 업데이트하지 않습니다.
 **Settings** → **Gameplay** → **Updates**에서 확인을 끌 수 있습니다(`settings.ini`의 `auto_update = 0`).
 v0.1.6 이하는 스스로 업데이트하지 못하니 v1.0.0은 한 번 직접 받아 주세요.
+
+### 그래픽 API
+
+**Settings**(설정) → **Video**(화면) → **Graphics API**(그래픽 API)에서 게임이 무엇으로 그릴지 고릅니다. 다음 시작부터
+적용됩니다.
+
+- **OpenGL**(기본): Windows와 Linux는 OpenGL 3.3, Android는 OpenGL ES 3.0.
+- **Vulkan**: Vulkan 드라이버가 있는 Windows, Linux, Android 7.0 이상.
+- **Direct3D 12**: Windows 10 이상.
+
+셋 다 같은 그림을 그립니다. Vulkan과 Direct3D 12는 CPU에 시간을 더 남기므로(그리는 것마다 드라이버가 하는 일이 적고,
+셰이더는 다른 스레드에서 준비합니다) 휴대폰과 느린 PC에서 가장 도움이 됩니다. GPU가 어느 쪽에서 더 빠른지는
+드라이버에 따라 다르니 직접 바꿔 보세요. GPU에 맞춰 만든 셰이더는 `shader_cache/`에 남습니다. 어떤 API로 처음
+시작하면 플레이하는 동안 뒤에서 준비하고, 다음부터는 그대로 씁니다.
+
+고른 API를 기기에서 시작할 수 없으면 OpenGL을 쓰고 메뉴에 그렇게 표시합니다. Vulkan이나 Direct3D 12로 시작하다가
+게임이 죽으면(드라이버 문제) 다음에는 OpenGL로 시작하고 메뉴에도 그렇게 바꿔 둡니다. `settings.ini`의 `renderer`도 같은
+설정이고(0 OpenGL, 1 Vulkan, 2 Direct3D 12), `--renderer vulkan`(또는 `opengl`, `d3d12`)은 한 번만 그 API로 실행합니다.
 
 ### 저장
 

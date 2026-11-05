@@ -182,7 +182,14 @@ Controls → Buttons에서 Map 버튼을 붙일 수 있다.
   보여 줄 틈이 없는 프레임은 그리지 않고 진행만 하므로(docs/README.ko.md "프레임 페이싱") 게임 속도가 유지된다. 그럴
   때는 `log.txt`에 1분에 한 번 `[VI] 60 s: 3600 game frames (100% of full speed), 2250 shown (37.5 a second); ...` 같은
   줄이 남는다. 기기가 실제로 보여 주는 프레임 수다.
-- 그래픽 설정: Video 탭에는 VSync, MSAA, Textures만 있다. Android는 늘 화면 전체를 쓰므로 PC의 창 모드·해상도
+- Vulkan(1.5.0): **Settings** → **Video** → **Graphics API** → **Vulkan**이면 다음 시작부터 Vulkan으로 그린다
+  (Vulkan 드라이버가 있는 Android 7.0 이상. 기본은 그대로 OpenGL ES). SDL이 `libvulkan.so`를 실행 때 열기 때문에 없는
+  휴대폰에서도 APK는 OpenGL ES로 시작한다. 앱이 백그라운드로 가면(`SDL_APP_WILLENTERBACKGROUND`) 표면을 놓고 돌아오면
+  다시 만든다. 표면을 잃거나 스왑체인이 맞지 않게 되면(회전, 새 크기) 다음 프레임 전에 다시 만든다. 시작하다가 드라이버가
+  앱을 죽이면 앱 폴더에 `graphics_starting.txt`가 남고 다음 시작은 OpenGL ES로 한다(메뉴에도 그렇게 넣는다). 장치를
+  잃으면 안내와 함께 끝내고, 이때도 OpenGL ES로 바꿔 둔다. GPU에 맞춰 만든 셰이더는 `shader_cache/`에 둔다. 리눅스의
+  Mesa lavapipe에서 확인했고(docs/README.ko.md "그래픽"), 휴대폰에서는 아직 확인하지 못했다.
+- 그래픽 설정: Video 탭에는 Graphics API, VSync, MSAA, Textures가 있다. Android는 늘 화면 전체를 쓰므로 PC의 창 모드·해상도
   (Display, Resolution)는 숨기고 `settings.ini`에 있어도 쓰지 않는다. GPU가 고른 MSAA를 지원하지 않으면 창을 만들 때
   8x→4x→2x→끔으로 낮춰 다시 시도한다(`[PC] MSAA 8x is not available, using 4x`). 예전에는 Galaxy Z Flip6에서 MSAA 8x를
   고르면 `Couldn't find matching EGL config`로 창을 못 만들고, 설정이 저장돼 있어 매번 시작하자마자 끝났다.

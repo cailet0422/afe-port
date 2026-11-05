@@ -17,16 +17,16 @@
 ## Download
 
 <!-- When a new release is published, update the version in these links (here and in README.ko.md). -->
-Latest release: **[v1.4.15](https://github.com/cailet0422/afe-port/releases/tag/v1.4.15)**
+Latest release: **[v1.5.0](https://github.com/cailet0422/afe-port/releases/tag/v1.5.0)**
 
 | Platform | Download | Requirements |
 |---|---|---|
-| Windows 64-bit | [DobutsuNoMoriEPlus-v1.4.15-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.15/DobutsuNoMoriEPlus-v1.4.15-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
-| Windows 32-bit | [DobutsuNoMoriEPlus-v1.4.15-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.15/DobutsuNoMoriEPlus-v1.4.15-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.4.15-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.15/DobutsuNoMoriEPlus-v1.4.15-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.4.15-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.4.15/DobutsuNoMoriEPlus-v1.4.15-Android.apk) | Android 5.0+, ARM 32/64-bit |
+| Windows 64-bit | [DobutsuNoMoriEPlus-v1.5.0-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.5.0/DobutsuNoMoriEPlus-v1.5.0-Windows-x64.zip) | OpenGL 3.3, Vulkan 1.0 or Direct3D 12 (`SDL2.dll` included) |
+| Windows 32-bit | [DobutsuNoMoriEPlus-v1.5.0-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.5.0/DobutsuNoMoriEPlus-v1.5.0-Windows-x86.zip) | OpenGL 3.3, Vulkan 1.0 or Direct3D 12 (`SDL2.dll` included); also runs on 64-bit Windows |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.5.0-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.5.0/DobutsuNoMoriEPlus-v1.5.0-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 or Vulkan 1.0 |
+| Android | [DobutsuNoMoriEPlus-v1.5.0-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.5.0/DobutsuNoMoriEPlus-v1.5.0-Android.apk) | Android 5.0+, ARM 32/64-bit; OpenGL ES 3.0, or Vulkan on Android 7.0+ |
 
-Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.4.15/SHA256SUMS.txt) ·
+Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.5.0/SHA256SUMS.txt) ·
 Older versions and release notes: [all releases](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -41,8 +41,9 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
 
 ## Features
 
-- Runs natively on Windows (32/64-bit), Linux and Android (ARM 32/64-bit) through SDL2 and
-  OpenGL 3.3 / OpenGL ES 3.0. No emulator involved.
+- Runs natively on Windows (32/64-bit), Linux and Android (ARM 32/64-bit) through SDL2, drawing with
+  OpenGL 3.3 / OpenGL ES 3.0, Vulkan or (on Windows) Direct3D 12 ([Graphics API](#graphics-api)). No emulator
+  involved.
 - Reads the game straight from your disc image; the original image is never modified.
 - The port's own pause and settings menus: windows over the game you use with the mouse and keyboard
   (or a gamepad) on PC and with your fingers on Android, in Korean or English. Video options, volume,
@@ -121,6 +122,24 @@ with **Update now**, **Later** or **Skip this version**.
 Updates come only from this repository's releases, and a build made from source never updates itself.
 **Settings** → **Gameplay** → **Updates** turns the check off (`auto_update = 0` in `settings.ini`).
 Version v0.1.6 and earlier can't update themselves: download v1.0.0 once by hand.
+
+### Graphics API
+
+**Settings** → **Video** → **Graphics API** chooses what the game draws with, from the next start:
+
+- **OpenGL** (the default): OpenGL 3.3 on Windows and Linux, OpenGL ES 3.0 on Android.
+- **Vulkan**: Windows, Linux and Android 7.0+ with a Vulkan driver.
+- **Direct3D 12**: Windows 10 and later.
+
+All three draw the same picture. Vulkan and Direct3D 12 leave the CPU more time (the driver does less work for each
+thing drawn, and shaders are prepared on another thread), which helps most on phones and slower PCs; whether a GPU
+is faster with one or the other depends on its driver, so try them. The shaders made for your GPU are kept in
+`shader_cache/`: the first start with an API prepares them in the background as you play, later starts reuse them.
+
+If the chosen API cannot start on your device, the game uses OpenGL and the menu says so. If the game crashes as it
+starts with Vulkan or Direct3D 12 (a driver problem), it starts with OpenGL the next time and sets it in the menu.
+`renderer` in `settings.ini` is the same choice (0 OpenGL, 1 Vulkan, 2 Direct3D 12), and `--renderer vulkan` (or
+`opengl`, `d3d12`) uses an API for one run.
 
 ### Saving
 
