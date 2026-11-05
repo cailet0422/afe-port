@@ -235,6 +235,7 @@ static struct {
     Pipe* pipes;
     SDL_Thread* worker;
     SDL_mutex* lock;
+    SDL_mutex* save_lock;
     SDL_cond* wake;
     int* queue_jobs;
     int njobs, capjobs, quit;
@@ -1590,14 +1591,36 @@ static Pipe* pipe_find(int kind, uint32_t rkey, const PCGXShaderConfig* config, 
 }
 
 /* the worker: builds the specialized pipelines queued */
+static void save_cache(void);
+
 static int worker_main(void* arg) {
+    Uint32 saved = SDL_GetTicks();
+    int unsaved = 0;
+
     (void)arg;
     SDL_LockMutex(vk.lock);
     for (;;) {
         Pipe* p;
 
-        while (vk.njobs == 0 && !vk.quit) SDL_CondWait(vk.wake, vk.lock);
+        if (vk.njobs == 0 && unsaved > 0 && SDL_GetTicks() - saved > 10000) {
+            SDL_UnlockMutex(vk.lock);
+            save_cache();
+            saved = SDL_GetTicks();
+            unsaved = 0;
+            SDL_LockMutex(vk.lock);
+            continue;
+        }
+
+        while (vk.njobs == 0 && !vk.quit) {
+            if (unsaved > 0) {
+                SDL_CondWaitTimeout(vk.wake, vk.lock, 2000);
+                if (vk.njobs == 0 && SDL_GetTicks() - saved > 10000) break;
+            } else {
+                SDL_CondWait(vk.wake, vk.lock);
+            }
+        }
         if (vk.quit) break;
+        if (vk.njobs == 0) continue; /* (to save) */
         p = &vk.pipes[vk.queue_jobs[--vk.njobs]];
         SDL_UnlockMutex(vk.lock);
         p->pipe = build_pipeline(KIND_SPEC, p->rkey, &p->config);
@@ -1605,6 +1628,7 @@ static int worker_main(void* arg) {
         SDL_AtomicSet(&p->state, p->pipe != VK_NULL_HANDLE ? 2 : 3);
         SDL_LockMutex(vk.lock);
         vk.pipes_ready++;
+        unsaved++;
         if (vk.configs_out != NULL && p->pipe != VK_NULL_HANDLE) {
             fwrite(&p->rkey, sizeof(p->rkey), 1, vk.configs_out);
             fwrite(&p->config, sizeof(p->config), 1, vk.configs_out);
@@ -2027,22 +2051,32 @@ static void vk_fail(const char* what, VkResult r) {
     vk.lost = 1;
 }
 
+/* the pipeline cache to its file: when the worker has built what it had
+ * (an app on Android is mostly closed without quitting), going to the
+ * background and at the end. Through a new file, so a cut-off write never
+ * leaves a broken one. */
 static void save_cache(void) {
     size_t size = 0;
     void* data;
     FILE* f;
+    int ok = 0;
 
-    if (vk.cache == VK_NULL_HANDLE || vkGetPipelineCacheData(vk.dev, vk.cache, &size, NULL) != VK_SUCCESS || size == 0) return;
-    data = malloc(size);
-    if (data == NULL) return;
-    if (vkGetPipelineCacheData(vk.dev, vk.cache, &size, data) == VK_SUCCESS) {
-        f = fopen(CACHE_FILE, "wb");
-        if (f != NULL) {
-            fwrite(data, 1, size, f);
-            fclose(f);
+    if (vk.cache == VK_NULL_HANDLE || vk.save_lock == NULL) return;
+    SDL_LockMutex(vk.save_lock);
+    if (vkGetPipelineCacheData(vk.dev, vk.cache, &size, NULL) == VK_SUCCESS && size > 0 &&
+        (data = malloc(size)) != NULL) {
+        if (vkGetPipelineCacheData(vk.dev, vk.cache, &size, data) == VK_SUCCESS &&
+            (f = fopen(CACHE_FILE ".new", "wb")) != NULL) {
+            ok = fwrite(data, 1, size, f) == size;
+            ok = fclose(f) == 0 && ok;
+        }
+        free(data);
+        if (ok) {
+            remove(CACHE_FILE); /* (Windows' rename does not replace) */
+            rename(CACHE_FILE ".new", CACHE_FILE);
         }
     }
-    free(data);
+    SDL_UnlockMutex(vk.save_lock);
 }
 
 static void load_cache(void) {
@@ -2408,6 +2442,7 @@ static void vk_shutdown(void) {
     if (vk.surface != VK_NULL_HANDLE) vkDestroySurfaceKHR(vk.instance, vk.surface, NULL);
     if (vk.instance != VK_NULL_HANDLE) vkDestroyInstance(vk.instance, NULL);
     if (vk.lock) SDL_DestroyMutex(vk.lock);
+    if (vk.save_lock) SDL_DestroyMutex(vk.save_lock);
     if (vk.wake) SDL_DestroyCond(vk.wake);
     memset(&vk, 0, sizeof(vk));
 }
@@ -2428,6 +2463,7 @@ static void vk_set_vsync(int on) {
 void pc_gfx_vk_event(const SDL_Event* e) {
     if (vk.dev == VK_NULL_HANDLE) return;
     if (e->type == SDL_APP_WILLENTERBACKGROUND) {
+        save_cache(); /* (the system may end the app in the background) */
         vk.want_suspend = 1; /* (after the frame that may hold an image) */
         if (!vk.frames[vk.fi].acquired_image) suspend();
     } else if (e->type == SDL_APP_DIDENTERFOREGROUND) {
@@ -2523,6 +2559,7 @@ int pc_gfx_vk_open(const char* title, int w, int h, Uint32 sdl_flags, int msaa) 
     mkdir(CACHE_DIR, 0755);
 #endif
     vk.lock = SDL_CreateMutex();
+    vk.save_lock = SDL_CreateMutex();
     vk.wake = SDL_CreateCond();
     if (g_pc_settings.specialized_shaders && vk.lock != NULL && vk.wake != NULL) {
         vk.worker = SDL_CreateThread(worker_main, "VkPipelines", NULL);
