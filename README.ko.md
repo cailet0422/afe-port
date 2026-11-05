@@ -17,16 +17,16 @@
 ## 다운로드
 
 <!-- 새 릴리즈를 내면 아래 링크의 버전을 바꾼다(README.md도 함께). -->
-최신 릴리즈: **[v1.4.13](https://github.com/cailet0422/afe-port/releases/tag/v1.4.13)**
+최신 릴리즈: **[v1.4.14](https://github.com/cailet0422/afe-port/releases/tag/v1.4.14)**
 
 | 플랫폼 | 다운로드 | 필요 사항 |
 |---|---|---|
-| Windows 64비트 | [DobutsuNoMoriEPlus-v1.4.13-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.13/DobutsuNoMoriEPlus-v1.4.13-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` 포함) |
-| Windows 32비트 | [DobutsuNoMoriEPlus-v1.4.13-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.13/DobutsuNoMoriEPlus-v1.4.13-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.4.13-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.13/DobutsuNoMoriEPlus-v1.4.13-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.4.13-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.4.13/DobutsuNoMoriEPlus-v1.4.13-Android.apk) | Android 5.0 이상, ARM 32·64비트 |
+| Windows 64비트 | [DobutsuNoMoriEPlus-v1.4.14-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.14/DobutsuNoMoriEPlus-v1.4.14-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` 포함) |
+| Windows 32비트 | [DobutsuNoMoriEPlus-v1.4.14-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.14/DobutsuNoMoriEPlus-v1.4.14-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.4.14-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.14/DobutsuNoMoriEPlus-v1.4.14-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.4.14-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.4.14/DobutsuNoMoriEPlus-v1.4.14-Android.apk) | Android 5.0 이상, ARM 32·64비트 |
 
-체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.4.13/SHA256SUMS.txt) ·
+체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.4.14/SHA256SUMS.txt) ·
 이전 버전과 릴리즈 노트: [전체 릴리즈](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
