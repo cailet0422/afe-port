@@ -590,14 +590,337 @@ static void pc_gx_cache_uniform_locations(GLuint shader) {
 /* --- Vertex Flush --- */
 int pc_gx_draw_call_count = 0;
 
+/* Uniform setters that skip a uniform the shader does not have (location -1) */
+static inline void u1i(GLint loc, int v) { if (loc >= 0) glUniform1i(loc, v); }
+static inline void u2i(GLint loc, int a, int b) { if (loc >= 0) glUniform2i(loc, a, b); }
+static inline void u3i(GLint loc, int a, int b, int c) { if (loc >= 0) glUniform3i(loc, a, b, c); }
+static inline void u4i(GLint loc, int a, int b, int c, int d) { if (loc >= 0) glUniform4i(loc, a, b, c, d); }
+static inline void u1f(GLint loc, float v) { if (loc >= 0) glUniform1f(loc, v); }
+static inline void u3f(GLint loc, float a, float b, float c) { if (loc >= 0) glUniform3f(loc, a, b, c); }
+static inline void u4f(GLint loc, float a, float b, float c, float d) { if (loc >= 0) glUniform4f(loc, a, b, c, d); }
+static inline void u3fv(GLint loc, int n, const float* v) { if (loc >= 0) glUniform3fv(loc, n, v); }
+static inline void u4fv(GLint loc, int n, const float* v) { if (loc >= 0) glUniform4fv(loc, n, v); }
+
+#define U (g_gx.uloc)
+
+static void upload_matrices(unsigned int dirty) {
+    if (dirty & PC_GX_DIRTY_PROJECTION) {
+        if (U.projection >= 0) glUniformMatrix4fv(U.projection, 1, GL_TRUE, (const float*)g_gx.projection_mtx);
+    }
+    if (dirty & PC_GX_DIRTY_MODELVIEW) {
+        if (U.modelview >= 0) {
+            /* the 3x4 position matrix as a 4x4 */
+            const float* src = (const float*)g_gx.pos_mtx[g_gx.current_mtx];
+            float mv44[16];
+
+            memcpy(mv44, src, 12 * sizeof(float));
+            mv44[12] = 0.0f; mv44[13] = 0.0f; mv44[14] = 0.0f; mv44[15] = 1.0f;
+            glUniformMatrix4fv(U.modelview, 1, GL_TRUE, mv44);
+        }
+        if (U.normal_mtx >= 0) {
+            glUniformMatrix3fv(U.normal_mtx, 1, GL_TRUE, (const float*)g_gx.nrm_mtx[g_gx.current_mtx]);
+        }
+    }
+}
+
+static void upload_tev(unsigned int dirty) {
+    if (dirty & PC_GX_DIRTY_TEV_COLORS) {
+        u4fv(U.tev_prev, 1, g_gx.tev_colors[0]);
+        u4fv(U.tev_reg0, 1, g_gx.tev_colors[1]);
+        u4fv(U.tev_reg1, 1, g_gx.tev_colors[2]);
+        u4fv(U.tev_reg2, 1, g_gx.tev_colors[3]);
+    }
+    if (dirty & PC_GX_DIRTY_TEV_STAGES) {
+        u1i(U.num_tev_stages, g_gx.num_tev_stages);
+        for (int s = 0; s < PC_GX_MAX_TEV_STAGES && s < g_gx.num_tev_stages; s++) {
+            const PCGXTevStage* ts = &g_gx.tev_stages[s];
+
+            u4i(U.tev_color_in[s], ts->color_a, ts->color_b, ts->color_c, ts->color_d);
+            u4i(U.tev_alpha_in[s], ts->alpha_a, ts->alpha_b, ts->alpha_c, ts->alpha_d);
+            u1i(U.tev_color_op[s], ts->color_op);
+            u1i(U.tev_alpha_op[s], ts->alpha_op);
+            u4i(U.tev_bsc[s], ts->color_bias, ts->color_scale, ts->alpha_bias, ts->alpha_scale);
+            u4i(U.tev_out[s], ts->color_clamp, ts->alpha_clamp, ts->color_out, ts->alpha_out);
+            u2i(U.tev_swap[s], ts->ras_swap, ts->tex_swap);
+        }
+        if (U.tev_ksel >= 0) {
+            int ksel[PC_GX_MAX_TEV_STAGES * 3];
+
+            for (int s = 0; s < PC_GX_MAX_TEV_STAGES; s++) {
+                ksel[s * 3 + 0] = g_gx.tev_stages[s].k_color_sel;
+                ksel[s * 3 + 1] = g_gx.tev_stages[s].k_alpha_sel;
+                ksel[s * 3 + 2] = s;
+            }
+            glUniform3iv(U.tev_ksel, PC_GX_MAX_TEV_STAGES, ksel);
+        }
+        for (int s = 0; s < PC_GX_MAX_TEV_STAGES; s++) {
+            /* the stage's texture coordinates: its own index when it names none */
+            int tc_src = 0;
+
+            if (s < g_gx.num_tev_stages) {
+                int tc = g_gx.tev_stages[s].tex_coord;
+
+                tc_src = tc >= 0 && tc < 8 ? tc : s;
+            }
+            u1i(U.tev_tc_src[s], tc_src);
+        }
+    }
+    if ((dirty & PC_GX_DIRTY_SWAP_TABLES) && U.swap_table >= 0) {
+        int sw[16];
+
+        for (int t = 0; t < 4; t++) {
+            sw[t * 4 + 0] = g_gx.tev_swap_table[t].r;
+            sw[t * 4 + 1] = g_gx.tev_swap_table[t].g;
+            sw[t * 4 + 2] = g_gx.tev_swap_table[t].b;
+            sw[t * 4 + 3] = g_gx.tev_swap_table[t].a;
+        }
+        glUniform4iv(U.swap_table, 4, sw);
+    }
+    if (dirty & PC_GX_DIRTY_KONST) {
+        u4fv(U.kcolor, 4, (const float*)g_gx.tev_k_colors);
+    }
+    if (dirty & PC_GX_DIRTY_ALPHA_CMP) {
+        u1i(U.alpha_comp0, g_gx.alpha_comp0);
+        u1i(U.alpha_ref0, g_gx.alpha_ref0);
+        u1i(U.alpha_op, g_gx.alpha_op);
+        u1i(U.alpha_comp1, g_gx.alpha_comp1);
+        u1i(U.alpha_ref1, g_gx.alpha_ref1);
+    }
+}
+
+static void upload_lighting(void) {
+    float lpos[8][3], lcol[8][4];
+
+    u1i(U.lighting_enabled, g_gx.chan_ctrl_enable[0]);
+    u4fv(U.mat_color, 1, g_gx.chan_mat_color[0]);
+    u4fv(U.amb_color, 1, g_gx.chan_amb_color[0]);
+    u1i(U.chan_mat_src, g_gx.chan_ctrl_mat_src[0]);
+    u1i(U.chan_amb_src, g_gx.chan_ctrl_amb_src[0]);
+    u1i(U.num_chans, g_gx.num_chans);
+    u1i(U.alpha_lighting_enabled, g_gx.chan_ctrl_enable[1]);
+    u1i(U.alpha_mat_src, g_gx.chan_ctrl_mat_src[1]);
+    u1i(U.light_mask, g_gx.chan_ctrl_light_mask[0]);
+    for (int i = 0; i < 8; i++) {
+        memcpy(lpos[i], g_gx.lights[i].pos, sizeof(lpos[i]));
+        memcpy(lcol[i], g_gx.lights[i].color, sizeof(lcol[i]));
+    }
+    u3fv(U.light_pos[0], 8, &lpos[0][0]);
+    u4fv(U.light_color[0], 8, &lcol[0][0]);
+}
+
+static void upload_texgen(void) {
+    for (int tg = 0; tg < 2; tg++) {
+        int slot = pc_tex_mtx_id_to_slot(g_gx.tex_gen_mtx[tg]);
+        int has_mtx = slot >= 0 && slot < 10;
+
+        u1i(U.texmtx_enable[tg], has_mtx);
+        if (has_mtx) {
+            const float* tm = (const float*)g_gx.tex_mtx[slot];
+
+            u4f(U.texmtx_row0[tg], tm[0], tm[1], tm[2], tm[3]);
+            u4f(U.texmtx_row1[tg], tm[4], tm[5], tm[6], tm[7]);
+        }
+        u1i(U.texgen_src[tg], g_gx.tex_gen_src[tg]);
+    }
+}
+
+/* Each TEV stage's texture on texture unit s */
+static void bind_stage_textures(void) {
+    int use_tex_stage[PC_GX_MAX_TEV_STAGES] = { 0 };
+
+    for (int s = 0; s < PC_GX_MAX_TEV_STAGES; s++) {
+        GLuint tex = 0;
+
+        if (s < g_gx.num_tev_stages) {
+            int tex_map = g_gx.tev_stages[s].tex_map;
+
+            if (tex_map >= 0 && tex_map < 8) {
+                tex = g_gx.gl_textures[tex_map];
+            }
+        }
+        if (tex != 0) {
+            use_tex_stage[s] = 1;
+            glActiveTexture(GL_TEXTURE0 + s);
+            glBindTexture(GL_TEXTURE_2D, tex);
+        }
+    }
+    u1i(U.use_texture0, use_tex_stage[0]);
+    u1i(U.use_texture1, use_tex_stage[1]);
+    u1i(U.use_texture2, use_tex_stage[2]);
+    u1i(U.texture0, 0);
+    u1i(U.texture1, 1);
+    u1i(U.texture2, 2);
+}
+
+/* Indirect textures on units 3-6 */
+static void upload_indirect(void) {
+    u1i(U.num_ind_stages, g_gx.num_ind_stages);
+    for (int i = 0; i < g_gx.num_ind_stages && i < 4; i++) {
+        int ind_tex_map = g_gx.ind_order[i].tex_map;
+
+        if (ind_tex_map >= 0 && ind_tex_map < 8 && g_gx.gl_textures[ind_tex_map]) {
+            glActiveTexture(GL_TEXTURE3 + i);
+            glBindTexture(GL_TEXTURE_2D, g_gx.gl_textures[ind_tex_map]);
+        }
+        u1i(U.ind_tex[i], 3 + i);
+        if (U.ind_scale[i] >= 0) {
+            glUniform2f(U.ind_scale[i], 1.0f / (float)(1 << g_gx.ind_order[i].scale_s),
+                        1.0f / (float)(1 << g_gx.ind_order[i].scale_t));
+        }
+    }
+    for (int i = 0; i < 3; i++) {
+        float scale_val = ldexpf(1.0f, g_gx.ind_mtx_scale[i] + 17) / 1024.0f;
+        float packed[6];
+
+        for (int j = 0; j < 6; j++) {
+            packed[j] = ((const float*)g_gx.ind_mtx[i])[j] * scale_val;
+        }
+        u3f(U.ind_mtx_r0[i], packed[0], packed[1], packed[2]);
+        u3f(U.ind_mtx_r1[i], packed[3], packed[4], packed[5]);
+    }
+    for (int s = 0; s < g_gx.num_tev_stages && s < PC_GX_MAX_TEV_STAGES; s++) {
+        const PCGXTevStage* ts = &g_gx.tev_stages[s];
+
+        u4i(U.tev_ind_cfg[s], ts->ind_stage, ts->ind_mtx, ts->ind_bias, ts->ind_alpha);
+        u3i(U.tev_ind_wrap[s], ts->ind_wrap_s, ts->ind_wrap_t, ts->ind_add_prev);
+    }
+}
+
+static void upload_fog(void) {
+    u1i(U.fog_type, g_gx.fog_type);
+    u1f(U.fog_start, g_gx.fog_start);
+    u1f(U.fog_end, g_gx.fog_end);
+    u4fv(U.fog_color, 1, g_gx.fog_color);
+}
+
+/* The shader's uniforms of the state groups that changed */
+static void upload_uniforms(unsigned int dirty) {
+    upload_matrices(dirty);
+    upload_tev(dirty);
+    if (dirty & PC_GX_DIRTY_LIGHTING) {
+        upload_lighting();
+    }
+    if (dirty & PC_GX_DIRTY_TEXGEN) {
+        upload_texgen();
+    }
+    if (dirty & (PC_GX_DIRTY_TEXTURES | PC_GX_DIRTY_TEV_STAGES)) {
+        bind_stage_textures();
+    }
+    if (dirty & (PC_GX_DIRTY_INDIRECT | PC_GX_DIRTY_TEXTURES)) {
+        upload_indirect();
+    }
+    glActiveTexture(GL_TEXTURE0);
+    if (dirty & PC_GX_DIRTY_FOG) {
+        upload_fog();
+    }
+}
+
+#undef U
+
+static GLenum gl_primitive(u32 prim) {
+    switch (prim) {
+        case GX_TRIANGLESTRIP: return GL_TRIANGLE_STRIP;
+        case GX_TRIANGLEFAN:   return GL_TRIANGLE_FAN;
+        case GX_LINES:         return GL_LINES;
+        case GX_LINESTRIP:     return GL_LINE_STRIP;
+        case GX_POINTS:        return GL_POINTS;
+        default:               return GL_TRIANGLES; /* GX_TRIANGLES, and GX_QUADS drawn by index */
+    }
+}
+
+static GLenum gl_compare(u32 func) {
+    switch (func) {
+        case GX_NEVER:   return GL_NEVER;
+        case GX_LESS:    return GL_LESS;
+        case GX_EQUAL:   return GL_EQUAL;
+        case GX_LEQUAL:  return GL_LEQUAL;
+        case GX_GREATER: return GL_GREATER;
+        case GX_NEQUAL:  return GL_NOTEQUAL;
+        case GX_GEQUAL:  return GL_GEQUAL;
+        case GX_ALWAYS:  return GL_ALWAYS;
+        default:         return GL_LEQUAL;
+    }
+}
+
+/* A GX blend factor: the color factors (2, 3) are the destination's for the
+ * source and the source's for the destination */
+static GLenum gl_blend_factor(u32 factor, int is_src) {
+    switch (factor) {
+        case GX_BL_ZERO:        return GL_ZERO;
+        case GX_BL_ONE:         return GL_ONE;
+        case GX_BL_SRCCLR:      return is_src ? GL_DST_COLOR : GL_SRC_COLOR;
+        case GX_BL_INVSRCCLR:   return is_src ? GL_ONE_MINUS_DST_COLOR : GL_ONE_MINUS_SRC_COLOR;
+        case GX_BL_SRCALPHA:    return GL_SRC_ALPHA;
+        case GX_BL_INVSRCALPHA: return GL_ONE_MINUS_SRC_ALPHA;
+        case GX_BL_DSTALPHA:    return GL_DST_ALPHA;
+        case GX_BL_INVDSTALPHA: return GL_ONE_MINUS_DST_ALPHA;
+        default:                return is_src ? GL_ONE : GL_ZERO;
+    }
+}
+
+static void apply_blend(void) {
+    switch (g_gx.blend_mode) {
+        case GX_BM_NONE:
+        case GX_BM_LOGIC:
+            glDisable(GL_BLEND);
+            break;
+        case GX_BM_BLEND:
+            glEnable(GL_BLEND);
+            if (g_gx.blend_src == GX_BL_DSTALPHA && g_gx.blend_dst == GX_BL_INVDSTALPHA) {
+                /* GC EFB alpha semantics differ from GL */
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            } else {
+                glBlendFunc(gl_blend_factor(g_gx.blend_src, 1), gl_blend_factor(g_gx.blend_dst, 0));
+            }
+            break;
+        case GX_BM_SUBTRACT:
+            /* (the equation goes back to GL_FUNC_ADD after each draw) */
+            glEnable(GL_BLEND);
+            glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
+            glBlendFunc(GL_ONE, GL_ONE);
+            break;
+    }
+}
+
+/* Depth, color mask, culling and blending of the groups that changed */
+static void apply_render_state(unsigned int dirty) {
+    if (dirty & PC_GX_DIRTY_DEPTH) {
+        if (g_gx.z_compare_enable) {
+            glEnable(GL_DEPTH_TEST);
+            glDepthFunc(gl_compare(g_gx.z_compare_func));
+        } else {
+            glDisable(GL_DEPTH_TEST);
+        }
+        glDepthMask(g_gx.z_update_enable ? GL_TRUE : GL_FALSE);
+    }
+    if (dirty & PC_GX_DIRTY_COLOR_MASK) {
+        GLboolean color = g_gx.color_update_enable ? GL_TRUE : GL_FALSE;
+
+        glColorMask(color, color, color, g_gx.alpha_update_enable ? GL_TRUE : GL_FALSE);
+    }
+    if (dirty & PC_GX_DIRTY_CULL) {
+        switch (g_gx.cull_mode) {
+            case GX_CULL_NONE:  glDisable(GL_CULL_FACE); break;
+            case GX_CULL_FRONT: glEnable(GL_CULL_FACE); glCullFace(GL_FRONT); break;
+            case GX_CULL_BACK:  glEnable(GL_CULL_FACE); glCullFace(GL_BACK); break;
+            case GX_CULL_ALL:   glEnable(GL_CULL_FACE); glCullFace(GL_FRONT_AND_BACK); break;
+        }
+    }
+    if (dirty & PC_GX_DIRTY_BLEND) {
+        apply_blend();
+    }
+}
+
 void pc_gx_flush_vertices(void) {
     int count = g_gx.current_vertex_idx;
+    GLuint shader;
+
     if (count == 0) return;
     if (g_pc_skip_draw) return; /* fast script replay; GXBegin resets the buffer */
 
     pc_gx_draw_call_count++;
 
-    GLuint shader = pc_gx_tev_get_shader(&g_gx);
+    shader = pc_gx_tev_get_shader(&g_gx);
     if (shader && shader != g_gx.current_shader) {
         glUseProgram(shader);
         PC_GL_CHECK("glUseProgram");
@@ -610,322 +933,28 @@ void pc_gx_flush_vertices(void) {
     glBindBuffer(GL_ARRAY_BUFFER, g_gx.vbo);
     glBufferData(GL_ARRAY_BUFFER, count * sizeof(PCGXVertex), g_gx.vertex_buffer, GL_STREAM_DRAW);
 
-    /* Upload only dirty state groups */
     if (shader) {
-        GLint loc;
-        unsigned int dirty = g_gx.dirty;
-        #define UL(field) g_gx.uloc.field
-
-        if (dirty & PC_GX_DIRTY_PROJECTION) {
-            loc = UL(projection);
-            if (loc >= 0) glUniformMatrix4fv(loc, 1, GL_TRUE, (float*)g_gx.projection_mtx);
-        }
-
-        if (dirty & PC_GX_DIRTY_MODELVIEW) {
-            loc = UL(modelview);
-            if (loc >= 0) {
-                float mv44[16];
-                const float* src = (const float*)g_gx.pos_mtx[g_gx.current_mtx];
-                mv44[ 0] = src[0]; mv44[ 1] = src[1]; mv44[ 2] = src[2]; mv44[ 3] = src[3];
-                mv44[ 4] = src[4]; mv44[ 5] = src[5]; mv44[ 6] = src[6]; mv44[ 7] = src[7];
-                mv44[ 8] = src[8]; mv44[ 9] = src[9]; mv44[10] = src[10]; mv44[11] = src[11];
-                mv44[12] = 0.0f;   mv44[13] = 0.0f;   mv44[14] = 0.0f;    mv44[15] = 1.0f;
-                glUniformMatrix4fv(loc, 1, GL_TRUE, mv44);
-            }
-            loc = UL(normal_mtx);
-            if (loc >= 0) glUniformMatrix3fv(loc, 1, GL_TRUE, (const float*)g_gx.nrm_mtx[g_gx.current_mtx]);
-        }
-
-        if (dirty & PC_GX_DIRTY_TEV_COLORS) {
-            loc = UL(tev_prev); if (loc >= 0) glUniform4fv(loc, 1, g_gx.tev_colors[0]);
-            loc = UL(tev_reg0); if (loc >= 0) glUniform4fv(loc, 1, g_gx.tev_colors[1]);
-            loc = UL(tev_reg1); if (loc >= 0) glUniform4fv(loc, 1, g_gx.tev_colors[2]);
-            loc = UL(tev_reg2); if (loc >= 0) glUniform4fv(loc, 1, g_gx.tev_colors[3]);
-        }
-
-        if (dirty & PC_GX_DIRTY_TEV_STAGES) {
-            loc = UL(num_tev_stages); if (loc >= 0) glUniform1i(loc, g_gx.num_tev_stages);
-            for (int s = 0; s < PC_GX_MAX_TEV_STAGES && s < g_gx.num_tev_stages; s++) {
-                PCGXTevStage* ts = &g_gx.tev_stages[s];
-                loc = UL(tev_color_in[s]); if (loc >= 0) glUniform4i(loc, ts->color_a, ts->color_b, ts->color_c, ts->color_d);
-                loc = UL(tev_alpha_in[s]); if (loc >= 0) glUniform4i(loc, ts->alpha_a, ts->alpha_b, ts->alpha_c, ts->alpha_d);
-                loc = UL(tev_color_op[s]); if (loc >= 0) glUniform1i(loc, ts->color_op);
-                loc = UL(tev_alpha_op[s]); if (loc >= 0) glUniform1i(loc, ts->alpha_op);
-                loc = UL(tev_bsc[s]);  if (loc >= 0) glUniform4i(loc, ts->color_bias, ts->color_scale, ts->alpha_bias, ts->alpha_scale);
-                loc = UL(tev_out[s]);  if (loc >= 0) glUniform4i(loc, ts->color_clamp, ts->alpha_clamp, ts->color_out, ts->alpha_out);
-                loc = UL(tev_swap[s]); if (loc >= 0) glUniform2i(loc, ts->ras_swap, ts->tex_swap);
-            }
-            loc = UL(tev_ksel);
-            if (loc >= 0) {
-                int ksel[PC_GX_MAX_TEV_STAGES * 3];
-                for (int s = 0; s < PC_GX_MAX_TEV_STAGES; s++) {
-                    ksel[s * 3 + 0] = g_gx.tev_stages[s].k_color_sel;
-                    ksel[s * 3 + 1] = g_gx.tev_stages[s].k_alpha_sel;
-                    ksel[s * 3 + 2] = s;
-                }
-                glUniform3iv(loc, PC_GX_MAX_TEV_STAGES, ksel);
-            }
-            for (int s = 0; s < PC_GX_MAX_TEV_STAGES; s++) {
-                int tc_src = 0;
-                if (s < g_gx.num_tev_stages) {
-                    int tc = g_gx.tev_stages[s].tex_coord;
-                    if (tc >= 0 && tc < 8) tc_src = tc;
-                    else tc_src = s;
-                }
-                loc = UL(tev_tc_src[s]); if (loc >= 0) glUniform1i(loc, tc_src);
-            }
-        }
-
-        if (dirty & PC_GX_DIRTY_SWAP_TABLES) {
-            loc = UL(swap_table);
-            if (loc >= 0) {
-                int sw[16];
-                for (int t = 0; t < 4; t++) {
-                    sw[t*4+0] = g_gx.tev_swap_table[t].r;
-                    sw[t*4+1] = g_gx.tev_swap_table[t].g;
-                    sw[t*4+2] = g_gx.tev_swap_table[t].b;
-                    sw[t*4+3] = g_gx.tev_swap_table[t].a;
-                }
-                glUniform4iv(loc, 4, sw);
-            }
-        }
-
-        if (dirty & PC_GX_DIRTY_KONST) {
-            loc = UL(kcolor); if (loc >= 0) glUniform4fv(loc, 4, (const float*)g_gx.tev_k_colors);
-        }
-
-        if (dirty & PC_GX_DIRTY_ALPHA_CMP) {
-            loc = UL(alpha_comp0); if (loc >= 0) glUniform1i(loc, g_gx.alpha_comp0);
-            loc = UL(alpha_ref0);  if (loc >= 0) glUniform1i(loc, g_gx.alpha_ref0);
-            loc = UL(alpha_op);    if (loc >= 0) glUniform1i(loc, g_gx.alpha_op);
-            loc = UL(alpha_comp1); if (loc >= 0) glUniform1i(loc, g_gx.alpha_comp1);
-            loc = UL(alpha_ref1);  if (loc >= 0) glUniform1i(loc, g_gx.alpha_ref1);
-        }
-
-        if (dirty & PC_GX_DIRTY_LIGHTING) {
-            loc = UL(lighting_enabled); if (loc >= 0) glUniform1i(loc, g_gx.chan_ctrl_enable[0]);
-            loc = UL(mat_color);  if (loc >= 0) glUniform4fv(loc, 1, g_gx.chan_mat_color[0]);
-            loc = UL(amb_color);  if (loc >= 0) glUniform4fv(loc, 1, g_gx.chan_amb_color[0]);
-            loc = UL(chan_mat_src); if (loc >= 0) glUniform1i(loc, g_gx.chan_ctrl_mat_src[0]);
-            loc = UL(chan_amb_src); if (loc >= 0) glUniform1i(loc, g_gx.chan_ctrl_amb_src[0]);
-            loc = UL(num_chans);  if (loc >= 0) glUniform1i(loc, g_gx.num_chans);
-            loc = UL(alpha_lighting_enabled); if (loc >= 0) glUniform1i(loc, g_gx.chan_ctrl_enable[1]);
-            loc = UL(alpha_mat_src); if (loc >= 0) glUniform1i(loc, g_gx.chan_ctrl_mat_src[1]);
-            {
-                int color_light_mask = g_gx.chan_ctrl_light_mask[0];
-                loc = UL(light_mask); if (loc >= 0) glUniform1i(loc, color_light_mask);
-                float lpos[8][3], lcol[8][4];
-                for (int i = 0; i < 8; i++) {
-                    memcpy(lpos[i], g_gx.lights[i].pos, sizeof(lpos[i]));
-                    memcpy(lcol[i], g_gx.lights[i].color, sizeof(lcol[i]));
-                }
-                loc = UL(light_pos[0]);   if (loc >= 0) glUniform3fv(loc, 8, &lpos[0][0]);
-                loc = UL(light_color[0]); if (loc >= 0) glUniform4fv(loc, 8, &lcol[0][0]);
-            }
-        }
-
-        if (dirty & PC_GX_DIRTY_TEXGEN) {
-            for (int tg = 0; tg < 2; tg++) {
-                int mtx_id = g_gx.tex_gen_mtx[tg];
-                int slot = pc_tex_mtx_id_to_slot(mtx_id);
-                int has_mtx = (slot >= 0 && slot < 10);
-                loc = g_gx.uloc.texmtx_enable[tg]; if (loc >= 0) glUniform1i(loc, has_mtx);
-                if (has_mtx) {
-                    const float* tm = (const float*)g_gx.tex_mtx[slot];
-                    loc = g_gx.uloc.texmtx_row0[tg]; if (loc >= 0) glUniform4f(loc, tm[0], tm[1], tm[2], tm[3]);
-                    loc = g_gx.uloc.texmtx_row1[tg]; if (loc >= 0) glUniform4f(loc, tm[4], tm[5], tm[6], tm[7]);
-                }
-                loc = g_gx.uloc.texgen_src[tg]; if (loc >= 0) glUniform1i(loc, g_gx.tex_gen_src[tg]);
-            }
-        }
-
-        if (dirty & (PC_GX_DIRTY_TEXTURES | PC_GX_DIRTY_TEV_STAGES)) {
-            int use_tex_stage[PC_GX_MAX_TEV_STAGES] = { 0 };
-            GLuint tex_obj_stage[PC_GX_MAX_TEV_STAGES] = { 0 };
-            for (int s = 0; s < PC_GX_MAX_TEV_STAGES; s++) {
-                if (s < g_gx.num_tev_stages) {
-                    int tex_map = g_gx.tev_stages[s].tex_map;
-                    if (tex_map >= 0 && tex_map < 8)
-                        tex_obj_stage[s] = g_gx.gl_textures[tex_map];
-                }
-                if (tex_obj_stage[s] != 0) {
-                    use_tex_stage[s] = 1;
-                    glActiveTexture(GL_TEXTURE0 + s);
-                    glBindTexture(GL_TEXTURE_2D, tex_obj_stage[s]);
-                }
-            }
-            loc = UL(use_texture0); if (loc >= 0) glUniform1i(loc, use_tex_stage[0]);
-            loc = UL(use_texture1); if (loc >= 0) glUniform1i(loc, use_tex_stage[1]);
-            loc = UL(use_texture2); if (loc >= 0) glUniform1i(loc, use_tex_stage[2]);
-            loc = UL(texture0); if (loc >= 0) glUniform1i(loc, 0);
-            loc = UL(texture1); if (loc >= 0) glUniform1i(loc, 1);
-            loc = UL(texture2); if (loc >= 0) glUniform1i(loc, 2);
-        }
-
-        /* Indirect textures on units 3-6 */
-        if (dirty & (PC_GX_DIRTY_INDIRECT | PC_GX_DIRTY_TEXTURES)) {
-            loc = UL(num_ind_stages); if (loc >= 0) glUniform1i(loc, g_gx.num_ind_stages);
-            for (int i = 0; i < g_gx.num_ind_stages && i < 4; i++) {
-                int ind_tex_map = g_gx.ind_order[i].tex_map;
-                if (ind_tex_map >= 0 && ind_tex_map < 8) {
-                    GLuint ind_tex = g_gx.gl_textures[ind_tex_map];
-                    if (ind_tex) {
-                        glActiveTexture(GL_TEXTURE3 + i);
-                        glBindTexture(GL_TEXTURE_2D, ind_tex);
-                    }
-                }
-                loc = UL(ind_tex[i]); if (loc >= 0) glUniform1i(loc, 3 + i);
-                loc = UL(ind_scale[i]);
-                if (loc >= 0) {
-                    float s_scale = 1.0f / (float)(1 << g_gx.ind_order[i].scale_s);
-                    float t_scale = 1.0f / (float)(1 << g_gx.ind_order[i].scale_t);
-                    glUniform2f(loc, s_scale, t_scale);
-                }
-            }
-            for (int i = 0; i < 3; i++) {
-                float scale_val = ldexpf(1.0f, g_gx.ind_mtx_scale[i] + 17) / 1024.0f;
-                float packed[6];
-                for (int j = 0; j < 6; j++)
-                    packed[j] = ((float*)g_gx.ind_mtx[i])[j] * scale_val;
-                loc = UL(ind_mtx_r0[i]); if (loc >= 0) glUniform3f(loc, packed[0], packed[1], packed[2]);
-                loc = UL(ind_mtx_r1[i]); if (loc >= 0) glUniform3f(loc, packed[3], packed[4], packed[5]);
-            }
-            for (int s = 0; s < g_gx.num_tev_stages && s < PC_GX_MAX_TEV_STAGES; s++) {
-                PCGXTevStage* ts = &g_gx.tev_stages[s];
-                loc = UL(tev_ind_cfg[s]);
-                if (loc >= 0) glUniform4i(loc, ts->ind_stage, ts->ind_mtx, ts->ind_bias, ts->ind_alpha);
-                loc = UL(tev_ind_wrap[s]);
-                if (loc >= 0) glUniform3i(loc, ts->ind_wrap_s, ts->ind_wrap_t, ts->ind_add_prev);
-            }
-        }
-        glActiveTexture(GL_TEXTURE0);
-
-        if (dirty & PC_GX_DIRTY_FOG) {
-            loc = UL(fog_type);  if (loc >= 0) glUniform1i(loc, g_gx.fog_type);
-            loc = UL(fog_start); if (loc >= 0) glUniform1f(loc, g_gx.fog_start);
-            loc = UL(fog_end);   if (loc >= 0) glUniform1f(loc, g_gx.fog_end);
-            loc = UL(fog_color);  if (loc >= 0) glUniform4fv(loc, 1, g_gx.fog_color);
-        }
-
-        #undef UL
+        upload_uniforms(g_gx.dirty);
     }
-
-    GLenum gl_prim;
-    switch (g_gx.current_primitive) {
-        case GX_QUADS:         gl_prim = GL_TRIANGLES; break;
-        case GX_TRIANGLES:     gl_prim = GL_TRIANGLES; break;
-        case GX_TRIANGLESTRIP: gl_prim = GL_TRIANGLE_STRIP; break;
-        case GX_TRIANGLEFAN:   gl_prim = GL_TRIANGLE_FAN; break;
-        case GX_LINES:         gl_prim = GL_LINES; break;
-        case GX_LINESTRIP:     gl_prim = GL_LINE_STRIP; break;
-        case GX_POINTS:        gl_prim = GL_POINTS; break;
-        default:               gl_prim = GL_TRIANGLES; break;
-    }
-
-    if (g_gx.dirty & PC_GX_DIRTY_DEPTH) {
-        if (g_gx.z_compare_enable) {
-            glEnable(GL_DEPTH_TEST);
-            GLenum zfunc;
-            switch (g_gx.z_compare_func) {
-                case GX_NEVER:   zfunc = GL_NEVER; break;
-                case GX_LESS:    zfunc = GL_LESS; break;
-                case GX_EQUAL:   zfunc = GL_EQUAL; break;
-                case GX_LEQUAL:  zfunc = GL_LEQUAL; break;
-                case GX_GREATER: zfunc = GL_GREATER; break;
-                case GX_NEQUAL:  zfunc = GL_NOTEQUAL; break;
-                case GX_GEQUAL:  zfunc = GL_GEQUAL; break;
-                case GX_ALWAYS:  zfunc = GL_ALWAYS; break;
-                default:         zfunc = GL_LEQUAL; break;
-            }
-            glDepthFunc(zfunc);
-        } else {
-            glDisable(GL_DEPTH_TEST);
-        }
-        glDepthMask(g_gx.z_update_enable ? GL_TRUE : GL_FALSE);
-    }
-
-    if (g_gx.dirty & PC_GX_DIRTY_COLOR_MASK) {
-        glColorMask(
-            g_gx.color_update_enable ? GL_TRUE : GL_FALSE,
-            g_gx.color_update_enable ? GL_TRUE : GL_FALSE,
-            g_gx.color_update_enable ? GL_TRUE : GL_FALSE,
-            g_gx.alpha_update_enable ? GL_TRUE : GL_FALSE
-        );
-    }
-
-    if (g_gx.dirty & PC_GX_DIRTY_CULL) {
-        switch (g_gx.cull_mode) {
-            case GX_CULL_NONE:  glDisable(GL_CULL_FACE); break;
-            case GX_CULL_FRONT: glEnable(GL_CULL_FACE); glCullFace(GL_FRONT); break;
-            case GX_CULL_BACK:  glEnable(GL_CULL_FACE); glCullFace(GL_BACK); break;
-            case GX_CULL_ALL:   glEnable(GL_CULL_FACE); glCullFace(GL_FRONT_AND_BACK); break;
-        }
-    }
-
-    if (g_gx.dirty & PC_GX_DIRTY_BLEND) {
-        switch (g_gx.blend_mode) {
-            case GX_BM_NONE:
-                glDisable(GL_BLEND);
-                break;
-            case GX_BM_BLEND:
-                glEnable(GL_BLEND);
-                {
-                    GLenum src, dst;
-                    switch (g_gx.blend_src) {
-                        case GX_BL_ZERO:        src = GL_ZERO; break;
-                        case GX_BL_ONE:         src = GL_ONE; break;
-                        case GX_BL_DSTCLR:      src = GL_DST_COLOR; break;
-                        case GX_BL_INVDSTCLR:   src = GL_ONE_MINUS_DST_COLOR; break;
-                        case GX_BL_SRCALPHA:    src = GL_SRC_ALPHA; break;
-                        case GX_BL_INVSRCALPHA: src = GL_ONE_MINUS_SRC_ALPHA; break;
-                        case GX_BL_DSTALPHA:    src = GL_DST_ALPHA; break;
-                        case GX_BL_INVDSTALPHA: src = GL_ONE_MINUS_DST_ALPHA; break;
-                        default:                src = GL_ONE; break;
-                    }
-                    switch (g_gx.blend_dst) {
-                        case GX_BL_ZERO:        dst = GL_ZERO; break;
-                        case GX_BL_ONE:         dst = GL_ONE; break;
-                        case GX_BL_SRCCLR:      dst = GL_SRC_COLOR; break;
-                        case GX_BL_INVSRCCLR:   dst = GL_ONE_MINUS_SRC_COLOR; break;
-                        case GX_BL_SRCALPHA:    dst = GL_SRC_ALPHA; break;
-                        case GX_BL_INVSRCALPHA: dst = GL_ONE_MINUS_SRC_ALPHA; break;
-                        case GX_BL_DSTALPHA:    dst = GL_DST_ALPHA; break;
-                        case GX_BL_INVDSTALPHA: dst = GL_ONE_MINUS_DST_ALPHA; break;
-                        default:                dst = GL_ZERO; break;
-                    }
-                    /* DST_ALPHA→SRC_ALPHA: GC EFB alpha semantics differ from GL */
-                    if (g_gx.blend_src == GX_BL_DSTALPHA && g_gx.blend_dst == GX_BL_INVDSTALPHA) {
-                        src = GL_SRC_ALPHA;
-                        dst = GL_ONE_MINUS_SRC_ALPHA;
-                    }
-                    glBlendFunc(src, dst);
-                }
-                break;
-            case GX_BM_LOGIC:
-                glDisable(GL_BLEND);
-                break;
-            case GX_BM_SUBTRACT:
-                glEnable(GL_BLEND);
-                glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
-                glBlendFunc(GL_ONE, GL_ONE);
-                break;
-        }
-    }
+    apply_render_state(g_gx.dirty);
 
     if (g_gx.current_primitive == GX_QUADS) {
-        int num_quads = count / 4;
-        int num_indices = num_quads * 6;
-        glDrawElements(GL_TRIANGLES, num_indices, GL_UNSIGNED_SHORT, 0);
+        glDrawElements(GL_TRIANGLES, count / 4 * 6, GL_UNSIGNED_SHORT, 0); /* two triangles a quad */
         PC_GL_CHECK("glDrawElements");
     } else {
-        glDrawArrays(gl_prim, 0, count);
+        glDrawArrays(gl_primitive(g_gx.current_primitive), 0, count);
         PC_GL_CHECK("glDrawArrays");
     }
 
-    if (g_gx.blend_mode == GX_BM_SUBTRACT)
+    if (g_gx.blend_mode == GX_BM_SUBTRACT) {
+        /* back to the equation the rest of the program draws with, and set
+         * again for the next draw in this mode (before, only the first draw
+         * after GXSetBlendMode subtracted) */
         glBlendEquation(GL_FUNC_ADD);
-
-    g_gx.dirty = 0;
+        g_gx.dirty = PC_GX_DIRTY_BLEND;
+    } else {
+        g_gx.dirty = 0;
+    }
 }
 
 /* --- Vertex Descriptor / Format --- */

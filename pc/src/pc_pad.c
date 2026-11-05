@@ -22,7 +22,10 @@ static SDL_GameController* g_controller = NULL;
  * Shift+Enter, does not also press Start or B in the menu that comes next */
 static u32 s_typed_held = 0;
 
-BOOL PADInit(void) {
+#define BIT(bind) (1u << (bind))
+
+/* Opens the first gamepad SDL can open (with none, g_controller stays) */
+static void open_first_controller(void) {
     for (int i = 0; i < SDL_NumJoysticks(); i++) {
         if (SDL_IsGameController(i)) {
             g_controller = SDL_GameControllerOpen(i);
@@ -31,7 +34,22 @@ BOOL PADInit(void) {
             }
         }
     }
+}
+
+BOOL PADInit(void) {
+    open_first_controller();
     return TRUE;
+}
+
+/* A gamepad plugged in since the last read is opened, one pulled out closed */
+static void update_controller(void) {
+    if (!g_controller) {
+        open_first_controller();
+    }
+    if (g_controller && !SDL_GameControllerGetAttached(g_controller)) {
+        SDL_GameControllerClose(g_controller);
+        g_controller = NULL;
+    }
 }
 
 /* The GameCube button of each PC_BIND_* that is one */
@@ -63,169 +81,152 @@ static int pad_input_pressed(PCPadInput in) {
 /* Held controls to buttons and full stick tilts */
 static void apply_held(u32 held, u16* buttons, s8* stickX, s8* stickY, s8* cstickX, s8* cstickY) {
     for (int i = 0; i < PC_BIND_COUNT; i++) {
-        if (held & (1u << i)) {
+        if (held & BIT(i)) {
             *buttons |= s_bind_buttons[i];
         }
     }
-    if (held & (1u << PC_BIND_STICK_UP))     *stickY += STICK_MAGNITUDE;
-    if (held & (1u << PC_BIND_STICK_DOWN))   *stickY -= STICK_MAGNITUDE;
-    if (held & (1u << PC_BIND_STICK_LEFT))   *stickX -= STICK_MAGNITUDE;
-    if (held & (1u << PC_BIND_STICK_RIGHT))  *stickX += STICK_MAGNITUDE;
-    if (held & (1u << PC_BIND_CSTICK_UP))    *cstickY += STICK_MAGNITUDE;
-    if (held & (1u << PC_BIND_CSTICK_DOWN))  *cstickY -= STICK_MAGNITUDE;
-    if (held & (1u << PC_BIND_CSTICK_LEFT))  *cstickX -= STICK_MAGNITUDE;
-    if (held & (1u << PC_BIND_CSTICK_RIGHT)) *cstickX += STICK_MAGNITUDE;
+    if (held & BIT(PC_BIND_STICK_UP))     *stickY += STICK_MAGNITUDE;
+    if (held & BIT(PC_BIND_STICK_DOWN))   *stickY -= STICK_MAGNITUDE;
+    if (held & BIT(PC_BIND_STICK_LEFT))   *stickX -= STICK_MAGNITUDE;
+    if (held & BIT(PC_BIND_STICK_RIGHT))  *stickX += STICK_MAGNITUDE;
+    if (held & BIT(PC_BIND_CSTICK_UP))    *cstickY += STICK_MAGNITUDE;
+    if (held & BIT(PC_BIND_CSTICK_DOWN))  *cstickY -= STICK_MAGNITUDE;
+    if (held & BIT(PC_BIND_CSTICK_LEFT))  *cstickX -= STICK_MAGNITUDE;
+    if (held & BIT(PC_BIND_CSTICK_RIGHT)) *cstickX += STICK_MAGNITUDE;
 }
 
-u32 PADRead(PADStatus* status) {
-    memset(status, 0, sizeof(PADStatus) * 4);
-
-    const u8* keys = SDL_GetKeyboardState(NULL);
+/* The controls held on the keyboard and the mouse (keybindings.ini /
+ * Settings > Controls) */
+static u32 keyboard_held(const u8* keys) {
     u32 mouse = SDL_GetMouseState(NULL, NULL);
-    u16 buttons = 0;
-    u32 held = 0; /* 1 << PC_BIND_* */
-    u32 map_held = 0;
-    u32 chat_held = 0; /* a gamepad button bound to Chat */
-    s8 stickX = 0, stickY = 0;
-    s8 cstickX = 0, cstickY = 0;
+    u32 held = 0;
 
-    /* helper: check if a PCInputCode is currently pressed */
-    #define INPUT_PRESSED(code) \
-        ((code) < 0 ? 0 \
-         : ((code) & PC_INPUT_MOUSE_BIT) \
-            ? (mouse & SDL_BUTTON((code) & 0xFF)) \
-            : keys[(SDL_Scancode)(code)])
-
-    /* from keybindings.ini / Settings > Controls */
     for (int i = 0; i < PC_BIND_COUNT; i++) {
-        if (INPUT_PRESSED(g_pc_keybindings.key[i])) {
-            held |= 1u << i;
+        PCInputCode code = g_pc_keybindings.key[i];
+        int down = code < 0                       ? 0
+                   : (code & PC_INPUT_MOUSE_BIT) ? (mouse & SDL_BUTTON(code & 0xFF)) != 0
+                                                 : keys[(SDL_Scancode)code] != 0;
+
+        if (down) {
+            held |= BIT(i);
         }
     }
-
-    #undef INPUT_PRESSED
-
     /* the Chat key opens the chat box from its key press (pc_gui.cpp), so
      * the letter it types is not typed into the box */
-    held &= ~(1u << PC_BIND_CHAT);
+    held &= ~BIT(PC_BIND_CHAT);
 
     /* Ctrl+S saves (pc_main.c): S (the stick down by default) is left out
      * while Ctrl is held, and then until it is let go */
     if (keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_RCTRL]) {
         for (int i = 0; i < PC_BIND_COUNT; i++) {
-            if (g_pc_keybindings.key[i] == SDL_SCANCODE_S) s_typed_held |= held & (1u << i);
-        }
-    }
-
-    /* Keys type into the in-game text editor while it takes input, or into
-     * the chat box while it is open; once they finish the keys still held
-     * are ignored until let go (the Enter that sent a line is not Start) */
-    {
-        /* (and on the first read after: the Enter that sent a chat line
-         * closes the box in the frame it is pressed, before this read) */
-        static int s_typing_before = 0;
-        int editor = pc_typing_takes_keys();
-        int typing = editor || pc_gui_chat_active();
-
-        if (typing || s_typing_before) {
-            /* In the game's text editor, controls on keys that type nothing
-             * (Home, End, F1...) still press their buttons:
-             * Start on such a key finishes the text, as on a gamepad. The
-             * chat box keeps them all (Home and End move its cursor). */
-            u32 pass = 0;
-
-            if (editor) {
-                for (int i = 0; i < PC_BIND_MAP; i++) { /* the pad's buttons and sticks, not the map */
-                    if ((held & (1u << i)) && !pc_typing_key_types(g_pc_keybindings.key[i])) {
-                        pass |= 1u << i;
-                    }
-                }
-            }
-            s_typed_held = held & ~pass;
-            held = pass;
-        } else {
-            s_typed_held &= held;
-            held &= ~s_typed_held;
-        }
-        s_typing_before = typing;
-    }
-
-    /* hotplug */
-    if (!g_controller) {
-        for (int i = 0; i < SDL_NumJoysticks(); i++) {
-            if (SDL_IsGameController(i)) {
-                g_controller = SDL_GameControllerOpen(i);
-                if (g_controller) break;
+            if (g_pc_keybindings.key[i] == SDL_SCANCODE_S) {
+                s_typed_held |= held & BIT(i);
             }
         }
     }
+    return held;
+}
 
-    if (g_controller) {
-        if (!SDL_GameControllerGetAttached(g_controller)) {
-            SDL_GameControllerClose(g_controller);
-            g_controller = NULL;
-        }
-    }
-    if (g_controller) {
-        for (int i = 0; i < PC_BIND_COUNT; i++) {
-            for (int j = 0; j < PC_PAD_BINDS; j++) {
-                if (pad_input_pressed(g_pc_keybindings.pad[i][j])) {
-                    held |= 1u << i;
+/* Keys type into the in-game text editor while it takes input, or into the
+ * chat box while it is open; once they finish, the keys still held are
+ * ignored until let go (the Enter that sent a line is not Start). Also on
+ * the first read after: the Enter that sent a chat line closes the box in
+ * the frame it is pressed, before this read. */
+static u32 drop_typed_keys(u32 held) {
+    static int s_typing_before = 0;
+    int editor = pc_typing_takes_keys();
+    int typing = editor || pc_gui_chat_active();
+
+    if (typing || s_typing_before) {
+        /* In the game's text editor, controls on keys that type nothing
+         * (Home, End, F1...) still press their buttons: Start on such a key
+         * finishes the text, as on a gamepad. The chat box keeps them all
+         * (Home and End move its cursor). */
+        u32 pass = 0;
+
+        if (editor) {
+            for (int i = 0; i < PC_BIND_MAP; i++) { /* the pad's buttons and sticks, not the map */
+                if ((held & BIT(i)) && !pc_typing_key_types(g_pc_keybindings.key[i])) {
+                    pass |= BIT(i);
                 }
             }
         }
-
-        map_held |= held & (1u << PC_BIND_MAP);
-        chat_held |= held & (1u << PC_BIND_CHAT);
-        apply_held(held, &buttons, &stickX, &stickY, &cstickX, &cstickY);
-        held = 0;
-
-        s16 lx = SDL_GameControllerGetAxis(g_controller, SDL_CONTROLLER_AXIS_LEFTX);
-        s16 ly = SDL_GameControllerGetAxis(g_controller, SDL_CONTROLLER_AXIS_LEFTY);
-        if (abs(lx) > AXIS_DEADZONE) {
-            int sx = lx >> 8;
-            if (sx > 127) sx = 127; else if (sx < -128) sx = -128;
-            stickX = (s8)sx;
-        }
-        if (abs(ly) > AXIS_DEADZONE) {
-            int sy = -(ly >> 8);
-            if (sy > 127) sy = 127; else if (sy < -128) sy = -128;
-            stickY = (s8)sy;
-        }
-
-        s16 rx = SDL_GameControllerGetAxis(g_controller, SDL_CONTROLLER_AXIS_RIGHTX);
-        s16 ry = SDL_GameControllerGetAxis(g_controller, SDL_CONTROLLER_AXIS_RIGHTY);
-        if (abs(rx) > AXIS_DEADZONE) {
-            int srx = rx >> 8;
-            if (srx > 127) srx = 127; else if (srx < -128) srx = -128;
-            cstickX = (s8)srx;
-        }
-        if (abs(ry) > AXIS_DEADZONE) {
-            int sry = -(ry >> 8);
-            if (sry > 127) sry = 127; else if (sry < -128) sry = -128;
-            cstickY = (s8)sry;
-        }
-
-        u8 lt = (u8)(SDL_GameControllerGetAxis(g_controller, SDL_CONTROLLER_AXIS_TRIGGERLEFT) >> 7);
-        u8 rt = (u8)(SDL_GameControllerGetAxis(g_controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) >> 7);
-        status[0].triggerLeft = lt;
-        status[0].triggerRight = rt;
+        s_typed_held = held & ~pass;
+        held = pass;
+    } else {
+        s_typed_held &= held;
+        held &= ~s_typed_held;
     }
+    s_typing_before = typing;
+    return held;
+}
 
-    map_held |= held & (1u << PC_BIND_MAP);
-    /* a gamepad button bound to Chat */
-    {
-        static int s_chat_pad_held = 0;
-        int chat = chat_held != 0;
+/* The controls held on the gamepad */
+static u32 gamepad_held(void) {
+    u32 held = 0;
 
-        if (chat && !s_chat_pad_held) pc_gui_chat_request();
-        s_chat_pad_held = chat;
+    for (int i = 0; i < PC_BIND_COUNT; i++) {
+        for (int j = 0; j < PC_PAD_BINDS; j++) {
+            if (pad_input_pressed(g_pc_keybindings.pad[i][j])) {
+                held |= BIT(i);
+            }
+        }
+    }
+    return held;
+}
+
+/* An analog stick axis past the dead zone sets the stick (up is +y) */
+static void axis_tilt(SDL_GameControllerAxis axis, int flip, s8* out) {
+    s16 v = SDL_GameControllerGetAxis(g_controller, axis);
+
+    if (abs(v) > AXIS_DEADZONE) {
+        int s = flip ? -(v >> 8) : v >> 8;
+
+        *out = (s8)(s > 127 ? 127 : s < -128 ? -128 : s);
+    }
+}
+
+/* A gamepad button bound to Chat opens the chat box when pressed */
+static void chat_button(int down) {
+    static int s_chat_pad_held = 0;
+
+    if (down && !s_chat_pad_held) {
+        pc_gui_chat_request();
+    }
+    s_chat_pad_held = down;
+}
+
+u32 PADRead(PADStatus* status) {
+    const u8* keys = SDL_GetKeyboardState(NULL);
+    u16 buttons = 0;
+    s8 stickX = 0, stickY = 0;
+    s8 cstickX = 0, cstickY = 0;
+    u32 held;    /* 1 << PC_BIND_* */
+    u32 pad = 0; /* of them, on the gamepad */
+
+    memset(status, 0, sizeof(PADStatus) * 4);
+
+    held = drop_typed_keys(keyboard_held(keys));
+    update_controller();
+    if (g_controller) {
+        pad = gamepad_held();
+        held |= pad;
     }
     apply_held(held, &buttons, &stickX, &stickY, &cstickX, &cstickY);
+    if (g_controller) {
+        /* the analog sticks over the controls' full tilts */
+        axis_tilt(SDL_CONTROLLER_AXIS_LEFTX, 0, &stickX);
+        axis_tilt(SDL_CONTROLLER_AXIS_LEFTY, 1, &stickY);
+        axis_tilt(SDL_CONTROLLER_AXIS_RIGHTX, 0, &cstickX);
+        axis_tilt(SDL_CONTROLLER_AXIS_RIGHTY, 1, &cstickY);
+        status[0].triggerLeft = (u8)(SDL_GameControllerGetAxis(g_controller, SDL_CONTROLLER_AXIS_TRIGGERLEFT) >> 7);
+        status[0].triggerRight = (u8)(SDL_GameControllerGetAxis(g_controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) >> 7);
+    }
+    chat_button((pad & BIT(PC_BIND_CHAT)) != 0);
 
     pc_touch_read(&buttons, &stickX, &stickY);
     pc_input_script_apply(&buttons, &stickX, &stickY);
-    pc_minimap_pad(map_held != 0, &buttons);
+    pc_minimap_pad((held & BIT(PC_BIND_MAP)) != 0, &buttons);
     pc_ko_osk_pad(&buttons, &stickX, &stickY);
 
     if (pc_gui_chat_active()) {
