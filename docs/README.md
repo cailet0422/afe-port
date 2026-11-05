@@ -281,6 +281,48 @@ test `pc/tests/test_minimap.c`).
   left mouse button is not a game control); while the map is open a tap outside the on-screen pad's buttons closes
   it. The input script command `MAP` does what the key does.
 
+### Seamless acres
+
+afe-decomp (`TARGET_PC`); `seamless_blocks` in `[Gameplay]` (Settings → Gameplay → Seamless acres), on by default.
+
+On the GameCube the town is cut into acres (blocks of 640 × 640). The camera stays inside the player's acre
+(`Camera2_main_Normal_SetEndCenterPos_fromPlayer` keeps its centre within the acre less a border), and so does the
+player, held by a wall at its edge (`mCoBG_UniqueWallCheck`, for the player `Player_actor_CorrectWadeBlockBorder`).
+Walking into the edge starts the scroll (`Player_actor_Set_ScrollDemo_forWade`: a demo, then `mPlayer_INDEX_WADE`),
+which walks the player on by itself for 38 frames while the camera pans to the next acre; at its start the game moves
+its acre there (`mFI_SetBearActor`: `play->block_table`), and the acre's structures and props become actors
+(`aBC_setupActor`). With the setting on (`mFI_SeamlessActive`: outdoors in the town and on the island, not in the
+title demo or on the first day's arrival, whose own wall keeps the player by the station):
+
+- **Walking on.** `mFI_SeamlessSides` gives the sides of an acre that go on into an acre the scroll could go to
+  (`mFI_ScrollCheck`). Unless an event keeps the player in the acre (`mPlib_Get_unable_wade`), a demo such as a talk is
+  on, or a scroll itself, the wall reaches on into the next acre on those sides (`mCoBG_UniqueWallCheckOpen`, from the
+  acre the wall works from) and walking into the edge does not start the scroll; the ground's own collision decides
+  where the player can go, as within an acre. The camera's area reaches on the same way
+  (`Camera2_OpenSeamlessBorders`), so the player stays in the middle of the screen over the edge.
+- **The acre change.** Once the player stands in another acre, `Player_actor_SeamlessBlockChange` moves the game's
+  acre there as the scroll's setup does (at the player's own position) and counts the scroll's 38 frames, which the
+  rest of the game takes for the scroll: `mFI_SetPlayerWade` reports its start, progress and end, so the new acre's
+  insects and fish come out, villagers walk in, and events and the music follow; the end position asked for
+  (`Player_actor_Get_WadeEndPos`) is where the player is, and the sunburn shows at the same point. A fade out of the
+  scene (going into a building) cuts it short once its progress has been reported, so that its end is too, and none
+  starts during one; a scroll starting (pushing a snowball over the edge still scrolls) has its end reported first.
+  Stepping back within those frames moves the acre back right after them.
+- **What only the scroll stops.** The ball does not react to bumps and bees hang still during the scroll, as the
+  world waits for it; they read `mFI_GetPlayerWadeScroll`, which is none during this acre change, so they go on.
+- **The acres in view.** The camera now sees well into the next acres, so the structures and props of the acres
+  around the player's (houses, the shops, mailboxes, gyroids, snowmen...) are made into actors there too, as
+  `aBC_setupActor` makes the player's (`aBC_setupSeamlessBlocks`), each as it comes near the screen: within the
+  smallest culling area of those actors less `Actor_SEAMLESS_CULL_MARGIN`, by the last frame's camera. The game takes
+  those of other acres away once off screen (`Actor_delete_check`); it now waits until they are out by the same margin
+  more, so none comes and goes on the edge. The structures that went once the player was in another acre outside the
+  scroll (the dump, the stalls, the event tents...: `mDemo_CHECK_SCROLL`) stay as through a scroll, and the next acre
+  change takes away those of acres out of the way (`aBC_deleteActor_part`), as for the others.
+- With the setting off nothing changes: the scripted runs give the same screenshots, positions and saves as v1.4.11.
+  Villagers and insects of the next acre still come out when the player steps in, as at the scroll's start.
+- The input script command `BLOCK` prints the acre the game counts the player in, the player's own and the acre
+  change's state.
+
 ### Updates (release builds)
 
 `pc/src/pc_update.c`, `pc/src/pc_update_core.c` (no network or files: versions, GitHub's release JSON,

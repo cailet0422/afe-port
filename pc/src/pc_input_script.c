@@ -86,6 +86,7 @@ typedef enum {
     SCRIPT_CLOCK,
     SCRIPT_BGM,
     SCRIPT_MAP,
+    SCRIPT_BLOCK,
     SCRIPT_CLICK,
     SCRIPT_MP,
 } ScriptKind;
@@ -351,6 +352,8 @@ int pc_input_script_load(const char* path) {
             for (char* p = ev.name + strlen(word) + 1; *p != '\0'; p++) {
                 if (*p == '_') *p = ' ';
             }
+        } else if (strcmp(word, "BLOCK") == 0) {
+            ev.kind = SCRIPT_BLOCK;
         } else if (strcmp(word, "MAP") == 0) {
             ev.kind = SCRIPT_MAP;
         } else if (strcmp(word, "TYPE") == 0 && fields >= 3) {
@@ -860,6 +863,23 @@ static void push_click_button(void) {
     SDL_PushEvent(&e);
 }
 
+/* BLOCK: the block the game counts the player in, the player's own block and
+ * where the block change stands (mFI_WADE_*), for seamless block crossing */
+static void log_block(u32 frame) {
+    GAME_PLAY* play = (GAME_PLAY*)gamePT;
+    ACTOR* player = find_actor(ACTOR_PART_PLAYER, 0);
+    int bx = -1;
+    int bz = -1;
+
+    if (play == NULL || play->game.exec != play_main || player == NULL) {
+        return;
+    }
+    mFI_Wpos2BlockNum(&bx, &bz, player->world.position);
+    printf("[INPUT] frame %u: block %d,%d player %d,%d wade %d x %.0f z %.0f\n", (unsigned)frame,
+           (int)play->block_table.block_x, (int)play->block_table.block_z, bx, bz, mFI_GetPlayerWade(),
+           player->world.position.x, player->world.position.z);
+}
+
 /* Where the player and the villagers are (outside, x/z in world units; one
  * block is 640), for writing routes */
 static void log_positions(u32 frame) {
@@ -1353,6 +1373,8 @@ int pc_input_script_frame(u32 real_frame) {
             log_positions(frame);
         } else if (ev->kind == SCRIPT_MAP) {
             pc_minimap_request_toggle();
+        } else if (ev->kind == SCRIPT_BLOCK) {
+            log_block(frame);
         } else if (ev->kind >= SCRIPT_GIVE && ev->kind <= SCRIPT_BGM) {
             debug_command(ev);
         } else if (ev->kind == SCRIPT_QUIT) {
