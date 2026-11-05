@@ -142,6 +142,8 @@ typedef struct {
     HostBuf stream, staging;
     HostBuf extra[8]; /* more streaming space, made when a frame needs it and kept */
     int nextra;
+    HostBuf stage_extra[2]; /* more upload space, the same way */
+    int nstage_extra, stage_cur;
     int cur;          /* the streaming buffer in use: 0 stream, i extra[i - 1] */
     uint64_t serial;
     int begun, upload_begun, acquired_image, acquire_waited;
@@ -203,7 +205,11 @@ static struct {
     int want_samples;
     int vsync;
     int swapchain_dirty, suspended, want_suspend;
-    VkRenderPass passes[3][3]; /* [color load op][depth load op]: 0 load, 1 clear, 2 don't care */
+    VkRenderPass passes[3][3][2]; /* [color load op][depth load op][keep]: ops 0 load, 1 clear, 2 don't care */
+    VkSurfaceTransformFlagBitsKHR sc_transform; /* the surface's turn when the swapchain was made */
+    Uint32 subopt_checked;
+    int pass_keep;        /* the pass stores depth (and the MSAA picture) for a pass after it */
+    int keep_frames;      /* frames that store them anyway (a pass ended where none was expected) */
 
     Frame frames[FRAMES];
     int fi;               /* the frame being recorded */
@@ -471,6 +477,8 @@ static void frame_begin(void) {
     for (int i = 0; i < f->nextra; i++) f->extra[i].used = 0;
     f->cur = 0;
     f->staging.used = 0;
+    for (int i = 0; i < f->nstage_extra; i++) f->stage_extra[i].used = 0;
+    f->stage_cur = 0;
     f->serial = ++vk.serial;
     f->begun = 1;
     f->upload_begun = 0;
@@ -532,6 +540,8 @@ static void flush_and_wait(void) {
     cmd_begin(f->cmd);
     f->upload_begun = 0;
     f->staging.used = 0;
+    for (int i = 0; i < f->nstage_extra; i++) f->stage_extra[i].used = 0;
+    f->stage_cur = 0;
     bound_reset();
 }
 
@@ -582,7 +592,7 @@ static unsigned char* stream_alloc(VkDeviceSize n, VkDeviceSize align, HostBuf**
 
 /* --- swapchain and render targets --- */
 
-static VkRenderPass render_pass(int color_op, int depth_op);
+static VkRenderPass render_pass(int color_op, int depth_op, int keep);
 
 static int make_image(VkFormat format, uint32_t w, uint32_t h, uint32_t levels, VkSampleCountFlagBits samples,
                       VkImageUsageFlags usage, VkImageAspectFlags aspect, VkImage* image, VkImageView* view,
@@ -649,6 +659,7 @@ static int swapchain_create(void) {
 
     if (vk.surface == VK_NULL_HANDLE) return 0;
     if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk.phys, vk.surface, &caps) != VK_SUCCESS) return 0;
+    vk.sc_transform = caps.currentTransform;
     SDL_Vulkan_GetDrawableSize(vk.window, &w, &h);
     if (caps.currentExtent.width != UINT32_MAX) {
         vk.extent = caps.currentExtent;
@@ -722,7 +733,7 @@ static int swapchain_create(void) {
             att[0] = vk.views[i];
             att[1] = vk.depth_view;
         }
-        fi.renderPass = render_pass(0, 0);
+        fi.renderPass = render_pass(0, 0, 1);
         fi.attachmentCount = vk.samples != VK_SAMPLE_COUNT_1_BIT ? 3 : 2;
         fi.pAttachments = att;
         fi.width = vk.extent.width;
@@ -747,9 +758,11 @@ static VkAttachmentLoadOp load_op(int op) {
     return op == 1 ? VK_ATTACHMENT_LOAD_OP_CLEAR : op == 2 ? VK_ATTACHMENT_LOAD_OP_DONT_CARE : VK_ATTACHMENT_LOAD_OP_LOAD;
 }
 
-/* color op and depth op: 0 load, 1 clear, 2 don't care; all compatible */
-static VkRenderPass render_pass(int color_op, int depth_op) {
-    VkRenderPass* rp = &vk.passes[color_op][depth_op];
+/* color op and depth op: 0 load, 1 clear, 2 don't care; keep 0: depth and
+ * the MSAA samples are not stored (a frame's one pass, so a tiled GPU never
+ * writes them to memory), 1: stored for a pass after this one. All compatible. */
+static VkRenderPass render_pass(int color_op, int depth_op, int keep) {
+    VkRenderPass* rp = &vk.passes[color_op][depth_op][keep ? 1 : 0];
     VkAttachmentDescription a[3];
     VkAttachmentReference cref = { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
     VkAttachmentReference dref = { 1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
@@ -778,6 +791,10 @@ static VkRenderPass render_pass(int color_op, int depth_op) {
     a[2].samples = VK_SAMPLE_COUNT_1_BIT;
     a[2].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     a[2].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    if (!keep) {
+        a[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        if (msaa) a[0].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; /* (the resolved picture is stored) */
+    }
     sub.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     sub.colorAttachmentCount = 1;
     sub.pColorAttachments = &cref;
@@ -832,6 +849,24 @@ static void suspend(void) {
     vk.want_suspend = 0;
 }
 
+/* VK_SUBOPTIMAL_KHR: Android answers so at every frame where the picture is
+ * turned by the system (a landscape game on a portrait screen: no
+ * pre-rotation here), so the swapchain is made again only when the
+ * surface's size or turn changed since */
+static void suboptimal(void) {
+    VkSurfaceCapabilitiesKHR caps;
+    Uint32 now = SDL_GetTicks();
+
+    if (now - vk.subopt_checked < 500) return;
+    vk.subopt_checked = now;
+    if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk.phys, vk.surface, &caps) != VK_SUCCESS ||
+        caps.currentTransform != vk.sc_transform ||
+        (caps.currentExtent.width != UINT32_MAX &&
+         (caps.currentExtent.width != vk.extent.width || caps.currentExtent.height != vk.extent.height))) {
+        vk.swapchain_dirty = 1;
+    }
+}
+
 /* the swapchain image to draw this frame into; 0 when there is none now */
 static int acquire(void) {
     Frame* f = &vk.frames[vk.fi];
@@ -852,7 +887,7 @@ static int acquire(void) {
         r = vkAcquireNextImageKHR(vk.dev, vk.swapchain, UINT64_MAX, f->acquired, VK_NULL_HANDLE, &vk.image);
         if (r == VK_SUCCESS || r == VK_SUBOPTIMAL_KHR) {
             f->acquired_image = 1;
-            if (r == VK_SUBOPTIMAL_KHR) vk.swapchain_dirty = 1; /* after this frame */
+            if (r == VK_SUBOPTIMAL_KHR) suboptimal();
             return 1;
         }
         if (r == VK_ERROR_OUT_OF_DATE_KHR) {
@@ -886,10 +921,17 @@ static int pass_begin(void) {
     Frame* f = &vk.frames[vk.fi];
     VkRenderPassBeginInfo bi = { VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
     VkClearValue cv[3];
-    int color_op, depth_op;
+    int color_op, depth_op, keep;
 
     if (vk.in_pass) return 1;
     if (!acquire()) return 0;
+    if (vk.drew && !vk.pass_keep) {
+        /* a pass after one that did not store depth (a flush or a screen copy
+         * not seen coming): from now on frames store it for a while */
+        if (vk.keep_frames == 0 && g_pc_verbose) printf("[PC/Vulkan] a frame drew after its pass ended: keeping depth\n");
+        vk.keep_frames = 120;
+    }
+    keep = g_pc_frame_copies || vk.keep_frames > 0;
     if (!vk.drew) {
         /* the frame's first pass: cleared (OpenGL leaves the picture after a swap undefined) */
         color_op = 1;
@@ -912,7 +954,7 @@ static int pass_begin(void) {
     memset(cv, 0, sizeof(cv));
     memcpy(cv[0].color.float32, vk.clear_color, sizeof(vk.clear_color));
     cv[1].depthStencil.depth = vk.clear_depth;
-    bi.renderPass = render_pass(color_op, depth_op);
+    bi.renderPass = render_pass(color_op, depth_op, keep);
     bi.framebuffer = vk.fbs[vk.image];
     bi.renderArea.extent = vk.extent;
     bi.clearValueCount = vk.samples != VK_SAMPLE_COUNT_1_BIT ? 3 : 2;
@@ -920,6 +962,7 @@ static int pass_begin(void) {
     vkCmdBeginRenderPass(f->cmd, &bi, VK_SUBPASS_CONTENTS_INLINE);
     vk.in_pass = 1;
     vk.drew = 1;
+    vk.pass_keep = keep;
     vk.pending_clear = 0;
     bound_reset();
     return 1;
@@ -936,7 +979,9 @@ static void vk_present(void) {
     VkResult r;
 
     frame_begin();
-    show = pass_begin(); /* (a frame that drew nothing shows black) */
+    /* (a frame that drew nothing shows black; one that did is not passed
+     * through again, which would resolve MSAA samples not kept) */
+    show = vk.drew ? f->acquired_image : pass_begin();
     pass_end();
     if (show) {
         image_barrier(f->cmd, vk.images[vk.image], vk.layout[vk.image], VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -971,7 +1016,9 @@ static void vk_present(void) {
         pi.pSwapchains = &vk.swapchain;
         pi.pImageIndices = &vk.image;
         r = vkQueuePresentKHR(vk.queue, &pi);
-        if (r == VK_ERROR_OUT_OF_DATE_KHR || r == VK_SUBOPTIMAL_KHR) {
+        if (r == VK_SUBOPTIMAL_KHR) {
+            suboptimal();
+        } else if (r == VK_ERROR_OUT_OF_DATE_KHR) {
             vk.swapchain_dirty = 1;
         } else if (r == VK_ERROR_SURFACE_LOST_KHR) {
             vk.swapchain_dirty = 1;
@@ -981,6 +1028,7 @@ static void vk_present(void) {
     }
     f->begun = 0;
     vk.fi = (vk.fi + 1) % FRAMES;
+    if (vk.keep_frames > 0) vk.keep_frames--;
     if (vk.want_suspend) suspend();
     {
         int w = 0, h = 0;
@@ -1017,6 +1065,8 @@ static void tex_release(VkTex* t) {
 /* staging space for an upload: the frame's, or a buffer of its own */
 static unsigned char* staging_alloc(VkDeviceSize n, VkBuffer* buf, VkDeviceSize* off) {
     Frame* f;
+    HostBuf* b;
+    VkDeviceSize start;
 
     frame_begin();
     f = &vk.frames[vk.fi];
@@ -1029,13 +1079,24 @@ static unsigned char* staging_alloc(VkDeviceSize n, VkBuffer* buf, VkDeviceSize*
         *off = 0;
         return hb.map;
     }
-    if (f->staging.used + n > f->staging.size) {
-        flush_and_wait(); /* the uploads so far are done */
+    for (;;) {
+        b = f->stage_cur == 0 ? &f->staging : &f->stage_extra[f->stage_cur - 1];
+        start = (b->used + 15) & ~(VkDeviceSize)15;
+        if (start + n <= b->size) break;
+        if (f->stage_cur < f->nstage_extra) {
+            f->stage_cur++;
+        } else if (f->nstage_extra < 2 &&
+                   host_buffer(&f->stage_extra[f->nstage_extra], STAGING_SIZE, VK_BUFFER_USAGE_TRANSFER_SRC_BIT)) {
+            f->nstage_extra++;
+            f->stage_cur++;
+        } else {
+            flush_and_wait(); /* the uploads so far are done: all of them free again */
+        }
     }
-    *off = (f->staging.used + 15) & ~(VkDeviceSize)15;
-    f->staging.used = *off + n;
-    *buf = f->staging.buf;
-    return f->staging.map + *off;
+    *off = start;
+    b->used = start + n;
+    *buf = b->buf;
+    return b->map + start;
 }
 
 static int vk_tex_image(PCGfxTex* o, int w, int h, int format, const void* data, size_t size) {
@@ -1550,7 +1611,7 @@ static VkPipeline build_pipeline(int kind, uint32_t rkey, const PCGXShaderConfig
     ci.pColorBlendState = &cb;
     ci.pDynamicState = &dy;
     ci.layout = ui ? vk.ui_pipe_layout : vk.gx_layout;
-    ci.renderPass = render_pass(0, 0);
+    ci.renderPass = render_pass(0, 0, 1);
     if (vkCreateGraphicsPipelines(vk.dev, vk.cache, 1, &ci, NULL, &pipe) != VK_SUCCESS) return VK_NULL_HANDLE;
     return pipe;
 }
@@ -1981,9 +2042,10 @@ static void vk_read_pixels(int x, int y, int w, int h, int rgba, void* out) {
     memset(out, 0, (size_t)w * h * (rgba ? 4 : 3));
     if (w <= 0 || h <= 0 || vk.lost) return;
     frame_begin();
-    if (!pass_begin()) return; /* (the frame's picture, cleared if nothing was drawn) */
+    if (!vk.drew && !pass_begin()) return; /* (the frame's picture, cleared if nothing was drawn) */
     pass_end();
     f = &vk.frames[vk.fi];
+    if (!f->acquired_image) return;
     if (x < 0) { w += x; x = 0; }
     if (y < 0) { h += y; y = 0; }
     if (x + w > (int)vk.extent.width) w = (int)vk.extent.width - x;
@@ -2395,7 +2457,8 @@ static void vk_shutdown(void) {
         swapchain_destroy(0);
         for (int i = 0; i < 3; i++)
             for (int j = 0; j < 3; j++)
-                if (vk.passes[i][j]) vkDestroyRenderPass(vk.dev, vk.passes[i][j], NULL);
+                for (int k = 0; k < 2; k++)
+                    if (vk.passes[i][j][k]) vkDestroyRenderPass(vk.dev, vk.passes[i][j][k], NULL);
         for (int i = 0; i < FRAMES; i++) {
             Frame* f = &vk.frames[i];
 
@@ -2409,6 +2472,7 @@ static void vk_shutdown(void) {
             host_buffer_free(&f->stream);
             host_buffer_free(&f->staging);
             for (int k = 0; k < f->nextra; k++) host_buffer_free(&f->extra[k]);
+            for (int k = 0; k < f->nstage_extra; k++) host_buffer_free(&f->stage_extra[k]);
         }
         for (int a = 0; a < 3; a++)
             for (int b = 0; b < 3; b++)

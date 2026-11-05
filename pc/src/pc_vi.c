@@ -56,7 +56,10 @@ static unsigned stats_frames = 0, stats_shown = 0, stats_resets = 0, stats_holds
  * screen (GXCopyTex, e.g. the scene behind a menu), which a frame that is not
  * drawn would leave black. Called while the game builds the frame, before any
  * of it is drawn. */
+int g_pc_frame_copies = 0;     /* this frame copies the screen (set while the game builds it) */
+
 void pc_vi_frame_needs_draw(void) {
+    g_pc_frame_copies = 1;
     if (g_pc_vi_skip && g_pc_verbose) {
         printf("[VI] frame %u: shown after all (it copies the screen)\n", (unsigned)pc_frame_counter);
     }
@@ -241,6 +244,7 @@ void VIWaitForRetrace(void) {
     Uint64 t_before_pace = SDL_GetPerformanceCounter();
     vi_pace(frame_start_time, shown);
     Uint64 t_after_pace = SDL_GetPerformanceCounter();
+    g_pc_frame_copies = 0; /* (the next frame's game_main says again) */
 
     /* report slow frames (>20ms = missed 60fps by >4ms) */
     if (frame_ms > 20.0 && g_pc_verbose) {

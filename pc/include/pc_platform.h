@@ -72,6 +72,7 @@ extern int           g_pc_renderer_override; /* --renderer: the graphics API for
 extern int           g_pc_sim_refresh; /* --sim-refresh: imitate a VSync display of this many Hz (tests) */
 #define PC_DRAW_SKIPPED() (g_pc_skip_draw || g_pc_vi_skip)
 void pc_vi_frame_needs_draw(void); /* the frame copies the screen: draw and show it (pc_vi.c) */
+extern int g_pc_frame_copies; /* the frame being drawn copies the screen (Vulkan keeps depth for it) */
 extern int           g_pc_time_override;
 extern int           g_pc_deterministic; /* clock driven by frames from a fixed date (testing) */
 extern int           g_pc_autosave_test; /* --autosave: autosave with --deterministic too (testing) */
