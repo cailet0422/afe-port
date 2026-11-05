@@ -1433,6 +1433,18 @@ static void debug_command(const ScriptEvent* ev) {
     }
 }
 
+/* a SHOT captures the frame after script frame <frame> */
+static int shot_next(u32 frame) {
+    int i;
+
+    for (i = 0; i < s_count; i++) {
+        if (s_events[i].kind == SCRIPT_SHOT && s_events[i].frame == frame + 1) {
+            return first_waiting() == NULL; /* (or the next frame is the same script time) */
+        }
+    }
+    return 0;
+}
+
 int pc_input_script_frame(u32 real_frame) {
     int keep_running = 1;
 
@@ -1509,13 +1521,11 @@ int pc_input_script_frame(u32 real_frame) {
     if (s_fast) {
         /* Draw the next frame only if it is captured. Menus that keep a copy
          * of the scene behind them show black. */
-        g_pc_skip_draw = 1;
-        for (i = 0; i < s_count; i++) {
-            if (s_events[i].kind == SCRIPT_SHOT && s_events[i].frame == frame + 1 && first_waiting() == NULL) {
-                g_pc_skip_draw = 0;
-                break;
-            }
-        }
+        g_pc_skip_draw = !shot_next(frame);
     }
     return keep_running;
+}
+
+int pc_input_script_draws_next(void) {
+    return s_count > 0 && shot_next(s_frame);
 }

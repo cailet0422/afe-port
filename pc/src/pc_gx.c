@@ -301,11 +301,16 @@ void pc_gx_begin_frame(void) {
     pc_emu64_frame_cull_rejected = 0;
     pc_gx_draw_call_count = 0;
     g_pc_widescreen_stretch = 0;
+#ifdef PC_ENHANCEMENTS
+    pc_gx_update_aspect();
+#endif
+    if (g_pc_vi_skip) {
+        return; /* not shown: leave the framebuffer alone (nothing is drawn into it) */
+    }
     /* glClear respects write masks — must enable all before clearing */
     glDepthMask(GL_TRUE);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 #ifdef PC_ENHANCEMENTS
-    pc_gx_update_aspect();
     glDisable(GL_SCISSOR_TEST);
     glViewport(0, 0, g_pc_window_w, g_pc_window_h);
 #endif
@@ -916,7 +921,7 @@ void pc_gx_flush_vertices(void) {
     GLuint shader;
 
     if (count == 0) return;
-    if (g_pc_skip_draw) return; /* fast script replay; GXBegin resets the buffer */
+    if (PC_DRAW_SKIPPED()) return; /* fast script replay, or a frame not shown; GXBegin resets the buffer */
 
     pc_gx_draw_call_count++;
 
@@ -1779,6 +1784,7 @@ void GXSetTexCopyDst(u16 wd, u16 ht, u32 fmt, GXBool mipmap) {
     g_gx.tex_copy_mipmap = mipmap ? 1 : 0;
 }
 void GXCopyTex(void* dest, GXBool clear) {
+    pc_vi_frame_needs_draw(); /* a frame not drawn would copy black */
     if (g_pc_gx_dl.active) {
         u32 op = PCGX_DL_OP_COPY_TEX;
         u64 dest64 = (u64)(uintptr_t)dest;

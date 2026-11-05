@@ -195,6 +195,11 @@ never look, because the releases could not install over them anyway.
   - App version, device, Android version and the last 40 lines of `log.txt`. The full report is kept as
     `crash_prev.txt`, and the same crash is shown only once.
   `log.txt` is written immediately, line by line.
+- Game speed (1.4.15): the game takes one step per frame, and up to 1.4.14 a phone that could not draw and show 60
+  frames a second (reported on a Galaxy A36) ran the whole game that much slower, at a steady frame rate that looked
+  smooth. Now frames the phone has no time to show are played without being drawn (docs/README.md "Frame pacing"), so
+  the game keeps its speed. While that happens, `log.txt` gets a line once a minute such as `[VI] 60 s: 3600 game
+  frames (100% of full speed), 2250 shown (37.5 a second); ...`: the frames the device really shows.
 - Graphics settings: the Video tab has only VSync, MSAA and Textures. Android always uses the full screen, so the PC
   window mode and resolution (Display, Resolution) are hidden and not used even if they are in `settings.ini`. If the
   GPU does not support the chosen MSAA, window creation is retried with 8x→4x→2x→off

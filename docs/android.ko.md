@@ -177,6 +177,11 @@ Controls → Buttons에서 Map 버튼을 붙일 수 있다.
     시그널, 죽은 스레드의 호출 스택, 그 프로세스의 마지막 logcat 40줄을 붙인다(`Tombstone.java`).
   - 앱 버전·기기·Android 버전과 `log.txt`의 끝 40줄. 전체는 `crash_prev.txt`로 남고, 같은 크래시는 한 번만 보인다.
   `log.txt`는 줄 단위로 바로 쓴다.
+- 게임 속도(1.4.15): 게임은 프레임마다 한 걸음씩 진행하므로, 1.4.14까지는 1초에 60프레임을 그려서 보여 주지 못하는
+  휴대폰(갤럭시 A36에서 보고됨)에서 게임 전체가 그만큼 느리게, 부드러워 보이는 일정한 프레임 속도로 돌았다. 이제 휴대폰이
+  보여 줄 틈이 없는 프레임은 그리지 않고 진행만 하므로(docs/README.ko.md "프레임 페이싱") 게임 속도가 유지된다. 그럴
+  때는 `log.txt`에 1분에 한 번 `[VI] 60 s: 3600 game frames (100% of full speed), 2250 shown (37.5 a second); ...` 같은
+  줄이 남는다. 기기가 실제로 보여 주는 프레임 수다.
 - 그래픽 설정: Video 탭에는 VSync, MSAA, Textures만 있다. Android는 늘 화면 전체를 쓰므로 PC의 창 모드·해상도
   (Display, Resolution)는 숨기고 `settings.ini`에 있어도 쓰지 않는다. GPU가 고른 MSAA를 지원하지 않으면 창을 만들 때
   8x→4x→2x→끔으로 낮춰 다시 시도한다(`[PC] MSAA 8x is not available, using 4x`). 예전에는 Galaxy Z Flip6에서 MSAA 8x를

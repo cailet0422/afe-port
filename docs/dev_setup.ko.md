@@ -76,7 +76,9 @@ cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
   `NOTICE`, `WARNING`, `CALENDAR`, `FILM`, `MAP` …, `pc/include/pc_input_script.h`)로 연다.
 - 보통 속도 확인: `--no-framelimit` 없이(필요하면 `--script-fast`만) 돌리면 소리가 별도 스레드에서 돈다.
   `--deterministic`이 아니면 마을이 매번 달라 `--save` 경로가 저장까지 가지 못할 수 있지만 끝까지 크래시·멈춤
-  없이 도는지 보는 데 쓴다(llvmpipe에서 모든 프레임을 그리면 30fps 안팎이라 시간이 두 배쯤 걸린다).
+  없이 도는지 보는 데 쓴다(llvmpipe에서 모든 프레임을 그리면 30fps 안팎이다. 1.4.15부터는 llvmpipe가 제때 그리지 못한
+  프레임은 보여 주지 않고 진행만 하므로 게임 속도는 그대로다: `--verbose`의 `[VI]` 줄, docs/README.ko.md "프레임 페이싱").
+  `--sim-refresh HZ`는 HZ Hz 화면의 VSync를 흉내 낸다. 예: 초당 40프레임을 보여 주는 휴대폰이면 `--sim-refresh 40`.
 - 소리 확인: `--audio-dump 파일.wav`를 더하면 소리 출력(32kHz 스테레오 16비트, 볼륨 설정을 적용하기 전)을 WAV로
   남긴다. `SDL_AUDIODRIVER=dummy`에서도 된다. `--deterministic`이면 소리를 프레임마다 1/60초씩 만들므로 같은 스크립트가
   샘플 하나까지 같은 WAV를 낸다(프레임 F는 대략 샘플 F×32000/60). `python3 pc/tools/audio_stats.py 파일.wav

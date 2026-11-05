@@ -773,7 +773,7 @@ extern "C" void pc_gui_frame(void) {
     }
 
     ImGui::Render();
-    if (!g_pc_skip_draw) {
+    if (!PC_DRAW_SKIPPED()) {
         glViewport(0, 0, g_pc_window_w, g_pc_window_h);
         glDisable(GL_SCISSOR_TEST);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
