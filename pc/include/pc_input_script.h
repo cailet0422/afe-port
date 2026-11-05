@@ -107,6 +107,9 @@ int pc_input_script_active(void);
  * Returns 0 when the script asked to quit. */
 int pc_input_script_frame(u32 frame);
 
+/* A SHOT captures the next frame: it must be drawn and shown (pc_vi.c). */
+int pc_input_script_draws_next(void);
+
 #ifdef __cplusplus
 }
 #endif

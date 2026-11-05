@@ -17,16 +17,16 @@
 ## Download
 
 <!-- When a new release is published, update the version in these links (here and in README.ko.md). -->
-Latest release: **[v1.4.14](https://github.com/cailet0422/afe-port/releases/tag/v1.4.14)**
+Latest release: **[v1.4.15](https://github.com/cailet0422/afe-port/releases/tag/v1.4.15)**
 
 | Platform | Download | Requirements |
 |---|---|---|
-| Windows 64-bit | [DobutsuNoMoriEPlus-v1.4.14-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.14/DobutsuNoMoriEPlus-v1.4.14-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
-| Windows 32-bit | [DobutsuNoMoriEPlus-v1.4.14-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.14/DobutsuNoMoriEPlus-v1.4.14-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.4.14-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.14/DobutsuNoMoriEPlus-v1.4.14-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
-| Android | [DobutsuNoMoriEPlus-v1.4.14-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.4.14/DobutsuNoMoriEPlus-v1.4.14-Android.apk) | Android 5.0+, ARM 32/64-bit |
+| Windows 64-bit | [DobutsuNoMoriEPlus-v1.4.15-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.15/DobutsuNoMoriEPlus-v1.4.15-Windows-x64.zip) | OpenGL 3.3 (`SDL2.dll` included) |
+| Windows 32-bit | [DobutsuNoMoriEPlus-v1.4.15-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.15/DobutsuNoMoriEPlus-v1.4.15-Windows-x86.zip) | OpenGL 3.3 (`SDL2.dll` included); also runs on 64-bit Windows |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.4.15-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.4.15/DobutsuNoMoriEPlus-v1.4.15-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 |
+| Android | [DobutsuNoMoriEPlus-v1.4.15-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.4.15/DobutsuNoMoriEPlus-v1.4.15-Android.apk) | Android 5.0+, ARM 32/64-bit |
 
-Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.4.14/SHA256SUMS.txt) ·
+Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.4.15/SHA256SUMS.txt) ·
 Older versions and release notes: [all releases](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]

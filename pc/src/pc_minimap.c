@@ -497,7 +497,7 @@ void pc_minimap_draw(void) {
     } else {
         s_fade = 0.0f; /* gone at once: a menu or a message is coming */
     }
-    if (s_fade <= 0.0f || g_pc_skip_draw || s_tiles_hash == 0) {
+    if (s_fade <= 0.0f || PC_DRAW_SKIPPED() || s_tiles_hash == 0) {
         return;
     }
     if (gl_state == 0) {

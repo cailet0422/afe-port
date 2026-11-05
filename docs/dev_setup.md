@@ -83,7 +83,9 @@ cd pc/build32/bin && ./DobutsuNoMoriEPlus --verbose
 - Normal-speed check: running without `--no-framelimit` (with only `--script-fast` if needed) runs audio on its
   separate thread. Without `--deterministic` the town differs every time, so the `--save` route may not get as far
   as saving, but it serves to see whether the run reaches the end without crashes or hangs (drawing every frame on
-  llvmpipe runs at around 30fps, so it takes about twice as long).
+  llvmpipe runs at around 30fps; since 1.4.15 the frames llvmpipe cannot draw in time are played without being shown,
+  so the game keeps its speed: `[VI]` lines with `--verbose`, docs/README.md "Frame pacing"). `--sim-refresh HZ`
+  imitates a VSync display of HZ Hz, e.g. `--sim-refresh 40` for a phone that shows 40 frames a second.
 - Audio check: adding `--audio-dump file.wav` records the sound output (32kHz stereo 16-bit, before the volume
   setting is applied) as a WAV. It also works with `SDL_AUDIODRIVER=dummy`. With `--deterministic` audio is
   generated 1/60 s per frame, so the same script produces a WAV that is identical down to the sample (frame F is

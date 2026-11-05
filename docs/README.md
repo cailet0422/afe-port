@@ -402,6 +402,42 @@ title demo or on the first day's arrival, whose own wall keeps the player by the
   script's `QUIT` saves as closing the window does. Mr. Resetti's visit is decided in
   `mCD_SetResetInfo`, which returns at once while `resetti = 0` (the default) in `settings.ini`.
 
+### Frame pacing (game speed)
+
+`pc/src/pc_vi.c` (`VIWaitForRetrace`, `vi_pace`). The game takes one step per retrace, so its speed is the number of
+frames played a second.
+
+- Each frame has a slot on a 60 Hz schedule (`sched_base` + n/60 s); a frame done early waits for the end of its slot
+  (`SDL_Delay(1)` while more than 2 ms remain, then a spin).
+- Up to 1.4.14 each frame instead waited until 16.667 ms after the previous one ended, and nothing made up for a late
+  frame. Where drawing and showing a frame took longer than that (a phone's GPU, more so with HD textures, VSync on a
+  display that shows fewer frames) the game ran in slow motion at a steady rate that still looked smooth: on the
+  container's llvmpipe, 30-40 frames a second and 57-70% of the game's speed, 45-49% with the HD texture pack.
+- Now a late frame is made up for: the frames after it start at once, and when the game is a whole frame behind, the
+  next frame is played without being drawn or shown (`g_pc_vi_skip`: `pc_gx_flush_vertices` drops its draws, like
+  `--script-fast`; `pc_gx_begin_frame` does not clear; no swap; the touch gamepad, the minimap and the menus are not
+  drawn). At most 2 frames in a row are not shown. A frame that is played but not drawn costs about 1.5 ms on a
+  desktop CPU (the game, emu64 and the GX state); drawing is the slow part. On llvmpipe the game keeps 99-100% of its
+  speed with 30-40 frames shown a second, also with the HD texture pack; only where a shown frame takes more than about
+  50 ms (the heaviest title demo scenes with the HD pack on llvmpipe) does it fall behind, as 2 frames in a row not
+  shown cannot make up more.
+- A frame that copies the screen (`GXCopyTex`: the scene behind a submenu, the photo) calls `pc_vi_frame_needs_draw`
+  while the game builds it and is drawn and shown after all (a frame not drawn would copy black). The game builds the
+  frame (`game_main`) before any of it is drawn (`graph_task_set00`), so this is always in time.
+- More than 6 frames behind (a pause for loading or saving, the app in the background), the schedule starts over from
+  now instead of rushing through the backlog. If 8 frames not shown took 3/4 of a frame each on average, the CPU itself
+  is too slow and skipping would only make the picture choppy, so all frames are shown for 5 s (smooth and slow, as
+  before). A late frame moves the schedule by up to 1/256 of a frame, so VSync on a display a little slower than 60 Hz
+  keeps its pace instead of skipping a frame now and then.
+- Off with `--no-framelimit` or F3. The game's steps are the same whether a frame is shown or not: with
+  `--deterministic` the screenshots and the audio dump are identical to 1.4.14's at normal speed, with about 40% of the
+  frames not shown (idle title demo, map submenu opened on frames that were to be skipped, HD pack). An input script's
+  `SHOT` frames are always shown (`pc_input_script_draws_next`).
+- `[VI]` lines: with `--verbose` every 5 s (game frames, % of full speed, frames shown, frames not shown and their cost,
+  schedule resets, holds); without it (and on Android in `log.txt`) once a minute when frames were skipped. The window
+  title shows the frames shown a second. `--sim-refresh HZ` imitates a VSync display of HZ Hz (a shown frame waits for
+  its next refresh) to try the pacing on a fast PC.
+
 ### Scripted test input
 
 `--input-script file` replays per-frame input, screenshots and exit

@@ -479,6 +479,7 @@ int main(int argc, char* argv[]) {
             printf("Usage: DobutsuNoMoriEPlus [options]\n");
             printf("  --verbose, -v       Enable diagnostic output\n");
             printf("  --no-framelimit     Disable frame limiter\n");
+            printf("  --sim-refresh HZ    Show frames as a VSync display of HZ Hz would (frame pacing tests)\n");
             printf("  --input-script F    Replay frame-indexed input from F (see pc_input_script.h)\n");
             printf("  --script-fast       With --input-script: draw only the frames it screenshots\n");
             printf("  --deterministic     Start the clock at a fixed date and advance it by frames,\n");
@@ -492,6 +493,8 @@ int main(int argc, char* argv[]) {
             return 0;
         } else if (strcmp(argv[i], "--no-framelimit") == 0) {
             g_pc_no_framelimit = 1;
+        } else if (strcmp(argv[i], "--sim-refresh") == 0 && i + 1 < argc) {
+            g_pc_sim_refresh = atoi(argv[++i]);
         } else if (strcmp(argv[i], "--input-script") == 0 && i + 1 < argc) {
             if (!pc_input_script_load(argv[++i])) {
                 return 1;
