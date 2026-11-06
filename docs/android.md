@@ -180,7 +180,12 @@ never look, because the releases could not install over them anyway.
   D-pad at the upper left. Sliding between buttons presses the button under the finger. Sizes are based on the
   screen's short side, so the pad sits against the edges on both 4:3 and 20:9. Pressing a real gamepad button hides
   it, and touching the screen again brings it back. It is drawn with its own shader after the frame ends, and the GX
-  state is marked to be reapplied (`pc_gx_restore_after_nes`).
+  state is marked to be reapplied (`pc_gx_restore_after_nes`). Its buttons, D-pad and stick can be moved and resized
+  in Settings > Gameplay > Edit pad layout (1.6.0, `touch_layout`).
+- Full touch mode (1.6.0, `touch_controls = 2`, Settings > Gameplay > Touch controls > Full touch): no pad; tap to
+  walk, hold or drag to run, tap villagers and things to use them, icons for the pause menu, saving, the pad, the map
+  and the pockets, a tool strip to swipe, and a furniture mode in one's own house (README "Touch controls",
+  docs/README.md "Touch controls").
 - Crash report: the launcher icon opens `LaunchActivity`. If the last run ended abnormally, it shows the report before
   starting the game (`MainActivity`, which loads the native library) ("복사" (Copy), "게임 시작" (Start game),
   "닫기" (Close)); otherwise it starts the game right away. This is because a window shown in the same process as the
@@ -230,7 +235,8 @@ never look, because the releases could not install over them anyway.
   joystick.
 - Automated tests: with `TOUCH x,y[:x2,y2] [frames]` in `--input-script` (% of the window size; moves to x2,y2 on the
   next frame), `touch_controls = 1` is turned on and tested on the desktop (walking with the stick, START for pockets,
-  B to close confirmed).
+  B to close confirmed). The full touch mode is tested the same way with `touch_controls = 2`, `TOUCHW x,z` and
+  `TOUCHNPC id` (a finger on a point of the ground or a villager).
 - Fixed because of differences between Clang (NDK) and GCC: `-fsigned-char` (char is unsigned on ARM), `size_t` in
   `operator new`, enumerators named `EOF`/`SEEK_*` that get replaced by stdio macros (int → enum conversion), C++
   linkage of libc++ `<cmath>`, bionic's `bcmp`, the lld link map and Clang's names for function-local statics

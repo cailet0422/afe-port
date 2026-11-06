@@ -64,7 +64,10 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
   away by default ([Saving](#saving)).
 - Korean fan patch support: install the patch zip from inside the game, switch between Korean and
   Japanese at any time, and type Hangul with a real keyboard (2-set layout) or an on-screen keyboard.
-- Android: on-screen touch gamepad, physical gamepads, and a crash report shown on the next launch.
+- Android: on-screen touch gamepad (its buttons can be moved and resized), a **full touch mode** played with the
+  fingers on the world (tap to walk, tap villagers and things, icons for the pockets and the map, a tool strip, a
+  furniture mode in your house; [Touch controls](#touch-controls)), physical gamepads, and a crash report shown on
+  the next launch.
 - Minimap: outside in town, a small map of the town sits in the bottom left corner (you, facing the
   way you walk, and the villagers' houses). **M** opens the game's full map at any time, even before
   you have the map from the police station; on Android, tap the minimap. Turn it off under
@@ -96,8 +99,9 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
    apps pick the root of `Download`, so use a subfolder.)
 2. Install the APK (allow installing from unknown sources), open it, and pick that folder with
    **Choose folder**.
-3. Play with the on-screen touch gamepad or a physical controller. **SAVE**, left of START on the touch gamepad,
-   saves right away.
+3. Play with the on-screen touch gamepad, the full touch mode ([Touch controls](#touch-controls)) or a physical
+   controller. **SAVE**, left of START on the touch gamepad (the arrow-into-tray icon in the full touch mode), saves
+   right away.
 
 The APK is signed with a release key (certificate SHA-256
 `db6fc1ad60b6b6d980bee0990f120ef481f195f117729fa194b124d14752e8b7`), so new versions install over the
@@ -347,6 +351,31 @@ or button; gamepads can be rebound there too. On Korean text-entry screens you c
 Shift+Space). While typing, **Shift+Enter** (or Ctrl+Enter) finishes the text, as Start does. Enter starts a new
 line; where there is no room for one it goes to the next line, in a letter on to the closing, and in the closing
 it finishes too. If Start is on a key that types nothing, such as Home, that key finishes the text as well.
+
+### Touch controls
+
+Pause menu → **Settings** → **Gameplay** → **Touch controls** (`touch_controls` in `settings.ini`; the on-screen
+pad is the default on Android):
+
+- **On-screen pad**: a GameCube pad drawn over the game. **Edit pad layout...** under it shows the pad: drag a
+  button, the D-pad or the stick to move it, pick one and make it bigger or smaller (50-200%); **Reset all** puts
+  everything back.
+- **Full touch**: no pad; you play with your fingers on the world.
+  - **Tap** the ground to walk there; keep a finger **held** to run to where it is; **drag** to run that way.
+  - **Tap a villager** to walk up and talk; while a message is up, a tap goes on; tap a choice to pick it.
+  - **Tap a thing** to walk up and use it: items, flowers and weeds are picked up, trees shaken (or chopped with the
+    axe), signs, mailboxes and furniture used; with the shovel a tap on the ground digs there (or fills the hole);
+    with the net or the rod a tap nearby swings or casts that way. A tap on yourself is A.
+  - Icons at the top: the pause menu, save and the gamepad (top left), the map and the pockets (top right). In the
+    pockets, tap a slot for its commands (or to put down what the hand holds), tap a command, and **drag an item** to
+    another slot or onto yourself to wear or hold it; in the map, tap an acre. The X closes them.
+  - **Tools**: the strip in the middle shows the tool in hand with the ones before and after it in your pockets;
+    **swipe** it left or right (or tap a side) to take another one out.
+  - **Furniture mode** (the chair icon, in your own house): tap a piece to pick it, drag it to move it (green where it
+    fits), turn it with the arrows, put it in your pockets with the satchel, or drag a piece from the pockets at the
+    bottom onto the floor. The check mark ends the mode.
+  - Everything else that wants buttons (other menus, the NES games, the title) brings the GameCube pad up by itself;
+    the gamepad icon shows it at any time.
 
 ## Known limitations
 

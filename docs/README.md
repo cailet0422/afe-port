@@ -236,6 +236,53 @@ tabs, the Korean patch, resolution and update dialogs), `pc_gui_textures.cpp` (H
 - Settings apply at once (and are saved); a display mode or resolution change asks to keep it and reverts after 15 s.
   MSAA, the HD texture loading mode, the disc folder and Korean on/off say "restart" until the next start.
 
+### Touch controls
+
+`touch_controls` (Settings > Gameplay > Touch controls): 0 off, 1 the on-screen GameCube pad (`pc_touch.c`), 2 the
+full touch mode (`pc_touch_full.c`, `pc_touch_menu.c`, `pc_touch_room.c`, icons in `gui/pc_gui_touch.cpp`).
+
+- The pad's pieces (A B X Y L R Z START SAVE, the D-pad as one, the stick) can be moved and resized in Settings >
+  Gameplay > Edit pad layout (`PAGE_PAD_LAYOUT` in `pc_gui_menu.cpp`): the pad is drawn under the page while it is
+  open (`pc_touch_preview`), ImGui buttons over each piece take the drags, a slider the size (50-200%).
+  `touch_layout` keeps them as `NAME=x,y,size;...` (centre as fractions of the window); `layout()` applies them over
+  the default places; a moved stick takes the quarter it is in as its zone.
+- Full touch: `pc_touch.c` hands every finger to `pc_touch_full_finger_down` first. The fingers are worked out in
+  `pc_touch_full_game_frame` (after `game_main`, from `pc_pause_menu_draw`) and pressed in the next pad read
+  (`pc_touch_full_read`, from `pc_touch_read`), so the game sees a pad: the stick and buttons of a player.
+  - Screen ↔ world: `play->projection_matrix` (the last frame's camera, as shown) with the window's hor+ widening; a
+    window point meets the ground by solving the plane at the player's feet, then the ground's height there
+    (`mCoBG_GetBgY_AngleS_FromWpos`) three times. Walking steers the stick to the world yaw through the camera's
+    (`getCamera2AngleY`: stick up is the camera's forward), slowing near the end; a held finger runs (R held: the
+    game dashes with B, L or R, and R does nothing else outside); a drag is a stick nobody sees.
+  - A tap: a message → A (a choice row → that choice, rows from `mChoice` as `mChoice_DrawFont` places them); busy (a
+    rod, a net) → A; the player → A; a villager (`ACTOR_PART_NPC`, a box from its feet to 38 up) → walk within its
+    talk distance, turn to it (`Set_force_position_angle_proc`), A; a unit with an item → stand a unit off, turn,
+    B (items, flowers, weeds; outside, dropped furniture) or A (trees, rocks, signs, holes, furniture in a room); with
+    the shovel, the empty ground → A; with the net or the rod, near → turn and A.
+  - The tool strip swaps `Now_Private->equipment` with a pocket (as the pockets' menu does, m_hand_ovl.c
+    `mHD_drop_item`; the player takes it out at its next wait, walk or run). It moves round the empty hand and the
+    pockets in order; the tool in hand is between two places, so a step back takes back the same one.
+  - Other menus, the NES games and the screens before play bring the pad up (`pc_touch_full_pad_shown`).
+- The pockets (`pc_touch_menu.c`): slots from the tables of m_tag_ovl.c in the 640x480 picture
+  (`pc_gx_window_to_ui`). The cursor goes where the finger is through `mTG_PC_touch_cursor` (m_tag_ovl.c, TARGET_PC):
+  at the point where the stick would move it, under the same rules for what the hand holds; then A (a tap), L (a drag
+  takes the item), A where the finger is lifted (or B off the slots). A line of the command list:
+  `mTG_PC_touch_select_row` chooses it, `mTG_PC_select_geometry` says where the lines are. The map: the acre under the
+  finger is selected as a stick step would (`sel_bx`, `sel_bz`, the cursor's target, `mSM_OVL_PROC_WAIT`).
+- `pc_gx_window_to_ui` no longer reads `g_pc_widescreen_stretch`: emu64 sets it while it draws (stretched blits of
+  transitions) and between frames it held whatever was drawn last, so the Korean editor's keyboard and the menus could
+  get a touch a step to the side.
+- The furniture mode (`pc_touch_room.c`): in one's own room (`field_type` PLAYER_ROOM, which a guest in the host's
+  town never has). A piece is the anchor of layer 0 (its other units `RSV_FE1F`); its footprint by direction from
+  `mRmTp_GetFurnitureData`; it fits on the empty units inside the walls (4, 6 or 8 units by the room), not on the
+  player, and a piece from the pockets only while the room has fewer than it builds (`aMR_PC_FurnitureMax`). An edit
+  waits for the room to be quiet; `aMR_PC_SyncRoom` (ac_my_room.c, the multiplayer's room rebuild) takes the
+  furniture down as the destructor does (what dressers hold back in layers 1-3, the switches), saves the gyroids'
+  steps, calls `pc_touch_room_apply_edits` on the save's floor and builds the furniture again. A move carries the
+  layers above each unit (the anchor's to the anchor), the switch bit and the step nibble.
+- Tests: `TOUCHW x,z [frames]` and `TOUCHNPC id [frames]` in `--input-script` put a finger where a point of the ground
+  or a villager is on the window.
+
 ### Rebinding controls
 
 Change them under pause menu → Settings → **Controls** (`pc/src/gui/pc_gui_menu.cpp`, `pc_keybindings.c`).

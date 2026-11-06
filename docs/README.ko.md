@@ -214,6 +214,48 @@ ninja -C pc/build32strip
 - 설정은 바로 적용·저장된다. 화면 모드나 해상도를 바꾸면 유지할지 묻고 15초 뒤 되돌린다. MSAA, HD 텍스처 불러오기
   방식, 디스크 폴더, 한국어 켜기/끄기는 다음 시작까지 "다시 시작" 안내가 남는다.
 
+### 터치 조작
+
+`touch_controls`(설정 > 게임 > 터치 조작): 0 끔, 1 화면 게임큐브 패드(`pc_touch.c`), 2 풀 터치 모드(`pc_touch_full.c`,
+`pc_touch_menu.c`, `pc_touch_room.c`, 아이콘은 `gui/pc_gui_touch.cpp`).
+
+- 패드의 조각(A B X Y L R Z START SAVE, 십자 버튼 하나, 스틱)은 설정 > 게임 > 패드 배치 편집(`pc_gui_menu.cpp`의
+  `PAGE_PAD_LAYOUT`)에서 옮기고 크기를 바꾼다. 그 페이지가 열려 있는 동안 패드를 그 아래에 그리고(`pc_touch_preview`),
+  조각마다 놓인 ImGui 버튼이 끌기를, 슬라이더가 크기(50~200%)를 받는다. `touch_layout`에 `이름=x,y,크기;...`(중심은 창
+  대비 비율)로 저장하고 `layout()`이 기본 위치 위에 덮는다. 옮긴 스틱은 그 사분면을 영역으로 쓴다.
+- 풀 터치: `pc_touch.c`가 손가락을 먼저 `pc_touch_full_finger_down`에 넘긴다. 손가락은 `pc_touch_full_game_frame`
+  (`game_main` 뒤, `pc_pause_menu_draw`에서)에서 해석하고 다음 패드 읽기(`pc_touch_read`의 `pc_touch_full_read`)에서
+  누르므로 게임은 플레이어의 스틱과 버튼만 본다.
+  - 화면 ↔ 세계: `play->projection_matrix`(화면에 보이는 지난 프레임의 카메라)와 창의 hor+ 확장. 창의 한 점은 플레이어
+    발 높이의 평면과 만나는 점을 구한 뒤 그곳의 땅 높이(`mCoBG_GetBgY_AngleS_FromWpos`)로 세 번 다시 구한다. 걷기는
+    카메라 방향(`getCamera2AngleY`: 스틱 위가 카메라 앞)을 거쳐 세계 방향으로 스틱을 꺾고, 도착 직전에 늦춘다. 꾹 누르면
+    R을 누른 채 달리고(게임은 B·L·R로 달리고, 밖에서 R은 다른 일을 하지 않는다), 끌기는 보이지 않는 스틱이다.
+  - 탭: 대사 → A(선택지 줄 → 그 선택지, 줄 위치는 `mChoice_DrawFont`가 그리는 대로), 바쁨(낚싯대, 잠자리채) → A,
+    플레이어 → A, 주민(`ACTOR_PART_NPC`, 발에서 38 위까지의 상자) → 대화 거리 안까지 걸어가 돌아서서
+    (`Set_force_position_angle_proc`) A, 물건이 있는 칸 → 한 칸 떨어져 돌아서서 B(물건·꽃·잡초, 밖에 떨어진 가구)나
+    A(나무·바위·표지판·구멍·방 안 가구), 삽을 들고 빈 땅 → A, 잠자리채·낚싯대를 들고 가까운 곳 → 돌아서서 A.
+  - 도구 칸은 `Now_Private->equipment`를 소지품 한 칸과 맞바꾼다(소지품 메뉴가 하듯이, m_hand_ovl.c
+    `mHD_drop_item`; 플레이어는 다음 서기·걷기·달리기에서 꺼내 든다). 빈 손과 소지품을 차례로 돌고, 손에 든 도구는 두
+    자리 사이에 있어 한 번 넘겼다 돌아오면 같은 도구가 온다.
+  - 다른 메뉴, 패미컴 게임, 플레이 전 화면에서는 패드가 뜬다(`pc_touch_full_pad_shown`).
+- 소지품(`pc_touch_menu.c`): m_tag_ovl.c의 표에서 가져온 칸 위치(640x480 화면, `pc_gx_window_to_ui`). 커서는
+  `mTG_PC_touch_cursor`(m_tag_ovl.c, TARGET_PC)로 손가락 쪽으로 간다: 스틱이 커서를 옮기는 자리에서, 손에 든 것에 대한
+  같은 규칙으로. 그다음 A(탭), L(끌기는 물건을 집음), 손가락을 뗀 곳에서 A(칸 밖이면 B). 명령 목록의 줄은
+  `mTG_PC_touch_select_row`로 고르고 `mTG_PC_select_geometry`가 줄 위치를 알려 준다. 지도: 손가락 아래 구역을 스틱
+  한 걸음처럼 고른다(`sel_bx`, `sel_bz`, 커서 목표, `mSM_OVL_PROC_WAIT`).
+- `pc_gx_window_to_ui`는 이제 `g_pc_widescreen_stretch`를 읽지 않는다. emu64가 그리는 동안 바꾸는 값이라(전환
+  효과의 늘인 그림) 프레임 사이에는 마지막에 그린 것의 값이 남아 있어, 한글 편집기 키보드와 메뉴의 터치가 옆 칸으로
+  갈 수 있었다.
+- 가구 배치 모드(`pc_touch_room.c`): 자기 방에서만(`field_type`이 PLAYER_ROOM; 호스트 마을의 게스트는 외지인이라
+  해당 없음). 가구는 0층의 기준 칸(나머지 칸은 `RSV_FE1F`)이고 방향별 차지 칸은 `mRmTp_GetFurnitureData`로 구한다.
+  벽 안(방 크기에 따라 4·6·8칸)의 빈 칸에, 플레이어 위가 아닌 곳에 놓이고, 소지품에서 꺼낸 가구는 방이 만드는 개수
+  (`aMR_PC_FurnitureMax`)보다 적을 때만 놓인다. 편집은 방이 조용해질 때까지 기다렸다가 `aMR_PC_SyncRoom`(ac_my_room.c,
+  멀티플레이의 방 재구성)이 소멸자처럼 가구를 내리고(서랍의 물건은 1~3층으로, 스위치) 하니와 동작을 저장한 뒤 세이브의
+  층에 `pc_touch_room_apply_edits`를 부르고 가구를 다시 만든다. 옮길 때 각 칸 위의 층(기준 칸의 것은 기준 칸으로),
+  스위치 비트와 동작 값이 함께 간다.
+- 테스트: `--input-script`의 `TOUCHW x,z [프레임]`, `TOUCHNPC id [프레임]`이 땅의 한 점이나 주민이 창에 보이는 자리에
+  손가락을 댄다.
+
 ### 조작키 바꾸기
 
 일시정지 메뉴 → 설정 → **조작**에서 바꾼다(`pc/src/gui/pc_gui_menu.cpp`, `pc_keybindings.c`).
