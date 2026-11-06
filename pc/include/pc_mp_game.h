@@ -27,6 +27,8 @@ struct game_s;
 
 /* After game_main every frame (pc_pause_menu_draw) */
 void pc_mp_game_frame(struct game_s* game);
+/* pc_mp_fx.c: an effect or sound of the local player's action, to the room */
+void pc_mp_game_fx_out(const unsigned char* body, int len);
 
 /* --- For the menus (pc_gui_mp.cpp) --- */
 PcMp* pc_mp_game_session(void); /* NULL until the page was opened */

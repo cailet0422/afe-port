@@ -34,6 +34,7 @@
 #include "m_kankyo.h"
 #include "lb_rtc.h"
 
+#include <math.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -70,7 +71,27 @@ enum {
     G_REGION_REQ,   /* guest -> host: all of the shared town data, please */
     G_ITEM_NO,      /* host -> a guest: town, bx, bz, ux, uz, what is there, the guest's old, new: refused */
     G_EVPLACE,      /* host -> guests: town, where the day's visitors and events are (Common event_common) */
+    G_NPC_TALK,     /* guest -> host: town, villager index, id, talking (its player talks with it) */
+    G_FX,           /* town, origin slot, an effect or sound of that player's action (pc_mp_fx.c); the host
+                     * passes a guest's on */
 };
+
+/* pc_mp_fx.c */
+extern int pc_mp_fx_replaying;
+void pc_mp_fx_frame(int active);
+void pc_mp_fx_replay(GAME_PLAY* play, const u8* m, int len);
+static void fx_message(int from, const u8* m, int len);
+
+/* host: a guest talks with this villager (ac_npc_pc_mp.c_inc holds it) */
+typedef struct {
+    u16 id;
+    u8 slot;
+    u8 on;
+    u32 ms;
+} TalkHold;
+static TalkHold s_talk[ANIMAL_NUM_MAX];
+static u8 s_talk_told[ANIMAL_NUM_MAX];  /* guest: what the host was told */
+static u32 s_talk_told_ms[ANIMAL_NUM_MAX];
 
 static void home_frame(void);
 static void home_message(int from, const u8* m, int len);
@@ -437,6 +458,8 @@ static void slot_b_restore(void) {
 
 void pc_mp_game_leave(void) {
     if (s_mp == NULL) return;
+    memset(s_talk, 0, sizeof(s_talk));
+    memset(s_talk_told, 0, sizeof(s_talk_told));
     home_reset();
     npc_reset();
     design_reset();
@@ -968,6 +991,7 @@ static void rsv_forget(int bx, int bz, int ux, int uz) {
 int pc_mp_fg_quiet = 0;
 
 void pc_mp_fg_written(int bx, int bz, int ux, int uz, unsigned short old_item, unsigned short new_item) {
+    if (pc_mp_fx_replaying) return; /* (another player's effect shown here: taken back at once) */
     if (!s_applying) pc_autosave_unit_written(old_item, new_item);
     if (s_applying || pc_mp_fg_quiet || !in_shared_town() || !outside_in_town() || save_unit(bx, bz, ux, uz) == NULL ||
         OWN_THING(old_item) || OWN_THING(new_item)) {
@@ -1038,7 +1062,7 @@ void pc_mp_fg_written(int bx, int bz, int ux, int uz, unsigned short old_item, u
 void pc_mp_deposit_written(int bx, int bz, int ux, int uz, int on) {
     u8 m[10];
 
-    if (s_applying || !in_shared_town() || !outside_in_town() || save_deposit(bx, bz, uz) == NULL) {
+    if (pc_mp_fx_replaying || s_applying || !in_shared_town() || !outside_in_town() || save_deposit(bx, bz, uz) == NULL) {
         return;
     }
     m[0] = is_host() ? G_DEPOSIT_SET : G_DEPOSIT;
@@ -1277,6 +1301,24 @@ static void game_message(int from, const u8* m, int len) {
                 }
             }
             break;
+        case G_NPC_TALK:
+            if (is_host() && len >= 9 && town == s_my_town && m[5] < ANIMAL_NUM_MAX && from > 0 &&
+                from < PC_MP_MAX_PLAYERS) {
+                TalkHold* t = &s_talk[m[5]];
+
+                if (m[8]) {
+                    t->id = r16(m + 6);
+                    t->slot = (u8)from;
+                    t->on = 1;
+                    t->ms = pc_net_ms();
+                } else if (t->slot == from) {
+                    t->on = 0;
+                }
+            }
+            break;
+        case G_FX:
+            fx_message(from, m, len);
+            break;
         default:
             break;
     }
@@ -1373,6 +1415,109 @@ static void manage_puppets(GAME_PLAY* play) {
                                                EMPTY_NO, (s16)slot, -1, -1);
         if (s_puppet[slot] != NULL) printf("[MP] %s is here\n", list[i].name);
     }
+}
+
+/* --- What a player's actions look and sound like (pc_mp_fx.c) --- */
+
+static int my_slot(void) {
+    PcMpPlayer list[PC_MP_MAX_PLAYERS];
+    int n = s_mp != NULL ? pc_mp_players(s_mp, list, PC_MP_MAX_PLAYERS) : 0;
+
+    for (int i = 0; i < n; i++) {
+        if (list[i].is_you) return list[i].slot;
+    }
+    return is_host() ? 0 : -1;
+}
+
+/* the local player's: to the room (a guest's to the host, who passes it on) */
+void pc_mp_game_fx_out(const unsigned char* body, int len) {
+    u8 m[6 + 96];
+    int me;
+
+    if (s_mp == NULL || !in_room() || len <= 0 || len > 96 || (me = my_slot()) < 0) return;
+    m[0] = G_FX;
+    w32(m + 1, s_my_town);
+    m[5] = (u8)me;
+    memcpy(m + 6, body, (size_t)len);
+    pc_mp_send_game(s_mp, -1, 0, m, (size_t)(6 + len));
+}
+
+static void fx_message(int from, const u8* m, int len) {
+    int origin;
+
+    if (len <= 6 || len > 6 + 96) return;
+    if (is_host()) {
+        /* a guest's: passed on to the other guests */
+        PcMpPlayer list[PC_MP_MAX_PLAYERS];
+        int n = pc_mp_players(s_mp, list, PC_MP_MAX_PLAYERS);
+        u8 out[6 + 96];
+
+        if (from <= 0 || from >= PC_MP_MAX_PLAYERS) return;
+        memcpy(out, m, (size_t)len);
+        out[5] = (u8)from;
+        for (int i = 0; i < n; i++) {
+            if (!list[i].is_you && list[i].slot != from) pc_mp_send_game(s_mp, list[i].slot, 0, out, (size_t)len);
+        }
+        origin = from;
+    } else {
+        if (from != 0) return;
+        origin = m[5];
+    }
+    /* shown where that player's puppet is, in the same place */
+    if (origin >= 0 && origin < PC_MP_MAX_PLAYERS && s_puppet[origin] != NULL && r32(m + 1) == s_my_town &&
+        s_play != NULL) {
+        if (g_pc_verbose) printf("[MP] fx %d from %d\n", m[6], origin);
+        pc_mp_fx_replay(s_play, m + 6, len - 6);
+    }
+}
+
+/* afe-decomp ac_npc_pc_mp.c_inc: this game's player talks with villager idx
+ * (a guest tells the host, renewed every second while it lasts) */
+void pc_mp_npc_talking(int idx, mActor_name_t npc_id, int talking) {
+    u32 now;
+
+    if (idx < 0 || idx >= ANIMAL_NUM_MAX) return;
+    if (s_mp == NULL || !in_room() || is_host() || !in_shared_town()) {
+        s_talk_told[idx] = 0;
+        return;
+    }
+    now = pc_net_ms();
+    talking = talking ? 1 : 0;
+    if (talking != s_talk_told[idx] || (talking && now - s_talk_told_ms[idx] > 1000)) {
+        u8 m[9];
+
+        m[0] = G_NPC_TALK;
+        w32(m + 1, s_my_town);
+        m[5] = (u8)idx;
+        w16(m + 6, npc_id);
+        m[8] = (u8)talking;
+        pc_mp_send_game(s_mp, 0, 1, m, sizeof(m));
+        s_talk_told[idx] = (u8)talking;
+        s_talk_told_ms[idx] = now;
+    }
+}
+
+/* afe-decomp ac_npc_pc_mp.c_inc: the host's villager idx, at x,z, is talked
+ * with by a guest here: which way it faces (toward that guest) */
+int pc_mp_npc_talk_hold(int idx, mActor_name_t npc_id, f32 x, f32 z, s16* angle) {
+    TalkHold* t;
+    PcMpPlayer buf;
+    const PcMpPlayer* p;
+    f32 dx, dz;
+
+    if (idx < 0 || idx >= ANIMAL_NUM_MAX || s_mp == NULL || !in_room() || !is_host()) return 0;
+    t = &s_talk[idx];
+    if (!t->on || t->id != npc_id) return 0;
+    if (pc_net_ms() - t->ms > 3000) {
+        t->on = 0; /* (no word from it: gone) */
+        return 0;
+    }
+    p = player_of(t->slot, &buf);
+    if (!wanted_here(p)) return 0;
+    dx = p->state.x - x;
+    dz = p->state.z - z;
+    *angle = (s16)(atan2f(dx, dz) * (32768.0f / 3.14159265f));
+    return 1;
 }
 
 /* --- Every frame --- */
@@ -1570,6 +1715,7 @@ void pc_mp_game_frame(struct game_s* game) {
 
     s_frame++;
     s_play = play;
+    if (play != NULL) pc_mp_fx_frame(s_mp != NULL && in_room());
     if (s_mp == NULL) return;
 
     /* what the thread found */

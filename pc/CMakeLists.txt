@@ -533,6 +533,7 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_firewall.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_mp_game.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_mp_puppet.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/mp/pc_mp_fx.c
     ${SYSTEM_FONT_C}
     ${WINDOW_ICON_C}
     ${GUI_FONT_C}
