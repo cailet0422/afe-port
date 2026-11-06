@@ -221,6 +221,9 @@ void pc_touch_menu_finger(int kind, s64 id, float x, float y) {
 
             s_inv.dragging = 1;
             /* a drag from an item, the hand empty: take it */
+            if (info != NULL) {
+                printf("[TOUCH] pockets: drag from %.0f,%.0f\n", s_inv.ux0, s_inv.uy0);
+            }
             if (info != NULL && s_inv.phase == PH_NONE && cell_at(info, s_inv.ux0, s_inv.uy0, &c) &&
                 cell_has_item(&c) && !hand_holds(sm) && sm->overlay->tag_ovl->sel_tag_idx == 0) {
                 set_phase(PH_GRAB, &c);
@@ -267,6 +270,7 @@ void pc_touch_menu_finger(int kind, s64 id, float x, float y) {
                     return;
                 }
             }
+            printf("[TOUCH] pockets: beside the list (%.0f,%.0f): back\n", ux * 0.5f, uy * 0.5f);
             press(PAD_BUTTON_B, 0); /* beside the list: back */
             return;
         }
@@ -319,6 +323,8 @@ static void inventory_frame(Submenu* sm) {
                 mTG_PC_touch_cursor(-1, 0, 0);
                 press(PAD_TRIGGER_L, 0);
                 s_inv.pressed = 1;
+                printf("[TOUCH] pockets: L at table %d %d,%d\n", sm->overlay->tag_ovl->tags[0].table,
+                       sm->overlay->tag_ovl->tags[0].tag_col, sm->overlay->tag_ovl->tags[0].tag_row);
             } else if (s_inv.pressed && hand_holds(sm)) {
                 set_phase(PH_HOLD, NULL);
                 printf("[TOUCH] pockets: took the item\n");

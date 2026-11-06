@@ -156,12 +156,13 @@ static int submenu_type(GAME_PLAY* play) {
 }
 
 /* Widescreen: the game's 3D picture is widened about the centre (hor+,
- * pc_gx.c), its 2D drawing kept in the 4:3 middle */
+ * pc_gx.c), its 2D drawing kept in the 4:3 middle. (g_pc_widescreen_stretch
+ * only says how emu64 draws at that moment; the world is always hor+.) */
 static float aspect_3d(void) {
     float w = (float)g_pc_window_w, h = (float)g_pc_window_h;
     float gc = (float)PC_GC_WIDTH / (float)PC_GC_HEIGHT;
 
-    if (h <= 0.0f || w / h <= gc + 0.01f || g_pc_widescreen_stretch != 0) {
+    if (h <= 0.0f || w / h <= gc + 0.01f) {
         return 1.0f;
     }
     return gc / (w / h);
