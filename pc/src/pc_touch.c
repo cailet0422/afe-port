@@ -10,6 +10,9 @@
 
 #include <dolphin/pad.h>
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define MAX_FINGERS 10
 #define STICK_MAGNITUDE 80 /* full tilt, as pc_pad.c gives the keyboard */
@@ -84,8 +87,108 @@ static int s_hidden = 0;           /* a real controller was used since the last 
 static Shape s_shapes[CTRL_COUNT];
 static Shape s_stick_home;
 static float s_stick_radius;
+static int s_preview = 0; /* the layout editor shows the pad over the menus */
 
-/* Sizes follow the window's shorter side; everything hugs a corner or an edge */
+/* What the layout editor moved or resized (settings.ini touch_layout,
+ * "A=0.71,0.66,1.2;DPAD=...": the piece's centre as fractions of the
+ * window, its size factor). The pieces are the pad's buttons up to SAVE (as
+ * their CTRL_), the D-pad's four as one and the stick. */
+static const char* const s_piece_keys[PC_TOUCH_PIECE_COUNT] = {
+    "A", "B", "X", "Y", "L", "R", "Z", "START", "SAVE", "DPAD", "STICK",
+};
+
+typedef struct {
+    int set;
+    float x, y, size;
+} Override;
+
+static Override s_over[PC_TOUCH_PIECE_COUNT];
+static char s_parsed[sizeof(g_pc_settings.touch_layout)];
+static int s_parsed_once = 0;
+
+static int piece_by_key(const char* key, size_t len) {
+    int i;
+
+    for (i = 0; i < PC_TOUCH_PIECE_COUNT; i++) {
+        if (strlen(s_piece_keys[i]) == len && memcmp(s_piece_keys[i], key, len) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static int sane(float x, float y, float size) {
+    return isfinite(x) && isfinite(y) && isfinite(size) && x >= 0.0f && x <= 1.0f && y >= 0.0f && y <= 1.0f &&
+           size >= PC_TOUCH_SIZE_MIN && size <= PC_TOUCH_SIZE_MAX;
+}
+
+/* Reads touch_layout again when it changed (the settings file, the editor) */
+static void parse_layout(void) {
+    const char* p = g_pc_settings.touch_layout;
+
+    if (s_parsed_once && strcmp(s_parsed, p) == 0) {
+        return;
+    }
+    s_parsed_once = 1;
+    snprintf(s_parsed, sizeof(s_parsed), "%s", p);
+    memset(s_over, 0, sizeof(s_over));
+    while (*p != '\0') {
+        const char* end = strchr(p, ';');
+        const char* eq = strchr(p, '=');
+        size_t len = end != NULL ? (size_t)(end - p) : strlen(p);
+
+        if (eq != NULL && (size_t)(eq - p) < len) {
+            int piece = piece_by_key(p, (size_t)(eq - p));
+            char num[64];
+            float x, y, size;
+            size_t nlen = len - (size_t)(eq - p) - 1;
+
+            if (nlen >= sizeof(num)) {
+                nlen = sizeof(num) - 1;
+            }
+            memcpy(num, eq + 1, nlen);
+            num[nlen] = '\0';
+            if (piece >= 0 && sscanf(num, "%f,%f,%f", &x, &y, &size) == 3 && sane(x, y, size)) {
+                s_over[piece].set = 1;
+                s_over[piece].x = x;
+                s_over[piece].y = y;
+                s_over[piece].size = size;
+            }
+        }
+        p += len;
+        if (*p == ';') {
+            p++;
+        }
+    }
+}
+
+static void write_layout(void) {
+    char* out = g_pc_settings.touch_layout;
+    size_t cap = sizeof(g_pc_settings.touch_layout);
+    size_t n = 0;
+    int i;
+
+    out[0] = '\0';
+    for (i = 0; i < PC_TOUCH_PIECE_COUNT; i++) {
+        int k;
+
+        if (!s_over[i].set) {
+            continue;
+        }
+        k = snprintf(out + n, cap - n, "%s%s=%.4f,%.4f,%.3f", n > 0 ? ";" : "", s_piece_keys[i], s_over[i].x,
+                     s_over[i].y, s_over[i].size);
+        if (k < 0 || (size_t)k >= cap - n) {
+            out[n] = '\0'; /* (cannot happen: 11 pieces fit) */
+            break;
+        }
+        n += (size_t)k;
+    }
+    snprintf(s_parsed, sizeof(s_parsed), "%s", out);
+    s_parsed_once = 1;
+}
+
+/* Sizes follow the window's shorter side; everything hugs a corner or an edge
+ * unless the layout editor moved it */
 static void layout(void) {
     float w = (float)g_pc_window_w;
     float h = (float)g_pc_window_h;
@@ -111,6 +214,40 @@ static void layout(void) {
     s_shapes[CTRL_RIGHT] = (Shape){ dx + 0.08f * u, dy, 0.045f * u, 0.045f * u };
     s_stick_radius = 0.16f * u;
     s_stick_home = (Shape){ 0.32f * u, h - 0.30f * u, s_stick_radius, s_stick_radius };
+
+    parse_layout();
+    {
+        int i;
+
+        for (i = 0; i <= CTRL_SAVE; i++) {
+            if (s_over[i].set) {
+                Shape* s = &s_shapes[i];
+
+                s->x = s_over[i].x * w;
+                s->y = s_over[i].y * h;
+                s->rx *= s_over[i].size;
+                s->ry *= s_over[i].size;
+            }
+        }
+        if (s_over[PC_TOUCH_PIECE_DPAD].set) {
+            const Override* o = &s_over[PC_TOUCH_PIECE_DPAD];
+
+            for (i = CTRL_UP; i <= CTRL_RIGHT; i++) {
+                Shape* s = &s_shapes[i];
+
+                s->x = o->x * w + (s->x - dx) * o->size;
+                s->y = o->y * h + (s->y - dy) * o->size;
+                s->rx *= o->size;
+                s->ry *= o->size;
+            }
+        }
+        if (s_over[PC_TOUCH_PIECE_STICK].set) {
+            const Override* o = &s_over[PC_TOUCH_PIECE_STICK];
+
+            s_stick_radius *= o->size;
+            s_stick_home = (Shape){ o->x * w, o->y * h, s_stick_radius, s_stick_radius };
+        }
+    }
 }
 
 static int hit_control(float x, float y) {
@@ -128,15 +265,20 @@ static int hit_control(float x, float y) {
     return CTRL_NONE;
 }
 
-/* The stick takes the lower part of the left half */
+/* The stick takes the lower part of the left half (or the quarter the
+ * layout editor moved it to) */
 static int in_stick_zone(float x, float y) {
-    return x < g_pc_window_w * 0.45f && y > g_pc_window_h * 0.45f;
+    float w = (float)g_pc_window_w, h = (float)g_pc_window_h;
+    int right = s_stick_home.x > w * 0.5f;
+    int top = s_stick_home.y < h * 0.5f;
+
+    return (right ? x > w * 0.55f : x < w * 0.45f) && (top ? y < h * 0.55f : y > h * 0.45f);
 }
 
 /* --- Input ----------------------------------------------------------- */
 
 static int enabled(void) {
-    return g_pc_settings.touch_controls != 0;
+    return g_pc_settings.touch_controls == 1;
 }
 
 static Finger* find_finger(s64 id) {
@@ -481,7 +623,10 @@ static void build(void) {
 extern void pc_gx_restore_after_nes(void); /* rebinds the game's GL state after foreign drawing */
 
 void pc_touch_draw(void) {
-    if (!enabled() || s_hidden || PC_DRAW_SKIPPED() || g_pc_paused || pc_gui_chat_active()) {
+    if (PC_DRAW_SKIPPED()) {
+        return;
+    }
+    if (!s_preview && (!enabled() || s_hidden || g_pc_paused || pc_gui_chat_active())) {
         return; /* (the menus take the fingers while paused, the chat box while it is open) */
     }
     layout();
@@ -499,4 +644,70 @@ void pc_touch_draw(void) {
     pc_gfx_draw_ui(0, s_vertices, s_vertex_count, NULL, 0, (float)g_pc_window_w, (float)g_pc_window_h);
 
     pc_gx_restore_after_nes();
+}
+
+/* --- Layout editor (Settings) ----------------------------------------- */
+
+void pc_touch_preview(int on) {
+    s_preview = on != 0;
+}
+
+const char* pc_touch_piece_label(int piece) {
+    return piece >= 0 && piece < PC_TOUCH_PIECE_COUNT ? s_piece_keys[piece] : "";
+}
+
+void pc_touch_piece_get(int piece, float* x, float* y, float* rx, float* ry, float* size) {
+    float w = (float)(g_pc_window_w > 0 ? g_pc_window_w : 1);
+    float h = (float)(g_pc_window_h > 0 ? g_pc_window_h : 1);
+    Shape s;
+
+    layout();
+    if (piece == PC_TOUCH_PIECE_STICK) {
+        s = s_stick_home;
+    } else if (piece == PC_TOUCH_PIECE_DPAD) {
+        /* the box around the four arrows */
+        float x0 = s_shapes[CTRL_LEFT].x - s_shapes[CTRL_LEFT].rx;
+        float x1 = s_shapes[CTRL_RIGHT].x + s_shapes[CTRL_RIGHT].rx;
+        float y0 = s_shapes[CTRL_UP].y - s_shapes[CTRL_UP].ry;
+        float y1 = s_shapes[CTRL_DOWN].y + s_shapes[CTRL_DOWN].ry;
+
+        s = (Shape){ (x0 + x1) * 0.5f, (y0 + y1) * 0.5f, (x1 - x0) * 0.5f, (y1 - y0) * 0.5f };
+    } else if (piece >= 0 && piece <= CTRL_SAVE) {
+        s = s_shapes[piece];
+    } else {
+        s = (Shape){ 0, 0, 0, 0 };
+    }
+    *x = s.x / w;
+    *y = s.y / h;
+    *rx = s.rx / w;
+    *ry = s.ry / h;
+    *size = piece >= 0 && piece < PC_TOUCH_PIECE_COUNT && s_over[piece].set ? s_over[piece].size : 1.0f;
+}
+
+void pc_touch_piece_set(int piece, float x, float y, float size) {
+    if (piece < 0 || piece >= PC_TOUCH_PIECE_COUNT) {
+        return;
+    }
+    parse_layout();
+    x = SDL_clamp(x, 0.0f, 1.0f);
+    y = SDL_clamp(y, 0.0f, 1.0f);
+    size = SDL_clamp(size, PC_TOUCH_SIZE_MIN, PC_TOUCH_SIZE_MAX);
+    if (!isfinite(x) || !isfinite(y) || !isfinite(size)) {
+        return;
+    }
+    s_over[piece].set = 1;
+    s_over[piece].x = x;
+    s_over[piece].y = y;
+    s_over[piece].size = size;
+    write_layout();
+}
+
+void pc_touch_layout_reset(int piece) {
+    parse_layout();
+    if (piece < 0) {
+        memset(s_over, 0, sizeof(s_over));
+    } else if (piece < PC_TOUCH_PIECE_COUNT) {
+        s_over[piece].set = 0;
+    }
+    write_layout();
 }

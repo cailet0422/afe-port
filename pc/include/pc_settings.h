@@ -18,7 +18,10 @@ typedef struct {
     int nes_aspect;       /* NES emulator aspect: 0=fullscreen stretch, 1=4:3 pillarbox (default) */
     int master_volume;    /* Applied at the PC audio output, 0-100 (default 100) */
     int text_input;       /* 0 = built-in Hangul input from keys, 1 = the system's input method */
-    int touch_controls;   /* 0 = off, 1 = on-screen pad for touch screens */
+    int touch_controls;   /* 0 = off, 1 = on-screen pad for touch screens, 2 = full touch (pc_touch_full.c:
+                             tap to walk, tap things to use them, icons for the menus) */
+    char touch_layout[768]; /* the pad's pieces moved or resized in the layout editor ("A=0.71,0.66,1.20;..."):
+                               centre as fractions of the window, size factor; others where pc_touch.c puts them */
     int minimap;          /* 0 = off, 1 = the town's map in the bottom left corner outside (pc_minimap.c) */
     int seamless_blocks;  /* 1 = outside, walk on into the next block (acre) with the camera following, with
                              no stop at its edge (read by afe-decomp through pc_seamless_blocks) */

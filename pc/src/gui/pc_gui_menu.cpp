@@ -11,6 +11,7 @@ extern "C" {
 #include "pc_ko.h"
 #include "pc_ko_patch.h"
 #include "pc_rom_dir.h"
+#include "pc_touch.h"
 #include "pc_update.h"
 }
 
@@ -22,6 +23,7 @@ enum Page {
     PAGE_MAIN,
     PAGE_SETTINGS,
     PAGE_MULTIPLAYER,
+    PAGE_PAD_LAYOUT, /* Settings > Gameplay > Edit pad layout */
 };
 
 enum Tab {
@@ -82,6 +84,10 @@ void MenuOpen() {
 }
 
 void MenuClose() {
+    pc_touch_preview(0); /* (the pad layout editor shows the pad while paused) */
+    if (s_page == PAGE_PAD_LAYOUT) {
+        s_page = PAGE_SETTINGS;
+    }
     s_capture = -1;
     s_quit_open = false;
     s_town_open = false;
@@ -133,6 +139,10 @@ static void res_revert() {
 }
 
 bool MenuBack() {
+    if (s_page == PAGE_PAD_LAYOUT) {
+        s_page = PAGE_SETTINGS;
+        return true;
+    }
     if (s_capture >= 0) {
         s_capture = -1;
         return true;
@@ -509,9 +519,24 @@ static void tab_gameplay() {
             save();
         }
     }
-    if (Switch(T("On-screen controls", "화면 터치 패드"), &g_pc_settings.touch_controls,
-               T("A GameCube pad drawn over the game for touch screens", "터치 화면용 게임큐브 패드를 그립니다"))) {
-        save();
+    {
+        const char* names[] = { T("Off", "끔"), T("On-screen pad", "화면 게임패드"), T("Full touch", "풀 터치") };
+        row(T("Touch controls", "터치 조작"),
+            T("On-screen pad: a GameCube pad drawn over the game. Full touch: tap where to walk (hold or drag to run), "
+              "tap villagers and things to use them, icons for the pockets and the map, tools at the top.",
+              "화면 게임패드: 게임 위에 게임큐브 패드를 그립니다. 풀 터치: 누른 곳으로 걷고(꾹 누르거나 끌면 달리기), "
+              "주민과 물건을 눌러 쓰고, 소지품·지도 아이콘과 위쪽 도구 칸으로 조작합니다."));
+        if (ImGui::Combo("##touch", &g_pc_settings.touch_controls, names, 3)) {
+            save();
+        }
+    }
+    if (g_pc_settings.touch_controls == 1) {
+        row(T("Pad layout", "패드 배치"),
+            T("Move the pad's buttons, the D-pad and the stick, and make them bigger or smaller",
+              "패드의 버튼, 십자 버튼, 스틱을 옮기고 크기를 바꿉니다"));
+        if (SmallButton(T("Edit pad layout...", "패드 배치 편집..."))) {
+            s_page = PAGE_PAD_LAYOUT;
+        }
     }
     {
         const char* names[] = { T("Built-in Hangul (dubeolsik)", "내장 두벌식"), T("System input method", "시스템 입력기") };
@@ -1033,14 +1058,151 @@ static void popup_update() {
     ImGui::EndPopup();
 }
 
+/* --- Pad layout editor ----------------------------------------------------- */
+
+/* The pad (pc_touch.c draws it under this page) with a frame on each piece:
+ * drag a piece to move it, pick one to change its size */
+static int s_pad_sel = -1;
+static ImVec2 s_pad_grab;
+
+static const char* pad_piece_name(int i) {
+    if (i == PC_TOUCH_PIECE_DPAD) return T("D-pad", "십자 버튼");
+    if (i == PC_TOUCH_PIECE_STICK) return T("Stick", "스틱");
+    return pc_touch_piece_label(i);
+}
+
+static void draw_pad_layout() {
+    ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGuiIO& io = ImGui::GetIO();
+    float W = vp->Size.x, H = vp->Size.y;
+    float min_r = 22.0f * g_scale;
+
+    ImGui::SetNextWindowPos(vp->Pos);
+    ImGui::SetNextWindowSize(vp->Size);
+    ImGui::Begin("##padlayout", NULL,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove |
+                     ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                     ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoNav);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+
+    /* the stick last: it is the biggest, the others win where they overlap it */
+    for (int k = 0; k < PC_TOUCH_PIECE_COUNT; k++) {
+        int i = k;
+        float x, y, rx, ry, size;
+
+        pc_touch_piece_get(i, &x, &y, &rx, &ry, &size);
+        ImVec2 c(vp->Pos.x + x * W, vp->Pos.y + y * H);
+        ImVec2 r(rx * W, ry * H);
+        ImVec2 hit(r.x > min_r ? r.x : min_r, r.y > min_r ? r.y : min_r);
+
+        ImGui::PushID(i);
+        ImGui::SetCursorScreenPos(ImVec2(c.x - hit.x, c.y - hit.y));
+        ImGui::InvisibleButton("##piece", ImVec2(hit.x * 2.0f, hit.y * 2.0f));
+        if (ImGui::IsItemActivated()) {
+            s_pad_sel = i;
+            s_pad_grab = ImVec2(io.MousePos.x - c.x, io.MousePos.y - c.y);
+        }
+        if (ImGui::IsItemActive() && (io.MouseDelta.x != 0.0f || io.MouseDelta.y != 0.0f)) {
+            float nx = (io.MousePos.x - s_pad_grab.x - vp->Pos.x) / W;
+            float ny = (io.MousePos.y - s_pad_grab.y - vp->Pos.y) / H;
+
+            pc_touch_piece_set(i, nx, ny, size);
+        }
+        if (ImGui::IsItemDeactivated()) {
+            save();
+        }
+        bool sel = s_pad_sel == i;
+        ImU32 col = sel ? IM_COL32(0xFF, 0xD0, 0x40, 0xFF) : IM_COL32(0xFF, 0xFF, 0xFF, 0x90);
+        float pad = 4.0f * g_scale;
+
+        if (i == PC_TOUCH_PIECE_DPAD) {
+            dl->AddRect(ImVec2(c.x - r.x - pad, c.y - r.y - pad), ImVec2(c.x + r.x + pad, c.y + r.y + pad), col,
+                        8.0f * g_scale, 0, (sel ? 3.0f : 1.5f) * g_scale);
+        } else {
+            dl->AddEllipse(c, ImVec2(r.x + pad, r.y + pad), col, 0.0f, 0, (sel ? 3.0f : 1.5f) * g_scale);
+        }
+        if (i == PC_TOUCH_PIECE_DPAD || i == PC_TOUCH_PIECE_STICK) {
+            const char* name = pad_piece_name(i);
+            ImVec2 ts = ImGui::CalcTextSize(name);
+            ImVec2 tp(c.x - ts.x * 0.5f, c.y - r.y - pad - ts.y - 2.0f * g_scale);
+
+            if (tp.y < vp->Pos.y) tp.y = c.y + r.y + pad + 2.0f * g_scale;
+            dl->AddText(ImVec2(tp.x + 1, tp.y + 1), IM_COL32(0, 0, 0, 0xC0), name);
+            dl->AddText(tp, col, name);
+        }
+        ImGui::PopID();
+    }
+    ImGui::End();
+
+    /* the tools: in the middle, where the pad has nothing; it can be dragged away */
+    ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + W * 0.5f, vp->Pos.y + H * 0.5f), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSizeConstraints(ImVec2(300.0f * g_scale, 0), ImVec2(W * 0.6f, H * 0.8f));
+    ImGui::Begin("##padtools", NULL,
+                 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize |
+                     ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse);
+    Heading(T("Pad layout", "패드 배치"));
+    Help(T("Drag a button, the D-pad or the stick to move it; pick one to change its size.",
+           "버튼·십자 버튼·스틱을 끌어서 옮기고, 하나를 고른 뒤 크기를 바꾸세요."));
+    if (s_pad_sel >= 0) {
+        float x, y, rx, ry, size;
+        float pct;
+
+        pc_touch_piece_get(s_pad_sel, &x, &y, &rx, &ry, &size);
+        pct = size * 100.0f;
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(pad_piece_name(s_pad_sel));
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::SliderFloat("##size", &pct, PC_TOUCH_SIZE_MIN * 100.0f, PC_TOUCH_SIZE_MAX * 100.0f, "%.0f%%")) {
+            pc_touch_piece_set(s_pad_sel, x, y, pct / 100.0f);
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            save();
+        }
+        if (SmallButton(T("Smaller", "작게"))) {
+            pc_touch_piece_set(s_pad_sel, x, y, size - 0.1f);
+            save();
+        }
+        ImGui::SameLine();
+        if (SmallButton(T("Bigger", "크게"))) {
+            pc_touch_piece_set(s_pad_sel, x, y, size + 0.1f);
+            save();
+        }
+        ImGui::SameLine();
+        if (SmallButton(T("Reset this", "이것만 원래대로"))) {
+            pc_touch_layout_reset(s_pad_sel);
+            save();
+        }
+    } else {
+        ImGui::TextDisabled("%s", T("Nothing picked", "고른 것 없음"));
+    }
+    ImGui::Spacing();
+    if (SmallButton(T("Reset all", "모두 원래대로"))) {
+        pc_touch_layout_reset(-1);
+        s_pad_sel = -1;
+        save();
+    }
+    ImGui::SameLine();
+    if (BigButton(T("Done", "완료"), 0.0f, true)) {
+        s_page = PAGE_SETTINGS;
+    }
+    ImGui::End();
+}
+
 /* --- Frame ---------------------------------------------------------------- */
 
 void MenuDraw() {
     ImGuiViewport* vp = ImGui::GetMainViewport();
 
-    ImGui::GetBackgroundDrawList()->AddRectFilled(vp->Pos, ImVec2(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y),
-                                                  IM_COL32(0x10, 0x0C, 0x06, 0x90));
+    pc_touch_preview(s_page == PAGE_PAD_LAYOUT);
+    if (s_page != PAGE_PAD_LAYOUT) {
+        ImGui::GetBackgroundDrawList()->AddRectFilled(vp->Pos, ImVec2(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y),
+                                                      IM_COL32(0x10, 0x0C, 0x06, 0x90));
+    }
     switch (s_page) {
+        case PAGE_PAD_LAYOUT:
+            draw_pad_layout();
+            break;
         case PAGE_MAIN:
             draw_main();
             break;
