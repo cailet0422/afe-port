@@ -243,13 +243,31 @@ be made; then one side needs the port forwarded (UPnP or by hand).
 - **Saving while visiting**: the port's autosave (`pc_autosave.c`) writes a visiting guest's pockets, bells and
   letters into the guest's own town file (`mCD_PC_PatchTraveller`), as the trip home would, so a guest whose game
   stops in the host's town keeps what it had.
+- **A talk with a villager** (afe-decomp `ac_npc_pc_mp.c_inc`, `G_NPC_TALK`): the host reports a villager it talks
+  with (`aNPC_PC_MP_TALK` in `G_NPC`); a guest tells the host which villager it talks with and where that villager
+  stands in its game (renewed every second while the talk lasts), and the host's villager walks there (or is there at
+  once, far off or out of sight), stops and turns to that guest, in the pose of its talk action
+  (`aNPC_ACTION_TYPE_TALK`, without a talk of its own), until the talk is over (or 3 s without word). Guests follow
+  the host's villager as always, so everyone sees it stand there, turned to the one it talks with.
+- **What a player's actions look and sound like** (`pc_mp_fx.c`, `G_FX`): while the local player's move runs
+  (afe-decomp `m_player.c` `pc_mp_fx_player`) the calls it makes through the effect clip (dust, dirt, splashes,
+  ripples, footprints...), the effect BG (a tree shaking), the bg_item clip (a hole dug or filled, an item flying out
+  of the ground, fruit falling from a tree, an item dropped from the hand) and its sounds (afe-decomp `audio.c`
+  `sAdo_OngenTrgStart`) are recorded (the clips' procs are wrapped each frame) and sent; the host passes a guest's on.
+  A game with that player's puppet in the same place makes the same calls with the same arguments, the local player
+  standing for the sender for the moment of the call (some effects start from the player's position). What these
+  calls write to the items is taken back at once and the hole or drop they start is only shown (afe-decomp bg_item
+  `pc_visual`, `m_field_info.c` `mFI_pc_fg_hold`; four hole entries on PC, so a shown hole never takes the slot of
+  one's own): the items themselves come from the acting player's game as before. Left out: the arrow over a catch
+  and sweat (the player's own game takes those away again), and bees (each game's own).
 
 ## Limits
 
 - One town is shared: the host's. Guests' towns are not visited (switch hosts for that).
 - Villagers follow the host, but not exactly: only those the host has as actors (in the acres around the host) have
-  an exact position; for the others only the rough one the game keeps (the acre) is shared. Talking and greeting, going in and
-  out of houses, sleeping and catching insects are each game's own. Villagers inside houses follow only while the host
+  an exact position; for the others only the rough one the game keeps (the acre) is shared. Greeting, going in and
+  out of houses, sleeping and catching insects are each game's own; a talk is shown to the others (above), but what
+  is said is only on the talking player's screen. Villagers inside houses follow only while the host
   is in the same house. The island villager, insects and fish are not shared.
 - Each player's own: insects and fish (spawned by each game's set manager for the acre it enters), balloons floating
   by, Wisp's spirits, rolling snowballs, a beach ball, the money rock's coins, bees, and the island (its villager, items

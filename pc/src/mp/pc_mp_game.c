@@ -71,7 +71,7 @@ enum {
     G_REGION_REQ,   /* guest -> host: all of the shared town data, please */
     G_ITEM_NO,      /* host -> a guest: town, bx, bz, ux, uz, what is there, the guest's old, new: refused */
     G_EVPLACE,      /* host -> guests: town, where the day's visitors and events are (Common event_common) */
-    G_NPC_TALK,     /* guest -> host: town, villager index, id, talking (its player talks with it) */
+    G_NPC_TALK,     /* guest -> host: town, villager index, id, talking (its player talks with it), where */
     G_FX,           /* town, origin slot, an effect or sound of that player's action (pc_mp_fx.c); the host
                      * passes a guest's on */
 };
@@ -88,6 +88,7 @@ typedef struct {
     u8 slot;
     u8 on;
     u32 ms;
+    f32 x, y, z; /* where the villager stands in that guest's game */
 } TalkHold;
 static TalkHold s_talk[ANIMAL_NUM_MAX];
 static u8 s_talk_told[ANIMAL_NUM_MAX];  /* guest: what the host was told */
@@ -1302,7 +1303,7 @@ static void game_message(int from, const u8* m, int len) {
             }
             break;
         case G_NPC_TALK:
-            if (is_host() && len >= 9 && town == s_my_town && m[5] < ANIMAL_NUM_MAX && from > 0 &&
+            if (is_host() && len >= 15 && town == s_my_town && m[5] < ANIMAL_NUM_MAX && from > 0 &&
                 from < PC_MP_MAX_PLAYERS) {
                 TalkHold* t = &s_talk[m[5]];
 
@@ -1311,6 +1312,9 @@ static void game_message(int from, const u8* m, int len) {
                     t->slot = (u8)from;
                     t->on = 1;
                     t->ms = pc_net_ms();
+                    t->x = (f32)(s16)r16(m + 9);
+                    t->y = (f32)(s16)r16(m + 11);
+                    t->z = (f32)(s16)r16(m + 13);
                 } else if (t->slot == from) {
                     t->on = 0;
                 }
@@ -1466,14 +1470,18 @@ static void fx_message(int from, const u8* m, int len) {
     /* shown where that player's puppet is, in the same place */
     if (origin >= 0 && origin < PC_MP_MAX_PLAYERS && s_puppet[origin] != NULL && r32(m + 1) == s_my_town &&
         s_play != NULL) {
-        if (g_pc_verbose) printf("[MP] fx %d from %d\n", m[6], origin);
+        if (g_pc_verbose) {
+            printf("[MP] fx %d from %d", m[6], origin);
+            if (len >= 6 + 17) printf(" (%u)", (unsigned)(m[6 + 15] | (m[6 + 16] << 8)));
+            printf("\n");
+        }
         pc_mp_fx_replay(s_play, m + 6, len - 6);
     }
 }
 
 /* afe-decomp ac_npc_pc_mp.c_inc: this game's player talks with villager idx
  * (a guest tells the host, renewed every second while it lasts) */
-void pc_mp_npc_talking(int idx, mActor_name_t npc_id, int talking) {
+void pc_mp_npc_talking(int idx, mActor_name_t npc_id, int talking, f32 x, f32 y, f32 z) {
     u32 now;
 
     if (idx < 0 || idx >= ANIMAL_NUM_MAX) return;
@@ -1484,22 +1492,26 @@ void pc_mp_npc_talking(int idx, mActor_name_t npc_id, int talking) {
     now = pc_net_ms();
     talking = talking ? 1 : 0;
     if (talking != s_talk_told[idx] || (talking && now - s_talk_told_ms[idx] > 1000)) {
-        u8 m[9];
+        u8 m[15];
 
         m[0] = G_NPC_TALK;
         w32(m + 1, s_my_town);
         m[5] = (u8)idx;
         w16(m + 6, npc_id);
         m[8] = (u8)talking;
+        w16(m + 9, (u16)(s16)x);
+        w16(m + 11, (u16)(s16)y);
+        w16(m + 13, (u16)(s16)z);
         pc_mp_send_game(s_mp, 0, 1, m, sizeof(m));
         s_talk_told[idx] = (u8)talking;
         s_talk_told_ms[idx] = now;
     }
 }
 
-/* afe-decomp ac_npc_pc_mp.c_inc: the host's villager idx, at x,z, is talked
- * with by a guest here: which way it faces (toward that guest) */
-int pc_mp_npc_talk_hold(int idx, mActor_name_t npc_id, f32 x, f32 z, s16* angle) {
+/* afe-decomp ac_npc_pc_mp.c_inc: the host's villager idx is talked with by
+ * a guest here: where it stands in that guest's game, and which way it
+ * faces there (toward that guest) */
+int pc_mp_npc_talk_hold(int idx, mActor_name_t npc_id, f32* x, f32* y, f32* z, s16* angle) {
     TalkHold* t;
     PcMpPlayer buf;
     const PcMpPlayer* p;
@@ -1514,8 +1526,11 @@ int pc_mp_npc_talk_hold(int idx, mActor_name_t npc_id, f32 x, f32 z, s16* angle)
     }
     p = player_of(t->slot, &buf);
     if (!wanted_here(p)) return 0;
-    dx = p->state.x - x;
-    dz = p->state.z - z;
+    *x = t->x;
+    *y = t->y;
+    *z = t->z;
+    dx = p->state.x - t->x;
+    dz = p->state.z - t->z;
     *angle = (s16)(atan2f(dx, dz) * (32768.0f / 3.14159265f));
     return 1;
 }
