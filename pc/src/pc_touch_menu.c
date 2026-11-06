@@ -224,7 +224,8 @@ void pc_touch_menu_finger(int kind, s64 id, float x, float y) {
             if (info != NULL) {
                 printf("[TOUCH] pockets: drag from %.0f,%.0f\n", s_inv.ux0, s_inv.uy0);
             }
-            if (info != NULL && s_inv.phase == PH_NONE && cell_at(info, s_inv.ux0, s_inv.uy0, &c) &&
+            if (info != NULL && (info->data0 == mSM_IV_OPEN_NORMAL || info->data0 == mSM_IV_OPEN_EXCHANGE) &&
+                s_inv.phase == PH_NONE && cell_at(info, s_inv.ux0, s_inv.uy0, &c) &&
                 cell_has_item(&c) && !hand_holds(sm) && sm->overlay->tag_ovl->sel_tag_idx == 0) {
                 set_phase(PH_GRAB, &c);
             }
@@ -275,13 +276,17 @@ void pc_touch_menu_finger(int kind, s64 id, float x, float y) {
             return;
         }
         if (cell_at(info, ux, uy, &c)) {
+            if (info->data0 != mSM_IV_OPEN_NORMAL && info->data0 != mSM_IV_OPEN_EXCHANGE &&
+                c.table != sm->overlay->tag_ovl->tags[0].table) {
+                return; /* (selling, giving ...: the cursor stays in its table) */
+            }
             set_phase(PH_MOVE_THEN_A, &c);
             return;
         }
         {
             int tab = tab_at(info, ux, uy);
 
-            if (tab >= 0 && sm->overlay->inventory_ovl->page_order[0] != tab) {
+            if (tab >= 0 && info->data0 == mSM_IV_OPEN_NORMAL && sm->overlay->inventory_ovl->page_order[0] != tab) {
                 press(PAD_TRIGGER_R, 0);
             }
         }
@@ -390,7 +395,11 @@ void pc_touch_menu_frame(GAME_PLAY* play) {
         s_map_tap = 0;
         s_close_until = 0;
         mTG_PC_touch_cursor(-1, 0, 0);
+        mTG_PC_touch_select_row(-1);
         return;
+    }
+    if (sm->overlay->tag_ovl == NULL || sm->overlay->tag_ovl->sel_tag_idx < 1) {
+        mTG_PC_touch_select_row(-1); /* no list open: a line tapped as it closed is forgotten */
     }
     if (sm->menu_type == mSM_OVL_INVENTORY) {
         inventory_frame(sm);

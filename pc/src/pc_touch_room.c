@@ -35,6 +35,7 @@
 #include "m_mark_room.h"
 #include "m_collision_bg.h"
 #include "ac_my_room.h"
+#include "m_ftr_def.h"
 
 #include <math.h>
 #include <string.h>
@@ -286,11 +287,36 @@ static void put_state(mHm_lyr_c* lyr, int x, int z, int sw, u32 step) {
     if (x >= 1 && x <= 8 && z >= 1 && z <= 8) {
         int shift = (x - 1) * 4;
 
+        lyr->ftr_switch &= ~(1ull << switch_bit(x, z));
         if (sw) {
             lyr->ftr_switch |= 1ull << switch_bit(x, z);
         }
+        /* (the game leaves a step where a gyroid stood: cleared first) */
+        lyr->haniwa_step[z - 1] &= ~(0xFu << shift);
         lyr->haniwa_step[z - 1] |= (step & 0xF) << shift;
     }
+}
+
+/* A pocket's item as the piece the game would put down facing the room
+ * (ac_my_room_move.c_inc aMR_JudgeBreedNewFurniture: the stego skull and the
+ * balloons a step more, the frog two), EMPTY_NO if it cannot be put down */
+static mActor_name_t pocket_piece(mActor_name_t item) {
+    mActor_name_t ftr = mRmTp_Item1ItemNo2FtrItemNo_AtPlayerRoom(item, TRUE);
+    int idx, dir = 0;
+
+    if (!ITEM_IS_FTR(ftr)) {
+        return EMPTY_NO;
+    }
+    idx = mNT_ftr_item_no_to_ftr_idx(ftr);
+    if (!aMR_check_valid_furniture(mNT_ftr_idx_to_ftr_item_no(idx, 0))) {
+        return EMPTY_NO;
+    }
+    if (idx == FTR_DIN_STEGO_HEAD || (idx >= FTR_NOG_BALLOON_COMMON0 && idx <= FTR_NOG_BALLOON_COMMON7)) {
+        dir = 1;
+    } else if (idx == FTR_NOG_KAERU) {
+        dir = 2;
+    }
+    return mNT_ftr_idx_to_ftr_item_no(idx, dir & 3);
 }
 
 /* --- Edits (made by the room, ac_my_room.c aMR_PC_SyncRoom) -------------- */
@@ -429,7 +455,7 @@ void pc_touch_room_apply_edits(mHm_flr_c* fl) {
         }
         case OP_PLACE: {
             mActor_name_t item = Now_Private->inventory.pockets[s_op.slot];
-            mActor_name_t ftr = mRmTp_Item1ItemNo2FtrItemNo_AtPlayerRoom(item, TRUE);
+            mActor_name_t ftr = pocket_piece(item);
             int units[mRmTp_FTR_UNIT_MAX][2];
             int n, i;
 
@@ -506,6 +532,7 @@ void pc_touch_room_toggle(void) {
 
     if (s_on) {
         s_on = 0;
+        s_op.kind = OP_NONE;
     } else if (pc_touch_room_available(play) && pc_touch_player_free(play)) {
         s_on = 1;
         s_sel_x = s_sel_z = -1;
@@ -520,6 +547,7 @@ void pc_touch_room_frame(GAME_PLAY* play) {
     int slot;
 
     if (!s_on) {
+        s_op.kind = OP_NONE;
         return;
     }
     if (!pc_touch_room_available(play)) {
@@ -539,7 +567,7 @@ void pc_touch_room_frame(GAME_PLAY* play) {
 
         if (item != EMPTY_NO &&
             mPr_CHK_ITEM_COND(Now_Private->inventory.item_conditions, slot) == mPr_ITEM_COND_NORMAL &&
-            ITEM_IS_FTR(mRmTp_Item1ItemNo2FtrItemNo_AtPlayerRoom(item, TRUE))) {
+            pocket_piece(item) != EMPTY_NO) {
             s_slots[s_slot_count++] = slot;
         }
     }
@@ -729,6 +757,7 @@ void pc_touch_room_icon(int icon, int index) {
     (void)index;
     if (icon == PC_HUD_FURN_DONE) {
         s_on = 0;
+        s_op.kind = OP_NONE; /* (an edit still waiting for a quiet room is dropped with the mode) */
         printf("[TOUCH] furniture mode off\n");
         return;
     }
@@ -784,7 +813,7 @@ void pc_touch_room_finger(int kind, s64 id, float x, float y) {
             /* from the pockets: it hangs under the finger, facing the room */
             s_drag.active = 1;
             s_drag.slot = s_slots[i];
-            s_drag.ftr = mRmTp_Item1ItemNo2FtrItemNo_AtPlayerRoom(Now_Private->inventory.pockets[s_drag.slot], TRUE);
+            s_drag.ftr = pocket_piece(Now_Private->inventory.pockets[s_drag.slot]);
             return;
         }
         if (unit_at(x, y, &ux, &uz) && piece_at(fl, ux, uz, &ax, &az)) {

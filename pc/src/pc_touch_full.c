@@ -16,6 +16,7 @@
 #include "m_msg.h"
 #include "m_choice.h"
 #include "m_submenu.h"
+#include "m_submenu_ovl.h"
 #include "m_field_info.h"
 #include "m_collision_bg.h"
 #include "m_name_table.h"
@@ -416,10 +417,13 @@ static int tool_thrown_away(mActor_name_t item) {
 static int tool_neighbour(int dir) {
     int count = mPr_POCKETS_SLOT_COUNT + 1;
     mActor_name_t held = Now_Private->equipment;
-    int hand_ok = held != EMPTY_NO && (tool_thrown_away(held) || free_pocket() >= 0);
+    int hand_ok = held != EMPTY_NO && free_pocket() >= 0;
     int first = -1;
     int k, i;
 
+    if (tool_thrown_away(held)) {
+        return -2; /* a hand flower or a My Design umbrella: changed in the pockets' menu only (it is thrown away) */
+    }
     /* place k: 0 the hand (doubled position -2), k >= 1 pocket k - 1 (2 (k - 1)) */
 #define TOOL_PLACE(k) ((k) == 0 ? -2 : 2 * ((k) - 1))
     if (dir > 0) {
@@ -670,10 +674,14 @@ int pc_touch_full_pad_shown(void) {
         return FALSE;
     }
     play = pc_touch_play();
-    if (play == NULL) {
-        return TRUE; /* the title, the save screens: START and the buttons */
+    if (play == NULL || mEv_CheckTitleDemo() != 0) {
+        return TRUE; /* the title (its demo is played), the save screens: START and the buttons */
     }
     menu = submenu_type(play);
+    if (menu == mSM_OVL_INVENTORY && play->submenu.overlay != NULL &&
+        play->submenu.overlay->menu_info[mSM_OVL_INVENTORY].data0 == mSM_IV_OPEN_CPMAIL) {
+        return TRUE; /* (the pockets beside the letters' copy: another layout) */
+    }
     /* the menus other than the pockets and the map want buttons */
     return menu != mSM_OVL_NONE && menu != mSM_OVL_INVENTORY && menu != mSM_OVL_MAP;
 }
@@ -1174,6 +1182,18 @@ void pc_touch_full_game_frame(GAME* game) {
         }
     }
 
+    {
+        /* a door, another scene: a walk asked for there ends */
+        static int s_scene = -1;
+        int index = mPlib_get_player_actor_main_index((GAME*)play);
+
+        if (Save_Get(scene_no) != s_scene || index == mPlayer_INDEX_DOOR || index == mPlayer_INDEX_OUTDOOR ||
+            index == mPlayer_INDEX_INVADE) {
+            s_go.kind = GO_NONE;
+            s_face_pending = 0;
+        }
+        s_scene = Save_Get(scene_no);
+    }
     if (!pc_touch_player_free(play)) {
         if (s_go.kind != GO_NONE && (pc_touch_msg_open() || play->submenu.process_status != mSM_PROCESS_WAIT)) {
             s_go.kind = GO_NONE;
