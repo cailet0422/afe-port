@@ -257,9 +257,12 @@ be made; then one side needs the port forwarded (UPnP or by hand).
   A game with that player's puppet in the same place makes the same calls with the same arguments, the local player
   standing for the sender for the moment of the call (some effects start from the player's position). What these
   calls write to the items is taken back at once and the hole or drop they start is only shown (afe-decomp bg_item
-  `pc_visual`, `m_field_info.c` `mFI_pc_fg_hold`; four hole entries on PC, so a shown hole never takes the slot of
-  one's own): the items themselves come from the acting player's game as before. Left out: the arrow over a catch
-  and sweat (the player's own game takes those away again), and bees (each game's own).
+  `pc_visual`, `m_field_info.c` `mFI_pc_fg_hold`): the items themselves come from the acting player's game as
+  before. The shown ones have entries of their own after the GameCube's (as many drops again, 3 holes), so one's own
+  actions keep exactly the GameCube's, however many others act; what the shown ones would tell the island's villager
+  about the player is left out. Left out too: the arrow over a catch and sweat (the player's own game takes those
+  away again), bees and the insects of a shaken tree without fruit (each game's own); a record from another game is
+  checked before use (positions in this field, units in range).
 
 ## Limits
 

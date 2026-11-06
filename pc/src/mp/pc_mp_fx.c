@@ -31,6 +31,7 @@
 #include "ac_effectbg.h"
 #include "audio.h"
 
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -84,6 +85,16 @@ static const u8* get_pos(const u8* p, xyz_t* v) {
     p = get_f(p, &v->x);
     p = get_f(p, &v->y);
     return get_f(p, &v->z);
+}
+
+/* a position in this field (a record from another game is checked before use) */
+static int pos_ok(const xyz_t* v) {
+    return isfinite(v->x) && isfinite(v->y) && isfinite(v->z) && fabsf(v->x) < 100000.0f &&
+           fabsf(v->y) < 100000.0f && fabsf(v->z) < 100000.0f && mFI_GetUnitFG(*v) != NULL;
+}
+
+static int unit_ok(int ut_x, int ut_z) {
+    return ut_x >= 0 && ut_z >= 0 && ut_x < mFI_GetBlockXMax() * UT_X_NUM && ut_z < mFI_GetBlockZMax() * UT_Z_NUM;
 }
 
 /* the start of a record, when the local player's move makes it */
@@ -199,12 +210,18 @@ static void fx_fly(mActor_name_t item, xyz_t* pos, s16 angle) {
     s_depth--;
 }
 
+/* a tree whose shake drops something (not bees, not only the insects on a
+ * tree without fruit: those are each game's own) */
+static int drops_fruit(mActor_name_t item) {
+    return !IS_ITEM_BEE_TREE(item) && item != TREE && item != CEDAR_TREE && item != GOLD_TREE &&
+           item != TREE_PALM_NOFRUIT_0 && item != TREE_PALM_NOFRUIT_1 && item != TREE_PALM_NOFRUIT_2;
+}
+
 static void fx_fruit_drop(mActor_name_t item, int ut_x, int ut_z, xyz_t* drop_pos) {
     u8 buf[64];
     u8* p;
 
-    /* (a bees' tree: the bees are each game's own) */
-    if (!IS_ITEM_BEE_TREE(item) && (p = begin(buf, FX_FRUIT_DROP)) != NULL) {
+    if (drops_fruit(item) && (p = begin(buf, FX_FRUIT_DROP)) != NULL) {
         p = put_16(p, item);
         p = put_16(p, (u16)ut_x);
         p = put_16(p, (u16)ut_z);
@@ -352,6 +369,8 @@ void pc_mp_fx_replay(GAME_PLAY* play, const u8* m, int len) {
     kind = m[0];
     p = get_pos(p, &ppos);
     p = get_16(p, &a);
+    if (!isfinite(ppos.x) || !isfinite(ppos.y) || !isfinite(ppos.z)) return;
+    if (kind >= FX_DIG_HOLE && kind <= FX_DROP_V1 && CLIP(bg_item_clip) == NULL) return;
     keep_pos = pl->actor_class.world.position;
     keep_rot = pl->actor_class.shape_info.rotation.y;
     keep_angle = pl->actor_class.world.angle.y;
@@ -377,14 +396,17 @@ void pc_mp_fx_replay(GAME_PLAY* play, const u8* m, int len) {
             p = get_16(p, &c);
             p = get_16(p, &d);
             p = get_16(p, &e);
-            if (a < eEC_EFFECT_NUM) s_effect_make(a, pos, g, (s16)b, (GAME*)play, c, (s16)d, (s16)e);
+            if (a < eEC_EFFECT_NUM && a != eEC_EFFECT_YAJIRUSHI && a != eEC_EFFECT_ASE2 && isfinite(pos.x) &&
+                isfinite(pos.y) && isfinite(pos.z)) {
+                s_effect_make(a, pos, g, (s16)b, (GAME*)play, c, (s16)d, (s16)e);
+            }
             break;
         case FX_EFFECT_BG:
             if (p + 4 + 12 > end || s_effect_bg == NULL) break;
             p = get_16(p, &a);
             p = get_16(p, &b);
             p = get_pos(p, &pos);
-            s_effect_bg((GAME*)play, (s16)a, (s16)b, &pos);
+            if (pos_ok(&pos)) s_effect_bg((GAME*)play, (s16)a, (s16)b, &pos);
             break;
         case FX_DIG_HOLE:
             if (p + 2 + 12 + 4 > end || s_dig_hole == NULL) break;
@@ -392,21 +414,21 @@ void pc_mp_fx_replay(GAME_PLAY* play, const u8* m, int len) {
             p = get_pos(p, &pos);
             p = get_16(p, &b);
             p = get_16(p, &c);
-            s_dig_hole(a, &pos, b, c);
+            if (pos_ok(&pos)) s_dig_hole(a, &pos, b, c);
             break;
         case FX_BURY_HOLE:
             if (p + 2 + 12 + 2 > end || s_bury_hole == NULL) break;
             p = get_16(p, &a);
             p = get_pos(p, &pos);
             p = get_16(p, &b);
-            s_bury_hole(a, &pos, b);
+            if (pos_ok(&pos)) s_bury_hole(a, &pos, b);
             break;
         case FX_FLY:
             if (p + 2 + 12 + 2 > end || s_fly == NULL) break;
             p = get_16(p, &a);
             p = get_pos(p, &pos);
             p = get_16(p, &b);
-            s_fly(a, &pos, (s16)b);
+            if (pos_ok(&pos)) s_fly(a, &pos, (s16)b);
             break;
         case FX_FRUIT_DROP: {
             xyz_t drop_pos;
@@ -415,7 +437,7 @@ void pc_mp_fx_replay(GAME_PLAY* play, const u8* m, int len) {
             p = get_16(p, &a);
             p = get_16(p, &b);
             p = get_16(p, &c);
-            if (!IS_ITEM_BEE_TREE(a)) s_fruit_drop(a, (s16)b, (s16)c, &drop_pos);
+            if (drops_fruit(a) && unit_ok((s16)b, (s16)c)) s_fruit_drop(a, (s16)b, (s16)c, &drop_pos);
             break;
         }
         case FX_PLAYER_DROP:
@@ -424,20 +446,20 @@ void pc_mp_fx_replay(GAME_PLAY* play, const u8* m, int len) {
             p = get_16(p, &b);
             p = get_16(p, &c);
             p = get_16(p, &f);
-            s_player_drop((GAME*)play, a, (s16)b, (s16)c, (s16)f);
+            if (unit_ok((s16)b, (s16)c)) s_player_drop((GAME*)play, a, (s16)b, (s16)c, (s16)f);
             break;
         case FX_DROP_V1:
             if (p + 2 + 24 > end || s_drop_v1 == NULL) break;
             p = get_16(p, &a);
             p = get_pos(p, &pos);
             p = get_pos(p, &target);
-            s_drop_v1(a, &pos, &target);
+            if (pos_ok(&pos) && pos_ok(&target)) s_drop_v1(a, &pos, &target);
             break;
         case FX_SOUND:
             if (p + 2 + 12 > end) break;
             p = get_16(p, &a);
             p = get_pos(p, &pos);
-            sAdo_OngenTrgStart(a, &pos);
+            if (isfinite(pos.x) && isfinite(pos.y) && isfinite(pos.z)) sAdo_OngenTrgStart(a, &pos);
             break;
         default:
             break;
