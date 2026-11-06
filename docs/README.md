@@ -333,6 +333,20 @@ title demo or on the first day's arrival, whose own wall keeps the player by the
 
   Acres come into the area one acre away from the player's, so out of sight. Event visitors (the travelling sellers
   and the like) still come out by the game's own rules.
+- **Placeholders in saved towns** (since 1.5.2). Each building and prop actor keeps a placeholder in its unit of the
+  live Save while it exists (`RSV_NO` from `ac_structure_clip.c_inc`, or a `DUMMY_...`), and the game puts the name
+  back when it goes (`restore_fgdata`). The game's own card saves copy the live Save; on the GameCube only the
+  player's acre had actors then and the station master puts their names back first, but with the area the copy kept
+  the placeholders of the acres around, and a town saved before a trip by train lost the buildings there (the
+  players' houses and mailboxes on the plaza, villagers' houses, gyroids, signs). `m_card.c` `mCD_PC_PutBackNames`
+  gives every copy written to a card (the station's, the gyroid's, a new town's, the multiplayer town) the names of
+  every live actor's unit, as the autosave's copy has had them (`Actor_info_PC_restore_fgdata_copy`), and
+  `m_field_make.c` `mFM_PC_RepairTown` mends a town file that lost them when it loads: a placeholder in the unit where
+  the acre's original layout (`RESOURCE_FGDATA`) has a building, or where a villager's home has its house and
+  signboard, goes back to that building (the villagers' houses first) unless the town has the shop elsewhere (after
+  it grew), and a lot's sign goes back on a lot where no villager's house stands; the log says
+  `[PC] town repaired: ...`. The copies also get the unit before a villager's door empty again, which the house keeps
+  (`RSV_NO`) while it stands and empties when it goes.
 - With the setting off nothing changes: the scripted runs give the same screenshots, positions and saves as v1.4.12.
 - The input script command `BLOCK` prints the acre the game counts the player in, the player's own and the acre
   change's state, and the acres around with insects (`I`) and fish (`F`) out and the number of NPC actors.

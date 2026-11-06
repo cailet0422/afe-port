@@ -17,16 +17,16 @@
 ## Download
 
 <!-- When a new release is published, update the version in these links (here and in README.ko.md). -->
-Latest release: **[v1.5.1](https://github.com/cailet0422/afe-port/releases/tag/v1.5.1)**
+Latest release: **[v1.5.2](https://github.com/cailet0422/afe-port/releases/tag/v1.5.2)**
 
 | Platform | Download | Requirements |
 |---|---|---|
-| Windows 64-bit | [DobutsuNoMoriEPlus-v1.5.1-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.5.1/DobutsuNoMoriEPlus-v1.5.1-Windows-x64.zip) | OpenGL 3.3, Vulkan 1.0 or Direct3D 12 (`SDL2.dll` included) |
-| Windows 32-bit | [DobutsuNoMoriEPlus-v1.5.1-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.5.1/DobutsuNoMoriEPlus-v1.5.1-Windows-x86.zip) | OpenGL 3.3, Vulkan 1.0 or Direct3D 12 (`SDL2.dll` included); also runs on 64-bit Windows |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.5.1-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.5.1/DobutsuNoMoriEPlus-v1.5.1-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 or Vulkan 1.0 |
-| Android | [DobutsuNoMoriEPlus-v1.5.1-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.5.1/DobutsuNoMoriEPlus-v1.5.1-Android.apk) | Android 5.0+, ARM 32/64-bit; OpenGL ES 3.0, or Vulkan on Android 7.0+ |
+| Windows 64-bit | [DobutsuNoMoriEPlus-v1.5.2-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.5.2/DobutsuNoMoriEPlus-v1.5.2-Windows-x64.zip) | OpenGL 3.3, Vulkan 1.0 or Direct3D 12 (`SDL2.dll` included) |
+| Windows 32-bit | [DobutsuNoMoriEPlus-v1.5.2-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.5.2/DobutsuNoMoriEPlus-v1.5.2-Windows-x86.zip) | OpenGL 3.3, Vulkan 1.0 or Direct3D 12 (`SDL2.dll` included); also runs on 64-bit Windows |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.5.2-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.5.2/DobutsuNoMoriEPlus-v1.5.2-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 or Vulkan 1.0 |
+| Android | [DobutsuNoMoriEPlus-v1.5.2-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.5.2/DobutsuNoMoriEPlus-v1.5.2-Android.apk) | Android 5.0+, ARM 32/64-bit; OpenGL ES 3.0, or Vulkan on Android 7.0+ |
 
-Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.5.1/SHA256SUMS.txt) ·
+Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.5.2/SHA256SUMS.txt) ·
 Older versions and release notes: [all releases](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
