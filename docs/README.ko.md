@@ -457,6 +457,11 @@ afe-decomp(`TARGET_PC`). `[Gameplay]`의 `seamless_blocks`(Settings → Gameplay
   Ubuntu의 Wine 9는 GX 셰이더를 컴파일하지 못한다)에서 같은 스크린샷이 OpenGL과 똑같이 조금만 다르고(타이틀 데모, 지도
   서브메뉴, 일시정지 메뉴), MSAA 4x와 HD 텍스처 팩(BC7, 밉맵은 CPU에서)에서는 Vulkan으로 돌린 것과 픽셀의 0.015%에서 1
   이하로 다르다. 설정에서 해상도를 바꾸면 스왑체인 크기가 바뀐다. Windows판의 Vulkan(winevulkan)도 같게 그린다.
+- 스크립트 시나리오(dev_setup.ko.md)를 한글패치 디스크로 v1.4.14와 v1.5.0(OpenGL)에서, 세이브를 불러오는 대신 새 게임
+  실행(`make_newgame_script.py`) 뒤에 이어 붙여 돌렸다. 18번, 스크린샷 4,250장, 기록한 위치와 세이브는 같고, 39장이 픽셀
+  1~4개에서 1씩 다르다(전용 셰이더의 반올림). 이 비교에서 `famicom_draw()`가 게임큐브 NES 에뮬레이터의 그림(`result_bufp`,
+  NES 그림을 FixNES가 그리는 PC에서는 채워지지 않는다)을 그린다는 것을 찾았다. 예전 셰이더는 우연히 그 사각형을 버렸고, 새
+  셰이더는 패미컴 게임 위에 흰 사각형으로 그렸다. afe-decomp가 `TARGET_PC`에서는 그리지 않는다.
 - 컨테이너의 소프트웨어 렌더러에서의 속도는 GPU에 대해 알려 주는 것이 적다. 대기 중인 타이틀 데모는 OpenGL(llvmpipe)
   42초, Vulkan(lavapipe) 58초인데, 여기서는 CPU가 GPU의 일을 한다. Vulkan과 Direct3D 12가 줄이는 것은 그리기와 상태
   변경마다 드는 드라이버의 CPU 시간이다(파이프라인을 다른 스레드에서 미리 만들고, 그릴 때마다 상태를 검사하지 않고,

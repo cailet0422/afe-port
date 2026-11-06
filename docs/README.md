@@ -506,6 +506,12 @@ frames played a second.
   differ from OpenGL's as little (the title demo, the map submenu, the pause menu); with 4x MSAA and the HD texture
   pack (BC7, mipmaps made on the CPU) they match the Vulkan run's within 1 on 0.015% of the pixels; a resolution
   change in the settings resizes the swapchain. The Windows build's Vulkan (winevulkan) draws the same.
+- The scripted scenarios (dev_setup.md) on the Korean-patched disc, v1.4.14 against v1.5.0 with OpenGL, each spliced
+  after the new-game run (`make_newgame_script.py`) instead of loading a save: 18 runs, 4,250 screenshots, the logged
+  positions and the saves identical, 39 screenshots off by 1 on 1 to 4 pixels (rounding in the specialized shaders).
+  They found that `famicom_draw()` draws the GameCube NES emulator's picture (`result_bufp`, never filled on PC, where
+  FixNES draws the NES picture): the old shader happened to drop that quad, the new one drew a white box over the NES
+  games. afe-decomp leaves it out under `TARGET_PC`.
 - Speed on the container's software renderers says little about GPUs: the idle title demo takes 42 s with OpenGL
   (llvmpipe) and 58 s with Vulkan (lavapipe), where the CPU does the GPU's work. What Vulkan and Direct3D 12 save is the
   driver's CPU time per draw and state change (pipelines built ahead on another thread, no state validation at each
