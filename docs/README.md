@@ -385,9 +385,11 @@ title demo or on the first day's arrival, whose own wall keeps the player by the
   room (no fade, menu or message, the player standing, walking or running for 3 s): a few seconds after that talk. A
   refusal is tried again after 30 s.
 - A new resident of a town that has a file is saved the gyroid's way too: on the first job, once they have met a
-  villager, `mCD_PC_AutoSaveSnapshot` marks their house as saved (`has_saved`, as `aHNW_set_save_permission` does
-  before the gyroid's save) and writes the town. Before 1.5.1 it refused until the part-time job was over, so such a
-  player was not autosaved on their first days unless they saved at the gyroid.
+  villager. Every save by a house's owner marks the house as saved (`has_saved`), as every save at the gyroid does
+  (`aHNW_set_save_permission`); that also mends the houses of players autosaved before 1.5.1, which the gyroid never
+  saw. Before 1.5.1 `mCD_PC_AutoSaveSnapshot` refused while the part-time job lasted, so such a player was not
+  autosaved on their first days unless they saved at the gyroid. The first save is due (`mCD_PC_FirstSaveDue`) only
+  while the job lasts and the player owns the house, and after a first save it is not tried again within 30 s.
 - Between scenes (`play_cleanup`, after `mFM_Field_dt` and before `mCD_toNextLand`: every actor has put its data
   back) at most every 20 s, not from the title demo, the player select or the opening.
 - Every `autosave_every` minutes (default 1; 1.3.0 wrote `autosave_minutes = 5`, read only when not 5) while the player is outdoors in the town, nothing fading, no menu or message,
