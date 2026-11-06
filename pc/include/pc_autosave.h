@@ -9,7 +9,10 @@
  * main copy, then the backup), so turning the game off never loses more
  * than a minute or so. A new town, which has no file until its first save,
  * gets that save the gyroid's way first (mCD_PC_FirstSave), wherever the
- * gyroid would save (on day one, once the player has met a villager). A player visiting another town by train (the
+ * gyroid would save (on day one, once the player has met a villager). A
+ * player's first save (a new town's, or a new resident's) is made at the
+ * first quiet moment after that meeting, not on the timer
+ * (mCD_PC_FirstSaveDue). A player visiting another town by train (the
  * multiplayer's trip) has their pockets, bells, letters... saved into their
  * own town's file, as the trip home would (mCD_PC_PatchTraveller).
  *

@@ -31,6 +31,8 @@
  *                                     rhythm, 1-127), INST (a furniture instrument)
  *     <frame> NOJOB                   debug: end the part-time job for Nook (day one), so
  *                                     the shops, post office and houses act as later on
+ *     <frame> UNSAVED                 debug: the player's house as never saved at its gyroid
+ *                                     (with the job on: a new resident on the first day)
  *     <frame> JOBDONE                 debug: the part-time job finished as the game ends it
  *                                     (the errand cleared, Nook waits to tell of the HRA,
  *                                     the payment message); the town acts as on day two

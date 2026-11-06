@@ -378,6 +378,16 @@ title demo or on the first day's arrival, whose own wall keeps the player by the
   the first time. This happens only where the gyroid would save: the player in their own town, at their own house,
   and on day one once they have met a villager. Before 1.4.5 the autosave waited for a save at the gyroid, so a new
   town that was never saved there was lost.
+- A player's first save is not left to the timer (since 1.5.1). `mCD_PC_FirstSaveDue` says when the player has never
+  saved (no town file yet, or a new resident whose house was never saved) and the gyroid would now save them: on day
+  one, from the first talk with a villager (`mNpc_GetFriendAnimalNum`; the villager remembers the player as the talk
+  starts). The autosave then saves at the first quiet moment, outdoors or in a building other than the player's
+  room (no fade, menu or message, the player standing, walking or running for 3 s): a few seconds after that talk. A
+  refusal is tried again after 30 s.
+- A new resident of a town that has a file is saved the gyroid's way too: on the first job, once they have met a
+  villager, `mCD_PC_AutoSaveSnapshot` marks their house as saved (`has_saved`, as `aHNW_set_save_permission` does
+  before the gyroid's save) and writes the town. Before 1.5.1 it refused until the part-time job was over, so such a
+  player was not autosaved on their first days unless they saved at the gyroid.
 - Between scenes (`play_cleanup`, after `mFM_Field_dt` and before `mCD_toNextLand`: every actor has put its data
   back) at most every 20 s, not from the title demo, the player select or the opening.
 - Every `autosave_every` minutes (default 1; 1.3.0 wrote `autosave_minutes = 5`, read only when not 5) while the player is outdoors in the town, nothing fading, no menu or message,

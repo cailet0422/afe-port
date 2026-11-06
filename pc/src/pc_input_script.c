@@ -77,6 +77,7 @@ typedef enum {
     SCRIPT_NAMES,
     SCRIPT_SOUND,
     SCRIPT_NOJOB,
+    SCRIPT_UNSAVED,
     SCRIPT_JOBDONE,
     SCRIPT_BELLS,
     SCRIPT_DESIGN,
@@ -303,6 +304,8 @@ int pc_input_script_load(const char* path) {
             ev.value[1] = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : 1;
         } else if (strcmp(word, "NOJOB") == 0) {
             ev.kind = SCRIPT_NOJOB;
+        } else if (strcmp(word, "UNSAVED") == 0) {
+            ev.kind = SCRIPT_UNSAVED;
         } else if (strcmp(word, "JOBDONE") == 0) {
             ev.kind = SCRIPT_JOBDONE;
         } else if (strcmp(word, "WARP") == 0 && fields >= 3 &&
@@ -1169,6 +1172,16 @@ static void debug_command(const ScriptEvent* ev) {
         mEv_EventOFF(mEv_SAVED_HRAWAIT_PLR0 + Common_Get(player_no));
         mEv_EventOFF(mEv_SAVED_HRATALK_PLR0 + Common_Get(player_no));
         printf("[INPUT] frame %u: part-time job over\n", (unsigned)s_frame);
+    } else if (ev->kind == SCRIPT_UNSAVED) {
+        /* the player's house as never saved at its gyroid: with the first
+         * job on, a new resident of a town that has a file */
+        int house = mHS_get_arrange_idx(Common_Get(player_no));
+
+        if (house >= 0) {
+            Save_Get(homes[house]).flags.has_saved = FALSE;
+        }
+        printf("[INPUT] frame %u: house %d never saved (first job %d, friends %d)\n", (unsigned)s_frame, house,
+               mEv_CheckFirstJob(), mNpc_GetFriendAnimalNum(&Common_Get(now_private)->player_ID));
     } else if (ev->kind == SCRIPT_JOBDONE) {
         /* as aID_first_job does once Nook has let the player go
          * (ac_intro_demo_move.c_inc): the first job's errand cleared, the

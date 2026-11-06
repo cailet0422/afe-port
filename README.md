@@ -17,16 +17,16 @@
 ## Download
 
 <!-- When a new release is published, update the version in these links (here and in README.ko.md). -->
-Latest release: **[v1.5.0](https://github.com/cailet0422/afe-port/releases/tag/v1.5.0)**
+Latest release: **[v1.5.1](https://github.com/cailet0422/afe-port/releases/tag/v1.5.1)**
 
 | Platform | Download | Requirements |
 |---|---|---|
-| Windows 64-bit | [DobutsuNoMoriEPlus-v1.5.0-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.5.0/DobutsuNoMoriEPlus-v1.5.0-Windows-x64.zip) | OpenGL 3.3, Vulkan 1.0 or Direct3D 12 (`SDL2.dll` included) |
-| Windows 32-bit | [DobutsuNoMoriEPlus-v1.5.0-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.5.0/DobutsuNoMoriEPlus-v1.5.0-Windows-x86.zip) | OpenGL 3.3, Vulkan 1.0 or Direct3D 12 (`SDL2.dll` included); also runs on 64-bit Windows |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.5.0-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.5.0/DobutsuNoMoriEPlus-v1.5.0-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 or Vulkan 1.0 |
-| Android | [DobutsuNoMoriEPlus-v1.5.0-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.5.0/DobutsuNoMoriEPlus-v1.5.0-Android.apk) | Android 5.0+, ARM 32/64-bit; OpenGL ES 3.0, or Vulkan on Android 7.0+ |
+| Windows 64-bit | [DobutsuNoMoriEPlus-v1.5.1-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.5.1/DobutsuNoMoriEPlus-v1.5.1-Windows-x64.zip) | OpenGL 3.3, Vulkan 1.0 or Direct3D 12 (`SDL2.dll` included) |
+| Windows 32-bit | [DobutsuNoMoriEPlus-v1.5.1-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.5.1/DobutsuNoMoriEPlus-v1.5.1-Windows-x86.zip) | OpenGL 3.3, Vulkan 1.0 or Direct3D 12 (`SDL2.dll` included); also runs on 64-bit Windows |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.5.1-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.5.1/DobutsuNoMoriEPlus-v1.5.1-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 or Vulkan 1.0 |
+| Android | [DobutsuNoMoriEPlus-v1.5.1-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.5.1/DobutsuNoMoriEPlus-v1.5.1-Android.apk) | Android 5.0+, ARM 32/64-bit; OpenGL ES 3.0, or Vulkan on Android 7.0+ |
 
-Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.5.0/SHA256SUMS.txt) ·
+Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.5.1/SHA256SUMS.txt) ·
 Older versions and release notes: [all releases](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -60,7 +60,7 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
   ([Multiplayer](#multiplayer)).
 - **Autosave**: the game saves by itself every minute outdoors, between scenes (going in or out of a
   building) and when you quit, so closing it or a crash loses about a minute at most. A new town is saved too, as
-  soon as the gyroid could save it (on the first day, once you have met a villager). Mr. Resetti therefore stays
+  soon as the gyroid could save it: on the first day, right after the talk with the first villager you meet. Mr. Resetti therefore stays
   away by default ([Saving](#saving)).
 - Korean fan patch support: install the patch zip from inside the game, switch between Korean and
   Japanese at any time, and type Hangul with a real keyboard (2-set layout) or an on-screen keyboard.
@@ -151,8 +151,10 @@ The game saves your town as the gyroid's "save and continue" would, without aski
 - when you quit from the menu or close the window.
 
 A new town is saved the same way: its first save creates the town file on the memory card, as a first save at the
-gyroid would. On the first day this starts once you have met a villager, as the gyroid itself only saves from then
-on; a notice says when the town has been saved for the first time.
+gyroid would. On the first day the gyroid only saves once you have met a villager, so the first save is made right
+after the talk with the first villager you meet, a few seconds later, wherever you are (outdoors or in a building);
+a notice says it was saved for the first time. A player who moves into a town that already has a file is saved the
+same way on their first day.
 
 To save right away, press **Ctrl+S** (PC) or **SAVE** left of START on the touch gamepad. This also works in your
 house's rooms and with the autosave turned off; a notice says it saved, or why it cannot yet (in a conversation or a
