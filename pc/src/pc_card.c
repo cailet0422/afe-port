@@ -98,6 +98,12 @@ void pc_card_set_slot_b(const char* dir) {
     }
 }
 
+/* slot B is a multiplayer room's copy of the host's town (afe-decomp
+ * m_card.c: a trip there takes no villager along) */
+int pc_card_slot_b_is_net(void) {
+    return strcmp(card_dir[1], "save/card_b") != 0;
+}
+
 const char* pc_card_dir(s32 chan) {
     return chan >= 0 && chan <= 1 ? card_dir[chan] : "";
 }

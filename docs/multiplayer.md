@@ -113,14 +113,25 @@ be made; then one side needs the port forwarded (UPnP or by hand).
   as it is now into both save copies of it (`mCD_PC_SnapshotSave`: the save as the game writes it, with its checksum)
   and sends it (467 KB). The guest writes it to `save/card_b_net/` and points memory card slot B there
   (`pc_card_set_slot_b`), so the station's trip and the trip back (which writes the town back to slot B) never touch a
-  real card B. Slot B is the real one again once the guest is home (or leaves the room before going).
+  real card B. Slot B is the real one again once the guest is home (or leaves the room before going). A guest on its
+  trip (from the station's save, on the train, in the host's town and on the way home) keeps slot B on that copy even
+  when the room closes or it is sent out meanwhile, so the train home writes the host's town to the copy and the
+  guest arrives in its own town as usual; a guest whose own town is on card B, or whose town has the host's town's
+  name and number, is told it cannot go (the station would mix them up). A villager moving out of the guest's town
+  stays (still moving out) rather than moving into the copy, which is thrown away. A guest that joins a room while on
+  another trip gets the host's town once it is home; a copy left over outside a room with no trip under way (a station
+  save that did not go) is dropped.
 - **Items**: afe-decomp calls `pc_mp_fg_written` from `mFI_UtNumtoFGSet_common` and `mFI_BlockUtNumtoFGSet` (the
   functions nearly all of the game's item changes go through) and `pc_mp_deposit_written` from the buried-item flags.
   Outdoors in the shared town, a guest's change goes to the host with the item the guest saw there; the host keeps it if
   the unit still holds that (or already holds the new one) and passes it to everyone, otherwise it sends the guest what
   is there. The game's own placeholder while an item drops or a hole opens (`RSV_NO`) is not sent; the change after it
   carries what was there before. Received changes are written into the save's item layer and the field is redrawn
-  (`mFI_SetFGUpData`). A guest arriving gets the whole item and buried layer first (30 acres).
+  (`mFI_SetFGUpData`). A guest arriving gets the whole item and buried layer first (30 acres). A unit where either
+  game has a live actor's placeholder (below) is left alone by both: a guest's change there is refused, its unit going
+  back to the building's name or to what it saw there, and nothing is written over the receiving game's own
+  placeholder. A snowman's or a ball's actor taking its
+  item out of the unit and putting it back (`ac_birth_control.c`, `m_actor.c` `restore_fgdata`) is not sent either.
 - **The clock**: the host sends its game time every 10 s; a guest in its town takes it (`lbRTC_SetTime`) when the minute
   differs.
 - **Players**: a guest's or the host's position, facing, walk/run/still and look go out 15 times a second (only
@@ -140,11 +151,25 @@ be made; then one side needs the port forwarded (UPnP or by hand).
   the house door, the wallpaper and carpet and design furniture read them; the room is built again if the guest stands
   in it. The house doors (`door_original`, the design on a player's door) go with the furniture.
 - The menu draws the names (and chat balloons) at the head's projected position (`Game_play_Projection_Trans`).
-- **Building placeholders**: while the actor of a building exists (a player's house, a villager's house, a mailbox, the
-  shop...), the game keeps a placeholder in its unit (`DUMMY_HOUSE0`, `DUMMY_NPC_HOUSE_xxx`...) and puts the name back
-  when the actor goes (`m_actor.c` `restore_fgdata`). Placeholders are each game's own: never sent or taken, and a town
-  given whole (`mCD_PC_SnapshotSave`) or an item layer sent whole has the actor's name in their place. (Before, the
-  host's placeholders reached guests, and guests saw no house where the host's stands.)
+- **Building placeholders**: while the actor of a building or a prop exists (a player's house, a villager's house, a
+  mailbox, a gyroid, the shop, the station, the post office...), the game keeps a placeholder in its unit: `RSV_NO`
+  (`ac_structure_clip.c_inc`) or a `DUMMY_...` (trees and the like), and puts the name back when the actor goes
+  (`m_actor.c` `restore_fgdata`). With seamless acres the actors of the 3x3 acres around the player exist, so there
+  are many. Placeholders are each game's own: never sent or taken, and a town given whole (`mCD_PC_SnapshotSave`) or
+  an item layer sent whole has the actor's name in their place (every live actor's, of every part that puts its name
+  back). (Up to v1.5.1 the host's `RSV_NO`s reached guests, and guests saw no shop, station or houses where the host's
+  stood, and could not go in.)
+- **Saving a town with placeholders** (afe-decomp `m_card.c` `mCD_PC_PutBackNames`): the game's card saves copy the
+  live town (the station master's before a trip, the gyroid's, a new town's first save); with seamless acres those
+  copies could keep the placeholders of the acres around the player, and the file lose those buildings (a player's
+  house and mailbox gone after a trip by train, multiplayer or not). The copy now gets every live actor's name back,
+  as the autosave's did, and the unit before a villager's door its house keeps is empty again, as the house leaves it
+  when it goes; the live town is left as it is. A town file already missing buildings is mended when it
+  loads (`m_field_make.c` `mFM_PC_RepairTown`, `[PC] town repaired: ...` in the log): a placeholder in a building's
+  own unit of a town loaded for play is never right, so the building of the acre's original layout (houses,
+  mailboxes, gyroids, the shop, the station, the post office, lot signs...) or a villager's house and signboard (from
+  the villager's home, first) goes back there, unless the town has the shop elsewhere (after it grew); a lot's sign
+  goes back on a lot where no villager's house stands.
 - **House furniture** (`homes[]`): in a house the save data is the room itself (its furniture actors are built from it
   when the room loads). Every 10 frames the host compares, for every floor, the items of layers 1 and 2
   (`layer_main`, `layer_secondary`) and the wallpaper and carpet (`wall_floor`, `floor_bit_info`) with what it sent, and
@@ -163,8 +188,9 @@ be made; then one side needs the port forwarded (UPnP or by hand).
   wandering, below talking and greeting); only while it wanders, and it jumps there out of sight when more than 160
   away. A guest also keeps its villagers that are not actors at the host's positions and `is_home`, does not let the
   manager send them travelling or home by itself (`aSNMgr_walk_npc`, `aSNMgr_force_go_home`), brings out one the host
-  has in its acre and it does not (`setupActor_proc`), and removes, out of sight, one it has that the host has in
-  another acre.
+  has in its acre and it does not (`setupActor_proc`; with seamless acres also in the acres beside it, up to the
+  game's 6 villager actors there, as a player alone), and removes, out of sight, one it has that the host has
+  farther away.
 - **Villagers in their houses** (afe-decomp `ac_npc2.c`, the indoor controller): the same hooks report and follow in
   room coordinates (`pc_mp_npc_room_report`, `pc_mp_npc_room_target`); the host sends the villagers of the house it
   is in every 6 frames with the house's owner (`G_NPC_ROOM`), and a guest in the same house makes its copy walk where
@@ -175,8 +201,18 @@ be made; then one side needs the port forwarded (UPnP or by hand).
   Sisters' display, the post office, the turnip prices, the visitors' events, the snowmen. The host compares them
   with what it sent every second and sends what changed (in 1000-byte pieces); a guest arriving gets all of them
   (`G_REGION_REQ`). What a visitor can change there (a post on the board, the town tune, a lost item taken, things
-  bought or sold, a design on display, a letter sent) goes from a guest to the host while the guest is at that place
-  (3 s after it last took the host's), and from the host to everyone.
+  bought or sold, a design on display, a letter sent, a visitor's stock and gifts outdoors, in Redd's tent or
+  Gracie's car, a fish for the tourney, a snowman built) goes from a guest to the host while the guest is at that
+  place, and also what it changed there just before leaving it, once the host's data has come; then from the host to
+  everyone. The board's automatic notices are the host's (a guest's game does not post its own in the copy).
+- **Where the day's visitors are** (`G_EVPLACE`): the event manager picks the spots of the day's visitors and events
+  (Gulliver on the beach, Joan, Wendell, Pascal...) from the clock when the town loads and keeps them outside the
+  Save (`Common` `event_common` `place`), so each game picked its own. The host sends its own when a guest arrives and
+  when they change; a guest takes them (keeping the places of its own snowballs' parts), and its next scene has the
+  visitors where the host's are. The event areas next to them (`area`: Gracie's, K.K.'s, the tourney's, the Wisp's
+  state...) stay each game's own.
+  A visitor's tent or car that came with the host's town is taken as its lot (`ac_event_manager.c`), not as a lot
+  already taken.
 - **Every item outside, again**: besides the changes the hooks see, the host compares the whole item and buried layer
   with what it sent every half second and sends the acres that differ (changes the game makes without the hooks: a
   day's new weeds, things the villagers or events put down); a guest stepping outside asks for the whole layer again.
@@ -211,8 +247,8 @@ be made; then one side needs the port forwarded (UPnP or by hand).
 ## Limits
 
 - One town is shared: the host's. Guests' towns are not visited (switch hosts for that).
-- Villagers follow the host, but not exactly: only those the host has as actors (in the host's acre) have an exact
-  position; for the others only the rough one the game keeps (the acre) is shared. Talking and greeting, going in and
+- Villagers follow the host, but not exactly: only those the host has as actors (in the acres around the host) have
+  an exact position; for the others only the rough one the game keeps (the acre) is shared. Talking and greeting, going in and
   out of houses, sleeping and catching insects are each game's own. Villagers inside houses follow only while the host
   is in the same house. The island villager, insects and fish are not shared.
 - Each player's own: insects and fish (spawned by each game's set manager for the acre it enters), balloons floating
@@ -220,6 +256,10 @@ be made; then one side needs the port forwarded (UPnP or by hand).
   and weather). The fishing bobber and line, and a letter or present handed over, are not drawn on puppets.
 - A guest can turn a lamp in the host's house on or off on its own screen; it follows the host's again when the
   host's changes.
+- Two players in the same shop at once each see the stock as it was when they came in until the other's purchase
+  arrives (about a second), so both can buy the last of an item.
+- What the host's villagers remember of a guest (talks, gifts, letters) stays in the guest's copy of the host's town,
+  which is thrown away at the end of the trip.
 
 ## Testing
 

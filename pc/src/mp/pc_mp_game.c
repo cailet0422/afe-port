@@ -30,6 +30,7 @@
 #include "ac_npc.h"
 #include "ac_my_indoor.h"
 #include "ac_weather.h"
+#include "m_event.h"
 #include "m_kankyo.h"
 #include "lb_rtc.h"
 
@@ -68,6 +69,7 @@ enum {
     G_REGION,       /* host -> guests (or a guest's change -> host): town, region, offset, length, bytes */
     G_REGION_REQ,   /* guest -> host: all of the shared town data, please */
     G_ITEM_NO,      /* host -> a guest: town, bx, bz, ux, uz, what is there, the guest's old, new: refused */
+    G_EVPLACE,      /* host -> guests: town, where the day's visitors and events are (Common event_common) */
 };
 
 static void home_frame(void);
@@ -80,6 +82,7 @@ static void design_frame(void);
 static void npc_room_message(int from, const u8* m, int len);
 static void npc_room_frame(void);
 static void region_message(int from, const u8* m, int len);
+static void evplace_message(int from, const u8* m, int len);
 static void region_frame(void);
 static void region_reset(void);
 static void design_message(int from, const u8* m, int len);
@@ -234,7 +237,9 @@ static u32 room_town(void) {
 }
 
 static int in_shared_town(void) {
-    return in_room() && s_my_town != 0 && s_my_town == room_town();
+    /* (a guest only as the visitor there: never its own town, were the two
+     * towns' names and ids the same) */
+    return in_room() && s_my_town != 0 && s_my_town == room_town() && (is_host() || s_foreigner);
 }
 
 void pc_mp_game_name_utf8(const unsigned char* s, int n, char* out, size_t cap) {
@@ -406,6 +411,16 @@ int pc_mp_game_join_room(const PcMpRoomInfo* room, const char* password) {
     return pc_mp_join(s_mp, &room->addr, room->room_id, password);
 }
 
+extern int mCD_PC_TripPending(void);
+
+/* a guest's trip by train is under way: from the station's save to the
+ * host's town, the stay there, and the way home. Slot B (the copy of the
+ * host's town) must stay until it is home */
+static int trip_underway(void) {
+    return s_visit == PC_MP_VISIT_THERE || s_foreigner || mCD_PC_TripPending() ||
+           (Common_Get(now_private) != NULL && Common_Get(player_no) == mPr_FOREIGNER);
+}
+
 static void slot_b_restore(void) {
     char path[600];
     const char* name;
@@ -435,9 +450,10 @@ void pc_mp_game_leave(void) {
         s_upnp = 0; /* no router answered: ask again for the next room */
     }
     pc_mp_leave(s_mp);
-    /* a guest still in the host's town keeps slot B until it is home:
-     * the trip back writes that town there, never to a real card B */
-    if (s_visit != PC_MP_VISIT_THERE && !s_foreigner) {
+    /* a guest on its trip (on the train there, in the host's town, on the
+     * way home) keeps slot B until it is home: the trip writes that town
+     * there, never to a real card B */
+    if (!trip_underway()) {
         slot_b_restore();
         s_visit = PC_MP_VISIT_NONE;
     }
@@ -574,6 +590,15 @@ static u16* save_unit(int bx, int bz, int ux, int uz);
  * restore_fgdata). The placeholders are each game's own: never sent, and a
  * town given or sent whole has the names in their place. */
 #define IS_PLACEHOLDER(it) ((it) >= DUMMY_START && (it) <= DUMMY_MONUMENT_FOUNTAIN)
+/* A unit holding a live actor's placeholder: a DUMMY_... (trees and the like),
+ * or RSV_NO, which the buildings (houses, the shop, the station, mailboxes,
+ * villagers' houses...) keep in their own unit while their actor exists
+ * (ac_structure_clip.c_inc). RSV_NO is also the game's mark of a unit it is
+ * busy with and of the other units a building covers. */
+#define HOLDS_ACTOR(it) (IS_PLACEHOLDER(it) || (it) == RSV_NO)
+/* the ball, the paper airplanes...: each game's own, as the insects (their
+ * actors roll and fly about and come back to the nearest empty unit) */
+#define OWN_THING(it) (ITEM_NAME_GET_TYPE(it) == NAME_TYPE_ITEM2)
 
 typedef struct {
     u16* unit;
@@ -583,26 +608,36 @@ typedef struct {
 static GAME_PLAY* s_play = NULL; /* this frame's */
 
 static int real_names(RealName* out, int max) {
-    static const int parts[] = { ACTOR_PART_FG, ACTOR_PART_ITEM };
     int n = 0;
 
     if (s_play == NULL) return 0;
-    for (int i = 0; i < 2; i++) {
-        for (ACTOR* a = s_play->actor_info.list[parts[i]].actor; a != NULL && n < max; a = a->next_actor) {
+    /* the actors the game puts back into their units (m_actor.c
+     * restore_fgdata_all): those of the FG and ITEM parts, and any other with
+     * restore_fg (a mailbox...) */
+    for (int i = 0; i < ACTOR_PART_NUM; i++) {
+        for (ACTOR* a = s_play->actor_info.list[i].actor; a != NULL && n < max; a = a->next_actor) {
             int bx, bz, ux, uz;
             u16* u;
 
-            if (a->npc_id == EMPTY_NO || a->move_actor_list_idx != -1 || a->block_x < 0 || a->block_z < 0 ||
+            if ((i != ACTOR_PART_FG && i != ACTOR_PART_ITEM && a->restore_fg != TRUE) || a->npc_id == EMPTY_NO ||
+                a->move_actor_list_idx != -1 || a->block_x < 0 || a->block_z < 0 ||
                 ITEM_NAME_GET_TYPE(a->npc_id) == NAME_TYPE_ITEM2 ||
                 !mFI_Wpos2BkandUtNuminBlock(&bx, &bz, &ux, &uz, a->home.position)) {
                 continue;
             }
             u = save_unit(bx, bz, ux, uz);
-            if (u != NULL && IS_PLACEHOLDER(*u)) {
-                out[n].unit = u;
-                out[n].name = a->npc_id;
-                out[n].placeholder = *u;
-                n++;
+            {
+                /* (a passing train leaves its rails empty, as m_actor.c
+                 * Actor_info_PC_restore_fgdata_copy) */
+                u16 name = (a->npc_id >= TRAIN0 && a->npc_id <= TRAIN1) ? EMPTY_NO : a->npc_id;
+
+                if (u != NULL && *u != name &&
+                    (HOLDS_ACTOR(*u) || (*u == EMPTY_NO && name >= SNOWMAN0 && name <= SNOWMAN8))) {
+                    out[n].unit = u;
+                    out[n].name = name;
+                    out[n].placeholder = *u;
+                    n++;
+                }
             }
         }
     }
@@ -610,7 +645,7 @@ static int real_names(RealName* out, int max) {
 }
 
 static u16 shared_item(const u16* unit, const RealName* names, int n) {
-    if (IS_PLACEHOLDER(*unit)) {
+    if (HOLDS_ACTOR(*unit) || *unit == EMPTY_NO) { /* (a snowman's is empty while it is out) */
         for (int i = 0; i < n; i++) {
             if (names[i].unit == unit) return names[i].name;
         }
@@ -640,8 +675,8 @@ static void host_give_town(void) {
     /* the town as it is now in both copies of the save part (with the names
      * of the buildings out as actors, not their placeholders) */
     {
-        RealName names[96];
-        int n = real_names(names, 96);
+        RealName names[512];
+        int n = real_names(names, 512);
 
         for (int i = 0; i < n; i++) *names[i].unit = names[i].name;
         mCD_PC_SnapshotSave((Save*)(file + o0));
@@ -651,6 +686,26 @@ static void host_give_town(void) {
     pc_mp_set_town_blob(s_mp, file, (size_t)size);
     free(file);
     printf("[MP] gave the town (%d bytes)\n", size);
+}
+
+/* the player's own town is the one on memory card B */
+static int own_town_on_card_b(void) {
+    const char* name;
+    int size, o0, o1;
+    char path[600];
+    mLd_land_info_c land;
+    FILE* f;
+    int same = 0;
+
+    mCD_PC_LandFileInfo(&name, &size, &o0, &o1);
+    snprintf(path, sizeof(path), "save/card_b/%s", name); /* (the real card B, not a room's copy) */
+    f = pc_fopen_utf8(path, "rb");
+    if (f == NULL) return 0;
+    if (fseek(f, o0 + (long)offsetof(Save_t, land_info), SEEK_SET) == 0 && fread(&land, sizeof(land), 1, f) == 1) {
+        same = land.id == Save_Get(land_info).id && memcmp(land.name, Save_Get(land_info).name, LAND_NAME_SIZE) == 0;
+    }
+    fclose(f);
+    return same;
 }
 
 static void guest_got_town(void) {
@@ -664,6 +719,32 @@ static void guest_got_town(void) {
     if (blob == NULL || len != (size_t)size || o0 + save_size > size) {
         s_visit = PC_MP_VISIT_FAILED;
         return;
+    }
+    if (trip_underway()) {
+        /* (the copy the trip uses stays; asked again once home) */
+        if (s_visit == PC_MP_VISIT_DOWNLOADING) s_visit = PC_MP_VISIT_NONE;
+        return;
+    }
+    if (Common_Get(now_private) != NULL) {
+        const mLd_land_info_c* land = &((const Save*)(blob + o0))->save.land_info;
+        const char* refuse = NULL;
+
+        if (land->id == Save_Get(land_info).id &&
+            memcmp(land->name, Save_Get(land_info).name, LAND_NAME_SIZE) == 0) {
+            /* the station could not tell the two towns apart */
+            refuse = pc_gui_korean() ? "호스트 마을과 내 마을의 이름과 번호가 같아서 놀러 갈 수 없습니다."
+                                     : "The host's town has the same name and number as yours: no trip there.";
+        } else if (own_town_on_card_b()) {
+            /* (slot B would be the copy of the host's town: no save of ours) */
+            refuse = pc_gui_korean() ? "내 마을이 메모리 카드 B에 있어서 놀러 갈 수 없습니다. 카드 A로 옮겨 주세요."
+                                     : "Your town is on memory card B: move it to card A to visit.";
+        }
+        if (refuse != NULL) {
+            pc_gui_notify(refuse);
+            printf("[MP] no visit: %s\n", refuse);
+            s_visit = PC_MP_VISIT_FAILED;
+            return;
+        }
     }
     mkdirs(NET_DIR);
     snprintf(path, sizeof(path), "%s/%s", NET_DIR, name);
@@ -715,7 +796,7 @@ static void refresh_field(void) {
 static void put_unit(int bx, int bz, int ux, int uz, u16 item) {
     u16* p = save_unit(bx, bz, ux, uz);
 
-    if (p == NULL || *p == item || IS_PLACEHOLDER(*p) || IS_PLACEHOLDER(item)) return;
+    if (p == NULL || *p == item || HOLDS_ACTOR(*p) || HOLDS_ACTOR(item) || OWN_THING(*p) || OWN_THING(item)) return;
     s_applying = 1;
     *p = item;
     s_applying = 0;
@@ -864,19 +945,59 @@ static void pocket_fix_frame(void) {
     }
 }
 
+/* a building, a prop or a thing with its own actor (the ball...): its
+ * actor's RSV_NO or DUMMY_ in the unit is this game's own, not a change */
+static int actor_name(u16 it) {
+    return (it >= NPC_HOUSE_START && it <= STRUCTURE_START + 0xFF) || (it >= ACTOR_PROP_START && it <= ACTOR_PROP_START + 0xFF) ||
+           ITEM_NAME_GET_TYPE(it) == NAME_TYPE_ITEM2;
+}
+
+static void rsv_forget(int bx, int bz, int ux, int uz) {
+    for (int i = 0; i < s_nrsv; i++) {
+        if (s_rsv[i].bx == bx && s_rsv[i].bz == bz && s_rsv[i].ux == ux && s_rsv[i].uz == uz) {
+            memmove(&s_rsv[i], &s_rsv[i + 1], (size_t)(s_nrsv - i - 1) * sizeof(s_rsv[0]));
+            s_nrsv--;
+            return;
+        }
+    }
+}
+
+/* afe-decomp: a write of the game's own that is not a player's change (a
+ * snowman's or a ball's actor taking its item out of the unit or putting it
+ * back: ac_birth_control.c, m_actor.c restore_fgdata) */
+int pc_mp_fg_quiet = 0;
+
 void pc_mp_fg_written(int bx, int bz, int ux, int uz, unsigned short old_item, unsigned short new_item) {
     if (!s_applying) pc_autosave_unit_written(old_item, new_item);
-    if (s_applying || !in_shared_town() || !outside_in_town() || save_unit(bx, bz, ux, uz) == NULL ||
-        IS_PLACEHOLDER(old_item) || IS_PLACEHOLDER(new_item)) {
+    if (s_applying || pc_mp_fg_quiet || !in_shared_town() || !outside_in_town() || save_unit(bx, bz, ux, uz) == NULL ||
+        OWN_THING(old_item) || OWN_THING(new_item)) {
+        return;
+    }
+    if (old_item == RSV_NO && IS_PLACEHOLDER(new_item)) {
+        rsv_forget(bx, bz, ux, uz); /* (a building's actor: RSV_NO, then its DUMMY_) */
+        return;
+    }
+    if (IS_PLACEHOLDER(old_item) || IS_PLACEHOLDER(new_item)) {
         return; /* (an actor made from the unit, or gone: this game's own) */
     }
     if (new_item == RSV_NO) {
-        /* the game is busy with it: keep what was there */
-        if (old_item != RSV_NO && s_nrsv < (int)(sizeof(s_rsv) / sizeof(s_rsv[0]))) {
+        /* the game is busy with it (an item dropping, a hole opening): keep
+         * what was there. Not for an actor made from the unit; the oldest
+         * goes when the table is full */
+        if (old_item != RSV_NO && !actor_name(old_item)) {
+            rsv_forget(bx, bz, ux, uz);
+            if (s_nrsv == (int)(sizeof(s_rsv) / sizeof(s_rsv[0]))) {
+                memmove(&s_rsv[0], &s_rsv[1], (size_t)(s_nrsv - 1) * sizeof(s_rsv[0]));
+                s_nrsv--;
+            }
             Pending p = { (u8)bx, (u8)bz, (u8)ux, (u8)uz, old_item };
             s_rsv[s_nrsv++] = p;
         }
         return;
+    }
+    if (old_item == RSV_NO && actor_name(new_item)) {
+        rsv_forget(bx, bz, ux, uz);
+        return; /* (a building's actor gone: its name back) */
     }
     if (old_item == RSV_NO) {
         old_item = 0xFFFE; /* not known */
@@ -952,8 +1073,8 @@ static void send_fg_block(int to, int bx, int bz, const RealName* names, int nna
 }
 
 static void send_fg(int to) {
-    RealName names[96];
-    int nnames = real_names(names, 96);
+    RealName names[512];
+    int nnames = real_names(names, 512);
 
     for (int bz = 1; bz <= FG_BLOCK_Z_NUM; bz++) {
         for (int bx = 1; bx <= FG_BLOCK_X_NUM; bx++) send_fg_block(to, bx, bz, names, nnames);
@@ -969,7 +1090,7 @@ static u16 s_fg_shadow[FG_BLOCK_Z_NUM][FG_BLOCK_X_NUM][UT_Z_NUM][UT_X_NUM];
 static u16 s_dep_shadow[FG_BLOCK_Z_NUM][FG_BLOCK_X_NUM][UT_Z_NUM];
 
 static void fg_diff(void) {
-    RealName names[96];
+    RealName names[512];
     int nnames = -1;
 
     for (int bz = 1; bz <= FG_BLOCK_Z_NUM; bz++) {
@@ -994,7 +1115,7 @@ static void fg_diff(void) {
                 }
             }
             if (changed) {
-                if (nnames < 0) nnames = real_names(names, 96);
+                if (nnames < 0) nnames = real_names(names, 512);
                 send_fg_block(-1, bx, bz, names, nnames);
             }
         }
@@ -1025,6 +1146,18 @@ static void game_message(int from, const u8* m, int len) {
                 u16* cur = save_unit(bx, bz, ux, uz);
 
                 if (cur == NULL) return;
+                if (HOLDS_ACTOR(*cur)) {
+                    /* (busy here: an item dropping, a building's actor): the
+                     * guest's unit goes back to the building's name, or to
+                     * what it saw there (a placeholder it would not take) */
+                    RealName names[512];
+                    int n = real_names(names, 512);
+                    u16 back = shared_item(cur, names, n);
+
+                    if (HOLDS_ACTOR(back)) back = old != 0xFFFE ? old : back;
+                    send_item_no(from, bx, bz, ux, uz, back, old, item);
+                    return;
+                }
                 if ((*cur == old || old == 0xFFFE || *cur == item) &&
                     !(*cur == item && old != item && recent_other(bx, bz, ux, uz, old, item, from))) {
                     put_unit(bx, bz, ux, uz, item);
@@ -1097,8 +1230,8 @@ static void game_message(int from, const u8* m, int len) {
                         u16 item = r16(p);
 
                         /* (a unit the game is busy with, or one with an actor of ours made
-                         * from it, stays as it is) */
-                        if (*u != RSV_NO && !IS_PLACEHOLDER(*u) && !IS_PLACEHOLDER(item)) *u = item;
+                         * from it, stays as it is; nor is the host's placeholder taken) */
+                        if (!HOLDS_ACTOR(*u) && !HOLDS_ACTOR(item) && !OWN_THING(*u) && !OWN_THING(item)) *u = item;
                         p += 2;
                     }
                 }
@@ -1127,6 +1260,9 @@ static void game_message(int from, const u8* m, int len) {
         case G_REGION:
         case G_REGION_REQ:
             region_message(from, m, len);
+            break;
+        case G_EVPLACE:
+            evplace_message(from, m, len);
             break;
         case G_TIME:
             if (!is_host() && len >= 5 + (int)sizeof(lbRTC_time_c) && in_shared_town() && town == s_my_town) {
@@ -1340,10 +1476,18 @@ static void events(void) {
             case PC_MP_EV_JOINED:
                 snprintf(text, sizeof(text), ko ? "'%s' 방에 들어왔습니다" : "Joined '%s'", ev.text);
                 pc_gui_notify(text);
-                s_visit = PC_MP_VISIT_DOWNLOADING;
                 update_me();
-                pc_mp_request_town(s_mp);
                 design_reset(); /* ours go to the room */
+                if (trip_underway()) {
+                    /* (back in a room on a trip: the copy of the town the
+                     * game is in or travelling to stays; in the same host's
+                     * town, its state comes again) */
+                    s_fg_asked = 0;
+                    region_reset();
+                    break;
+                }
+                s_visit = PC_MP_VISIT_DOWNLOADING;
+                pc_mp_request_town(s_mp);
                 break;
             case PC_MP_EV_PLAYER_IN:
                 snprintf(text, sizeof(text), ko ? "%s 님이 들어왔습니다" : "%s joined", ev.text);
@@ -1389,7 +1533,7 @@ static void events(void) {
                     pc_gui_notify(ev.kind == PC_MP_EV_KICKED ? (ko ? "호스트가 방에서 내보냈습니다" : ev.text)
                                                                : (ko ? "방이 닫혔습니다" : ev.text));
                 }
-                if (s_visit != PC_MP_VISIT_THERE && !s_foreigner) {
+                if (!trip_underway()) {
                     slot_b_restore();
                     s_visit = PC_MP_VISIT_NONE;
                 }
@@ -1447,6 +1591,7 @@ void pc_mp_game_frame(struct game_s* game) {
     /* where we are */
     if (play != NULL && Common_Get(now_private) != NULL) {
         s_my_town = town_id(&Save_Get(land_info));
+        if (Save_Get(scene_no) != s_my_scene) s_nrsv = 0; /* (a new scene: its actors made anew) */
         s_my_scene = Save_Get(scene_no);
         s_my_outside = outside_in_town();
         s_foreigner = Common_Get(player_no) == mPr_FOREIGNER;
@@ -1463,6 +1608,7 @@ void pc_mp_game_frame(struct game_s* game) {
         if (s_host_town != 0 && s_my_town == s_host_town) {
             if (s_visit != PC_MP_VISIT_THERE) {
                 pc_gui_notify(pc_gui_korean() ? "호스트 마을에 도착했습니다" : "You are in the host's town");
+                region_reset(); /* (the shadows of an earlier trip are of another copy) */
             }
             s_visit = PC_MP_VISIT_THERE;
             s_visited = 1;
@@ -1493,6 +1639,17 @@ void pc_mp_game_frame(struct game_s* game) {
     if (!in_room() && s_visit == PC_MP_VISIT_THERE && !s_foreigner && s_my_town != s_host_town) {
         slot_b_restore();
         s_visit = PC_MP_VISIT_NONE;
+    }
+    if (!in_room() && s_slot_b_net && !trip_underway()) {
+        /* (out of the room with the copy and no trip under way: a station
+         * save that did not go, say) */
+        slot_b_restore();
+        s_visit = PC_MP_VISIT_NONE;
+    }
+    if (in_room() && !is_host() && s_visit == PC_MP_VISIT_NONE && !trip_underway()) {
+        /* (a room joined on another trip: its town once home) */
+        s_visit = PC_MP_VISIT_DOWNLOADING;
+        pc_mp_request_town(s_mp);
     }
 
     if (in_room()) {
@@ -1915,6 +2072,21 @@ static int npc_block(f32 x, f32 z, int* bx, int* bz) {
     return mFI_Wpos2BlockNum(bx, bz, p);
 }
 
+/* a guest's villager actors: those of the player's acre, and with seamless
+ * acres those of the acres beside it (mFI_SeamlessNear), as a player alone
+ * has them (ac_set_npc_manager.c aSNMgr_set_npc_seamless, with its 6 villager
+ * actors at most: they share 10 sets of clothes) */
+#define NPC_SEAMLESS_MAX 6
+
+static int npc_kept(int bx, int bz, int pbx, int pbz) {
+    return (bx == pbx && bz == pbz) || mFI_SeamlessNear(bx, bz);
+}
+
+static int npc_near(int bx, int bz, int pbx, int pbz, GAME_PLAY* play) {
+    return (bx == pbx && bz == pbz) ||
+           (mFI_SeamlessNear(bx, bz) && play->actor_info.list[ACTOR_PART_NPC].num_actors < NPC_SEAMLESS_MAX);
+}
+
 static void npc_frame(GAME_PLAY* play) {
     s_npc_frame++;
     if (is_host()) {
@@ -1976,7 +2148,8 @@ static void npc_frame(GAME_PLAY* play) {
         return;
     }
 
-    /* guest: the villagers that are not out here stay where the host's are;
+    /* guest: the villagers that are not out here or in the acres beside
+     * (seamless acres) stay where the host's are;
      * one the host has in this acre and we do not is brought out, one of
      * ours the host has elsewhere goes when out of sight */
     if (!pc_mp_npc_guest() || !outside_in_town() || play == NULL || s_npc_frame % 30 != 0 ||
@@ -2001,15 +2174,27 @@ static void npc_frame(GAME_PLAY* play) {
                 list->position.y = n->y;
                 list->position.z = n->z;
                 a->is_home = (n->flags & NPC_AT_HOME) ? TRUE : FALSE;
-                if ((n->flags & NPC_EXACT) && !(n->flags & NPC_HIDDEN) && bx == pbx && bz == pbz &&
+                if ((n->flags & NPC_EXACT) && !(n->flags & NPC_HIDDEN) && npc_near(bx, bz, pbx, pbz, play) &&
                     CLIP(npc_clip) != NULL && CLIP(npc_clip)->setupActor_proc != NULL) {
                     xyz_t p = { n->x, n->y, n->z };
                     int ux, uz;
 
-                    if (mFI_Wpos2BkandUtNuminBlock(&bx, &bz, &ux, &uz, p) &&
-                        CLIP(npc_clip)->setupActor_proc(play, a->id.npc_id, (s8)k, k, -1, bx, bz, ux, uz)) {
-                        list->appear_flag = FALSE;
-                        if (g_pc_verbose) printf("[MP] villager %d out here as the host's\n", k);
+                    if (mFI_Wpos2BkandUtNuminBlock(&bx, &bz, &ux, &uz, p)) {
+                        /* (an actor takes its block from the game's, as in
+                         * aSNMgr_set_npc_seamless) */
+                        s8 own_bx = play->block_table.block_x;
+                        s8 own_bz = play->block_table.block_z;
+                        int made;
+
+                        play->block_table.block_x = (s8)bx;
+                        play->block_table.block_z = (s8)bz;
+                        made = CLIP(npc_clip)->setupActor_proc(play, a->id.npc_id, (s8)k, k, -1, bx, bz, ux, uz);
+                        play->block_table.block_x = own_bx;
+                        play->block_table.block_z = own_bz;
+                        if (made) {
+                            list->appear_flag = FALSE;
+                            if (g_pc_verbose) printf("[MP] villager %d out here as the host's\n", k);
+                        }
                     }
                 }
             } else {
@@ -2022,7 +2207,7 @@ static void npc_frame(GAME_PLAY* play) {
                     continue;
                 }
                 out_of_sight = (actor->state_bitfield & ACTOR_STATE_NO_CULL) == 0;
-                if (bx != pbx || bz != pbz) {
+                if (!npc_kept(bx, bz, pbx, pbz)) {
                     if (out_of_sight) {
                         Actor_delete(actor);
                         if (g_pc_verbose) printf("[MP] villager %d is in another acre at the host's\n", k);
@@ -2364,65 +2549,74 @@ static void npc_room_frame(void) {
 typedef struct {
     u32 off, len;
     s16 guest_scene; /* a guest's change goes to the host while it is here: -1 never, -2 outdoors, -3 anywhere */
-    s16 guest_scene2;
+    s16 guest_scene2; /* (also there) */
+    s16 guest_scene3;
 } Region;
 
 static const Region s_regions[] = {
-    { SAVE_FIELD(weather), -1, -1 },
-    { SAVE_FIELD(melody), -3, -1 },
-    { SAVE_FIELD(museum_display), -1, -1 },
-    { SAVE_FIELD(noticeboard), -2, -1 },
-    { SAVE_FIELD(police_box), SCENE_POLICE_BOX, -1 },
-    { SAVE_FIELD(shop), SCENE_SHOP0, SCENE_CONVENI },
-    { SAVE_FIELD(needlework), SCENE_NEEDLEWORK, -1 },
-    { SAVE_FIELD(post_office), SCENE_POST_OFFICE, -1 },
-    { SAVE_FIELD(kabu_price_schedule), -1, -1 },
-    { SAVE_FIELD(event_save_data), -1, -1 },
-    { SAVE_FIELD(snowmen), -1, -1 },
+    { SAVE_FIELD(weather), -1, -1, -1 },
+    { SAVE_FIELD(melody), -3, -1, -1 },
+    { SAVE_FIELD(museum_display), -1, -1, -1 },
+    { SAVE_FIELD(noticeboard), -2, -1, -1 },
+    { SAVE_FIELD(police_box), SCENE_POLICE_BOX, -1, -1 },
+    { SAVE_FIELD(shop), SCENE_SHOP0, SCENE_CONVENI, -1 },
+    { SAVE_FIELD(needlework), SCENE_NEEDLEWORK, -1, -1 },
+    { SAVE_FIELD(post_office), SCENE_POST_OFFICE, -1, -1 },
+    { SAVE_FIELD(kabu_price_schedule), -1, -1, -1 },
+    /* the visitors: who comes and when is the host's; their stock and who got
+     * what (Redd, Gracie, Wendell, Saharah; Gulliver, Jingle...) a guest
+     * changes there (outdoors, Redd's tent, Gracie's car) goes to the host */
+    { offsetof(Save_t, event_save_data.special.scheduled),
+      offsetof(Save_t, event_save_data.special.event) - offsetof(Save_t, event_save_data.special.scheduled), -1, -1, -1 },
+    { SAVE_FIELD(event_save_data.special.event), -2, SCENE_BROKER_SHOP, SCENE_BUGGY },
+    { SAVE_FIELD(event_save_data.weekly), -2, -1, -1 },
+    { SAVE_FIELD(event_save_data.flags), -1, -1, -1 },
+    { SAVE_FIELD(snowmen), -2, -1, -1 },
     /* the houses outside the floors: size, roof, basement (homes[].haniwa_tempo
      * to door_original), the mailbox's letters (its flag), the gyroid at the
      * door (a visitor buys from it), the cockroaches, the music collected */
 #define HOUSE_REGIONS(h)                                                                                          \
     { offsetof(Save_t, homes[h].haniwa_tempo),                                                                    \
-      offsetof(Save_t, homes[h].door_original) + 1 - offsetof(Save_t, homes[h].haniwa_tempo), -1, -1 },          \
-        { SAVE_FIELD(homes[h].mailbox), -1, -1 }, { SAVE_FIELD(homes[h].haniwa), -2, -1 },                         \
-        { SAVE_FIELD(homes[h].goki), -1, -1 }, { SAVE_FIELD(homes[h].music_box), -1, -1 }
+      offsetof(Save_t, homes[h].door_original) + 1 - offsetof(Save_t, homes[h].haniwa_tempo), -1, -1, -1 },          \
+        { SAVE_FIELD(homes[h].mailbox), -1, -1, -1 }, { SAVE_FIELD(homes[h].haniwa), -2, -1, -1 },                         \
+        { SAVE_FIELD(homes[h].goki), -1, -1, -1 }, { SAVE_FIELD(homes[h].music_box), -1, -1, -1 }
     HOUSE_REGIONS(0), HOUSE_REGIONS(1), HOUSE_REGIONS(2), HOUSE_REGIONS(3),
 #undef HOUSE_REGIONS
     /* the villagers' own data (their clothes and umbrella, moving in or out,
      * moods...), the town's events and its other state */
-    { SAVE_FIELD(animals), -1, -1 },
-    { offsetof(Save_t, now_npc_max), 2, -1, -1 }, /* (and remove_animal_idx) */
-    { SAVE_FIELD(last_removed_animal_id), -1, -1 },
-    { SAVE_FIELD(event_save_common), -1, -1 },
-    { SAVE_FIELD(house_arrangement), -1, -1 },
-    { SAVE_FIELD(num_statues), -1, -1 },
-    { SAVE_FIELD(npc_force_go_home), -1, -1 },
-    { SAVE_FIELD(last_grow_time), -1, -1 },
-    { SAVE_FIELD(npc_used_tbl), -1, -1 },
-    { offsetof(Save_t, haniwa_scheduled), 3, -1, -1 }, /* (and dust_flag, clear_grass) */
-    { SAVE_FIELD(keep_house_size), -1, -1 },
-    { SAVE_FIELD(bridge), -1, -1 },
-    { SAVE_FIELD(fishRecord), -1, -1 },
-    { SAVE_FIELD(mask_cat), -1, -1 },
-    { SAVE_FIELD(return_animal), -1, -1 },
-    { SAVE_FIELD(LightHouse), -1, -1 },
-    { offsetof(Save_t, insect_term), 4, -1, -1 }, /* (the fish's term too) */
-    { SAVE_FIELD(good_field), -1, -1 },
-    { offsetof(Save_t, rainbow_month), 3, -1, -1 },
-    { SAVE_FIELD(add_npc), -1, -1 },
-    { SAVE_FIELD(monument_order), -1, -1 },
-    { SAVE_FIELD(monument_count), -1, -1 },
-    { SAVE_FIELD(sick_info), -1, -1 },
+    { SAVE_FIELD(animals), -1, -1, -1 },
+    { offsetof(Save_t, now_npc_max), 2, -1, -1, -1 }, /* (and remove_animal_idx) */
+    { SAVE_FIELD(last_removed_animal_id), -1, -1, -1 },
+    { SAVE_FIELD(event_save_common), -1, -1, -1 },
+    { SAVE_FIELD(house_arrangement), -1, -1, -1 },
+    { SAVE_FIELD(num_statues), -1, -1, -1 },
+    { SAVE_FIELD(npc_force_go_home), -1, -1, -1 },
+    { SAVE_FIELD(last_grow_time), -1, -1, -1 },
+    { SAVE_FIELD(npc_used_tbl), -1, -1, -1 },
+    { offsetof(Save_t, haniwa_scheduled), 3, -1, -1, -1 }, /* (and dust_flag, clear_grass) */
+    { SAVE_FIELD(keep_house_size), -1, -1, -1 },
+    { SAVE_FIELD(bridge), -1, -1, -1 },
+    { SAVE_FIELD(fishRecord), -2, -1, -1 }, /* (a guest's catch in the tourney) */
+    { SAVE_FIELD(mask_cat), -1, -1, -1 },
+    { SAVE_FIELD(return_animal), -1, -1, -1 },
+    { SAVE_FIELD(LightHouse), -1, -1, -1 },
+    { offsetof(Save_t, insect_term), 4, -1, -1, -1 }, /* (the fish's term too) */
+    { SAVE_FIELD(good_field), -1, -1, -1 },
+    { offsetof(Save_t, rainbow_month), 3, -1, -1, -1 },
+    { SAVE_FIELD(add_npc), -1, -1, -1 },
+    { SAVE_FIELD(monument_order), -1, -1, -1 },
+    { SAVE_FIELD(monument_count), -1, -1, -1 },
+    { SAVE_FIELD(sick_info), -1, -1, -1 },
 };
 #define NREGIONS ((int)(sizeof(s_regions) / sizeof(s_regions[0])))
 #define REGION_WEATHER 0
 #define REGION_CHUNK 1000
 
 static u8* s_region_shadow[NREGIONS]; /* host: as sent; guest: as last taken from the host */
+static u8 s_region_was_at[NREGIONS]; /* guest: at the place where it may change region r, last time */
+static int s_region_got = 0;          /* guest: the host's data came since arriving */
 static int s_region_ok = 0;
 static u32 s_region_frame = 0;
-static u32 s_region_applied_ms = 0;
 
 static u8* save_base(void) {
     return (u8*)&Common_Get(save).save;
@@ -2430,6 +2624,8 @@ static u8* save_base(void) {
 
 static void region_reset(void) {
     s_region_ok = 0;
+    s_region_got = 0;
+    memset(s_region_was_at, 0, sizeof(s_region_was_at));
 }
 
 static void region_send(int to, int r, u32 off, u32 n) {
@@ -2487,7 +2683,8 @@ static int guest_at(const Region* rg) {
     int scene = Save_Get(scene_no);
 
     if (rg->guest_scene == -3) return 1;
-    if (rg->guest_scene == -2) return outside_in_town();
+    if (rg->guest_scene == -2 && outside_in_town()) return 1;
+    if (rg->guest_scene >= -2 && (scene == rg->guest_scene2 || scene == rg->guest_scene3)) return 1;
     return rg->guest_scene >= 0 && (scene == rg->guest_scene || scene == rg->guest_scene2 ||
                                     (rg->guest_scene == SCENE_SHOP0 && (scene == SCENE_SUPER || scene == SCENE_DEPART ||
                                                                          scene == SCENE_DEPART_2)));
@@ -2502,6 +2699,92 @@ static void weather_now(void) {
     }
 }
 
+/* --- Where the day's visitors and events are ---
+ *
+ * The event manager picks the spots of the visitors (Gulliver on the beach,
+ * Joan, Wendell, Pascal...) and the events' areas from the clock's seconds
+ * when the town loads, and keeps them in Common event_common (not the Save):
+ * each game would pick its own. The host sends its own; a guest takes them,
+ * and its next scene puts them there (the tents' lots are the Save's,
+ * event_save_common, a region). */
+static u8 s_evplace_sent[4 + sizeof(((mEv_common_data_c*)0)->place) + sizeof(((mEv_common_data_c*)0)->area)];
+
+static int evplace_pack(u8* out) {
+    mEv_common_data_c* ev = Common_GetPointer(event_common);
+    int n = 0;
+
+    w16(out + n, (u16)ev->place_use_bitfield);
+    n += 2;
+    memcpy(out + n, ev->place, sizeof(ev->place));
+    n += (int)sizeof(ev->place);
+    w16(out + n, (u16)ev->area_use_bitfield);
+    n += 2;
+    memcpy(out + n, ev->area, sizeof(ev->area));
+    n += (int)sizeof(ev->area);
+    return n;
+}
+
+static void evplace_send(int to) {
+    u8 m[5 + sizeof(s_evplace_sent)];
+    int n = evplace_pack(m + 5);
+
+    m[0] = G_EVPLACE;
+    w32(m + 1, s_my_town);
+    pc_mp_send_game(s_mp, to, 1, m, 5 + n);
+    if (to < 0) memcpy(s_evplace_sent, m + 5, (size_t)n);
+}
+
+static void evplace_frame(void) {
+    u8 now[sizeof(s_evplace_sent)];
+
+    if (!is_host() || !in_shared_town()) return;
+    evplace_pack(now);
+    if (memcmp(now, s_evplace_sent, sizeof(now)) != 0) evplace_send(-1);
+}
+
+static void evplace_message(int from, const u8* m, int len) {
+    mEv_common_data_c* ev = Common_GetPointer(event_common);
+    const u8* p = m + 5;
+
+    if (is_host() || from != 0 || len != 5 + (int)sizeof(s_evplace_sent) || r32(m + 1) != s_my_town ||
+        !in_shared_town()) {
+        return;
+    }
+    {
+        /* the host's spots, but this game's own snowballs (their parts'
+         * places: ac_event_manager.c, ac_snowman.c) where they are; the
+         * areas hold each game's live state of an event (Gracie, K.K., the
+         * tourney, the Wisp, snowballs rolled) and stay as they are */
+        mEv_place_c host[mEv_PLACE_NUM];
+        u16 host_bits = r16(p);
+        u16 bits = 0;
+        mEv_place_c merged[mEv_PLACE_NUM];
+
+        memcpy(host, p + 2, sizeof(host));
+        memset(merged, 0, sizeof(merged));
+        for (int i = 0; i < mEv_PLACE_NUM; i++) {
+            if ((ev->place_use_bitfield & (1 << i)) && ev->place[i].info.type == (u8)mEv_EVENT_SNOWMAN_SEASON) {
+                merged[i] = ev->place[i];
+                bits |= (u16)(1 << i);
+            }
+        }
+        for (int i = 0; i < mEv_PLACE_NUM; i++) {
+            int slot = i;
+
+            if (!(host_bits & (1 << i)) || host[i].info.type == (u8)mEv_EVENT_SNOWMAN_SEASON) continue;
+            if (bits & (1 << slot)) {
+                for (slot = 0; slot < mEv_PLACE_NUM && (bits & (1 << slot)); slot++) {
+                }
+                if (slot == mEv_PLACE_NUM) break;
+            }
+            merged[slot] = host[i];
+            bits |= (u16)(1 << slot);
+        }
+        memcpy(ev->place, merged, sizeof(merged));
+        ev->place_use_bitfield = (s16)bits;
+    }
+}
+
 static void region_message(int from, const u8* m, int len) {
     int r;
     u32 off, n;
@@ -2510,6 +2793,7 @@ static void region_message(int from, const u8* m, int len) {
     if (m[0] == G_REGION_REQ) {
         if (is_host()) {
             for (r = 0; r < NREGIONS; r++) region_send(from, r, 0, s_regions[r].len);
+            evplace_send(from);
         }
         return;
     }
@@ -2528,13 +2812,24 @@ static void region_message(int from, const u8* m, int len) {
     if (from != 0) return;
     memcpy(save_base() + s_regions[r].off + off, m + 12, n);
     memcpy(s_region_shadow[r] + off, m + 12, n);
-    s_region_applied_ms = pc_net_ms();
+    s_region_got = 1;
     if (r == REGION_WEATHER) weather_now();
+    if (s_regions[r].off == offsetof(Save_t, event_save_data.flags)) {
+        /* the game reads the saved events (Nook's shop renewed...) from its
+         * copy in Common, taken when the town loaded: the host's, with the
+         * visitor's own (its gateway) kept */
+        u32 frgn = 1u << mEv_GET_SUBTYPE(mEv_SAVED_GATEWAY_FRGN);
+        u32 flags = (Save_Get(event_save_data).flags & ~frgn) | (Common_Get(event_flags[mEv_SAVED_EVENT]) & frgn);
+
+        Common_Get(event_flags[mEv_SAVED_EVENT]) = flags;
+        Save_Get(event_save_data).flags = flags;
+    }
 }
 
 static void region_frame(void) {
     s_region_frame++;
     if (!in_shared_town() || s_region_frame % 60 != 0 || !region_shadows()) return;
+    evplace_frame();
     if (!s_region_ok) {
         for (int r = 0; r < NREGIONS; r++) memcpy(s_region_shadow[r], save_base() + s_regions[r].off, s_regions[r].len);
         s_region_ok = 1;
@@ -2544,14 +2839,18 @@ static void region_frame(void) {
         for (int r = 0; r < NREGIONS; r++) region_diff(r, -1);
         return;
     }
-    /* a guest: what it changed itself at a place where it can (not just
-     * after the host's data came) goes to the host */
-    if (s_visit != PC_MP_VISIT_THERE || pc_net_ms() - s_region_applied_ms < 3000) return;
+    /* a guest: what it changed itself at a place where it can goes to the
+     * host (the host's data is taken into the save and the shadow alike, so
+     * it does not come back), also what it changed there just before leaving */
+    if (s_visit != PC_MP_VISIT_THERE || !s_region_got) return;
     for (int r = 0; r < NREGIONS; r++) {
-        if (s_regions[r].guest_scene != -1 && guest_at(&s_regions[r])) {
+        int at = s_regions[r].guest_scene != -1 && guest_at(&s_regions[r]);
+
+        if (at || s_region_was_at[r]) {
             region_diff(r, 0);
         } else {
             memcpy(s_region_shadow[r], save_base() + s_regions[r].off, s_regions[r].len);
         }
+        s_region_was_at[r] = (u8)at;
     }
 }

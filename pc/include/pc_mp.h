@@ -25,7 +25,7 @@
 extern "C" {
 #endif
 
-#define PC_MP_PROTOCOL 3
+#define PC_MP_PROTOCOL 4
 #define PC_MP_MAX_PLAYERS 8
 #define PC_MP_DEFAULT_PORT 47070
 #define PC_MP_LAN_PORT 47071 /* where rooms on the network listen for the broadcast */
