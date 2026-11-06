@@ -32,6 +32,7 @@ PCSettings g_pc_settings = {
     .seamless_blocks = 1,
     .auto_update = 1,
     .hd_textures = 1,
+    .specialized_shaders = 1,
 #ifdef __ANDROID__
     .hd_quality = 1,
 #endif
@@ -88,6 +89,8 @@ static const struct {
     { "ui_language", &g_pc_settings.ui_language, 0, 2 },
     { "hd_textures", &g_pc_settings.hd_textures, 0, 1 },
     { "hd_quality", &g_pc_settings.hd_quality, 0, 1 },
+    { "specialized_shaders", &g_pc_settings.specialized_shaders, 0, 1 },
+    { "renderer", &g_pc_settings.renderer, 0, 2 },
     { "mp_port", &g_pc_settings.mp_port, 1024, 65535 },
 };
 
@@ -145,6 +148,11 @@ void pc_settings_save(void) {
     fprintf(f, "\n");
     fprintf(f, "# Anti-aliasing samples: 0 = off, 2, 4, or 8\n");
     fprintf(f, "msaa = %d\n", g_pc_settings.msaa);
+    fprintf(f, "\n");
+    fprintf(f, "# Graphics API: 0 = OpenGL, 1 = Vulkan, 2 = Direct3D 12 (Windows); OpenGL when it cannot be used\n");
+    fprintf(f, "renderer = %d\n", g_pc_settings.renderer);
+    fprintf(f, "# GX shader: 1 = one made for each way the game draws (less work for the GPU), 0 = one for all\n");
+    fprintf(f, "specialized_shaders = %d\n", g_pc_settings.specialized_shaders);
     fprintf(f, "\n");
     fprintf(f, "[Enhancements]\n");
     fprintf(f, "# Load HD textures: 0 = while playing (on a thread), 1 = all at startup\n");
@@ -325,7 +333,7 @@ void pc_settings_apply(void) {
 #ifdef __ANDROID__
     /* The game always fills the screen; window mode and size are the PC's
      * (changing them took the app out of full screen) */
-    SDL_GL_SetSwapInterval(g_pc_settings.vsync);
+    pc_gfx_set_vsync(g_pc_settings.vsync);
     printf("[Settings] Applied: vsync=%d msaa=%d\n", g_pc_settings.vsync, g_pc_settings.msaa);
     return;
 #endif
@@ -369,7 +377,7 @@ void pc_settings_apply(void) {
         }
     }
 
-    SDL_GL_SetSwapInterval(g_pc_settings.vsync);
+    pc_gfx_set_vsync(g_pc_settings.vsync);
     pc_platform_update_window_size();
 
     printf("[Settings] Applied: %dx%d fullscreen=%d vsync=%d msaa=%d\n",

@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+"""Write pc/src/gen/pc_shaders.h: the port's shaders for every backend.
+
+- OpenGL: the GLSL of pc/shaders/*.vert|frag as text; the backend puts a
+  prelude in front at run time (pc_gx_tev.c).
+- Vulkan: SPIR-V, compiled here with glslangValidator from the same sources
+  with a Vulkan prelude; the GX shader's configuration values
+  (pc/include/pc_gx_config.h) become specialization constants.
+- Direct3D 12: HLSL (shader model 5.1) made from that SPIR-V with
+  spirv-cross; the backend compiles it at run time (D3DCompile), with each
+  configuration value as a SPIRV_CROSS_CONSTANT_ID_<n> define.
+
+The header is committed, so a build needs neither tool. Run this after
+changing a shader or the configuration list; --check (CI) fails if the
+header is out of date.
+
+usage: gen_shaders.py [--check]
+"""
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+PC = Path(__file__).resolve().parent.parent
+SHADERS = PC / "shaders"
+OUT = PC / "src" / "gen" / "pc_shaders.h"
+
+# (name, file, stage)
+GLSL = [("gx_vert", "gx.vert", "vert"), ("gx_frag", "gx.frag", "frag"),
+        ("ui_vert", "ui.vert", "vert"), ("ui_frag", "ui.frag", "frag")]
+
+
+def config_names():
+    h = (PC / "include" / "pc_gx_config.h").read_text()
+    stage = re.search(r"#define PC_GX_CONFIG_STAGE\(X, s\)(.*?)\n\n", h, re.S).group(1)
+    stage_names = re.findall(r"X\(S##s##_(\w+)\)", stage)
+    glob = re.search(r"#define PC_GX_CONFIG_FIELDS\(X\)(.*?)PC_GX_CONFIG_STAGE\(X, 0\)", h, re.S).group(1)
+    return re.findall(r"X\((\w+)\)", glob) + [f"S{s}_{n}" for s in range(3) for n in stage_names]
+
+
+def vk_prelude(gx, d3d12=False):
+    """The Vulkan prelude (d3d12: the same for spirv-cross to HLSL, y not flipped)."""
+    p = ["#version 450",
+         "#define VS_IN(n) layout(location = n) in",
+         "#define VARYING_OUT(n) layout(location = n) out",
+         "#define VARYING_IN(n) layout(location = n) in",
+         "#define FRAG_OUT layout(location = 0) out",
+         "#define CLIP_DEPTH_ZERO_ONE 1"]
+    if not d3d12:
+        p.append("#define CLIP_FLIP_Y 1")
+    if gx:
+        names = config_names()
+        p += ["#define DATA_BLOCK(b, name, type, var, n) layout(std140, set = 0, binding = b) uniform name { type var[n]; }",
+              "#define TEXTURE(b) layout(set = 1, binding = b) uniform sampler2D",
+              f"#define GX_CFG_VEC4S {len(names) // 4}",
+              f"#define GX_CFG_SWAP_VEC4 {names.index('SWAP0_R') // 4}",
+              f"#define GX_CFG_STAGE_VEC4 {names.index('S0_CA') // 4}",
+              "layout(constant_id = 0) const int SC_UBER = 1;",
+              "#define GX_UBER SC_UBER"]
+        for i, n in enumerate(names):
+            p.append(f"layout(constant_id = {i + 1}) const int SC_{n} = 0;")
+            p.append(f"#define C_{n} ((SC_UBER != 0) ? gx_cfg[{i // 4}].{'xyzw'[i % 4]} : SC_{n})")
+    else:
+        p += ["#define DATA_BLOCK(b, name, type, var, n) layout(push_constant) uniform name { type var[n]; }",
+              "#define TEXTURE(b) layout(set = 0, binding = b) uniform sampler2D"]
+    return "\n".join(p) + "\n"
+
+
+def spirv(fn, stage, prelude, tmp):
+    """SPIR-V words of pc/shaders/fn with the prelude"""
+    src = Path(tmp) / f"{fn}.{stage}"
+    out = Path(tmp) / f"{fn}.spv"
+    src.write_text(prelude + "#line 1\n" + (SHADERS / fn).read_text())
+    r = subprocess.run(["glslangValidator", "-V", "--target-env", "vulkan1.0", "-S", stage, "-o", str(out), str(src)],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        sys.exit(f"{fn}: {r.stdout}{r.stderr}")
+    data = out.read_bytes()
+    return [int.from_bytes(data[i:i + 4], "little") for i in range(0, len(data), 4)]
+
+
+def hlsl(fn, stage, prelude, tmp):
+    """HLSL (shader model 5.0) of pc/shaders/fn: SPIR-V with the prelude, through spirv-cross"""
+    words = spirv(fn, stage, prelude, tmp)
+    spv = Path(tmp) / f"{fn}.d3d12.spv"
+    out = Path(tmp) / f"{fn}.hlsl"
+    spv.write_bytes(b"".join(w.to_bytes(4, "little") for w in words))
+    r = subprocess.run(["spirv-cross", "--hlsl", "--shader-model", "50", str(spv), "--output", str(out)],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        sys.exit(f"{fn}: spirv-cross: {r.stdout}{r.stderr}")
+    return out.read_text()
+
+
+def c_words(name, words):
+    out = [f"static const unsigned int {name}[{len(words)}] = {{"]
+    for i in range(0, len(words), 8):
+        out.append("    " + ", ".join(f"0x{w:08x}" for w in words[i:i + 8]) + ",")
+    out.append("};")
+    return "\n".join(out) + "\n"
+
+
+def c_string(name, text):
+    out = [f"static const char {name}[] ="]
+    for line in text.splitlines(keepends=True):
+        esc = line.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+        out.append(f'    "{esc}"')
+    out[-1] += ";"
+    return "\n".join(out) + "\n"
+
+
+def generate():
+    names = config_names()
+    parts = [
+        "/* pc_shaders.h - generated by pc/tools/gen_shaders.py from pc/shaders; do not edit. */\n",
+        "#ifndef PC_SHADERS_H\n#define PC_SHADERS_H\n\n",
+        f"/* pc_gx_config.h has {len(names)} configuration values */\n",
+        f"#define PC_SHADERS_GX_CONFIG_COUNT {len(names)}\n\n",
+    ]
+    for name, fn, _stage in GLSL:
+        parts.append(c_string(f"pc_shader_{name}_glsl", (SHADERS / fn).read_text()))
+        parts.append("\n")
+    if shutil.which("glslangValidator") is None:
+        sys.exit("glslangValidator is needed (apt install glslang-tools)")
+    parts.append("/* Vulkan: SPIR-V (constant_id 0 = uber, n + 1 = configuration value n) */\n")
+    with tempfile.TemporaryDirectory() as tmp:
+        for name, fn, stage in GLSL:
+            words = spirv(fn, stage, vk_prelude(name.startswith("gx")), tmp)
+            parts.append(c_words(f"pc_shader_{name}_spv", words))
+            parts.append("\n")
+    if shutil.which("spirv-cross") is None:
+        sys.exit("spirv-cross is needed (apt install spirv-cross)")
+    parts.append("/* Direct3D 12: HLSL for D3DCompile (SPIRV_CROSS_CONSTANT_ID_<n> as above) */\n")
+    with tempfile.TemporaryDirectory() as tmp:
+        for name, fn, stage in GLSL:
+            parts.append(c_string(f"pc_shader_{name}_hlsl", hlsl(fn, stage, vk_prelude(name.startswith("gx"), True), tmp)))
+            parts.append("\n")
+    parts.append("#endif\n")
+    return "".join(parts)
+
+
+def main():
+    check = "--check" in sys.argv[1:]
+    text = generate()
+    if check:
+        if not OUT.exists() or OUT.read_text() != text:
+            sys.exit(f"{OUT.relative_to(PC.parent)} is out of date: run pc/tools/gen_shaders.py")
+        print(f"{OUT.relative_to(PC.parent)} is up to date")
+        return
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT.write_text(text)
+    print(f"wrote {OUT.relative_to(PC.parent)}")
+
+
+if __name__ == "__main__":
+    main()

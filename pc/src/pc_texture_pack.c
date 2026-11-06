@@ -141,15 +141,6 @@ static xxh_u64 xxhash64(const void* input, int len) {
 
 /* --- GL formats --- */
 
-#ifndef GL_COMPRESSED_RGBA_S3TC_DXT1_EXT
-#define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT 0x83F1
-#endif
-#ifndef GL_COMPRESSED_RGBA_S3TC_DXT5_EXT
-#define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83F3
-#endif
-#ifndef GL_COMPRESSED_RGBA_BPTC_UNORM
-#define GL_COMPRESSED_RGBA_BPTC_UNORM 0x8E8C
-#endif
 
 static int g_has_bc7 = 0;
 static int g_has_s3tc = 0;
@@ -177,7 +168,7 @@ typedef struct {
     xxh_u32 comp_size;
     xxh_u32 size;
     unsigned short method;  /* zip: 0 stored, 8 deflated */
-    GLuint gl;
+    PCTex gl;
     unsigned short tex_w, tex_h;
     xxh_u32 bytes;
     xxh_u32 last_used;      /* frame */
@@ -632,7 +623,7 @@ static void scan_dir(const char* dir, int depth, int zips) {
 
 typedef struct {
     int w, h;
-    GLenum gl_internal; /* 0: RGBA8 */
+    int gl_internal; /* the GPU format (pc_gfx.h): PC_TEXF_RGBA8 (0) or a BC format */
     int data_size;
     unsigned char* data;
 } Image;
@@ -736,9 +727,7 @@ static int decode_dds(const unsigned char* buf, size_t len, Image* im, int half)
             if (im->data == NULL) return 0;
             memcpy(im->data, buf + off, need);
             im->data_size = (int)need;
-            im->gl_internal = kind == BC7 ? GL_COMPRESSED_RGBA_BPTC_UNORM
-                            : kind == BC1 ? GL_COMPRESSED_RGBA_S3TC_DXT1_EXT
-                                          : GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
+            im->gl_internal = kind == BC7 ? PC_TEXF_BC7 : kind == BC1 ? PC_TEXF_BC1 : PC_TEXF_BC3;
             return 1;
         }
         if (!bc_to_rgba(im, kind, buf + off)) return 0;
@@ -828,28 +817,24 @@ static int load_entry(const Entry* e, FILE** zip_files, Image* im) {
     return ok;
 }
 
-/* --- GL --- */
+/* --- GPU --- */
 
-static GLuint upload(Image* im) {
-    GLuint tex;
+static PCTex upload(Image* im) {
+    PCTex tex;
 
     /* an error the game's drawing left must not count as this upload's */
-    for (int i = 0; i < 16 && glGetError() != GL_NO_ERROR; i++) {
-    }
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    if (im->gl_internal != 0) {
-        glCompressedTexImage2D(GL_TEXTURE_2D, 0, im->gl_internal, im->w, im->h, 0, im->data_size, im->data);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    pc_gfx_tex_error();
+    tex = pc_gfx_tex_new();
+    pc_gfx_bind(tex);
+    pc_gfx_tex_image(im->w, im->h, im->gl_internal, im->data, (size_t)im->data_size);
+    if (im->gl_internal != PC_TEXF_RGBA8) {
+        pc_gfx_tex_filter(PC_FILTER_LINEAR, PC_FILTER_LINEAR);
     } else {
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, im->w, im->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, im->data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        pc_gfx_tex_generate_mipmap();
+        pc_gfx_tex_filter(PC_FILTER_LINEAR_MIPMAP_LINEAR, PC_FILTER_LINEAR);
     }
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    if (glGetError() != GL_NO_ERROR) {
-        glDeleteTextures(1, &tex);
+    if (pc_gfx_tex_error()) {
+        pc_gfx_tex_delete(tex);
         return 0;
     }
     return tex;
@@ -875,7 +860,7 @@ static void entry_loaded(int idx, Image* im) {
 static void entry_unload(Entry* e) {
     if (e->state == ST_LOADED && e->gl != 0) {
         pc_gx_texture_forget(e->gl);
-        glDeleteTextures(1, &e->gl);
+        pc_gfx_tex_delete(e->gl);
         s_gpu_bytes -= e->bytes;
         s_loaded--;
     }
@@ -1000,18 +985,8 @@ static void free_index(void) {
 }
 
 static void check_gl(void) {
-    GLint n = 0;
-
-    g_has_bc7 = g_has_s3tc = 0;
-    glGetIntegerv(GL_NUM_EXTENSIONS, &n);
-    for (GLint i = 0; i < n; i++) {
-        const char* ext = (const char*)glGetStringi(GL_EXTENSIONS, i);
-
-        if (ext == NULL) continue;
-        if (strcmp(ext, "GL_ARB_texture_compression_bptc") == 0 || strcmp(ext, "GL_EXT_texture_compression_bptc") == 0)
-            g_has_bc7 = 1;
-        if (strcmp(ext, "GL_EXT_texture_compression_s3tc") == 0) g_has_s3tc = 1;
-    }
+    g_has_bc7 = pc_gfx_has_bc7();
+    g_has_s3tc = pc_gfx_has_s3tc();
 }
 
 static void preload_all(void);
@@ -1207,7 +1182,7 @@ static int gc_texture_data_size(int w, int h, unsigned int fmt) {
     return ((w + bw - 1) / bw) * ((h + bh - 1) / bh) * block_bytes;
 }
 
-GLuint pc_texture_pack_lookup(const void* data, int data_size, int w, int h, unsigned int fmt, const void* tlut_data,
+PCTex pc_texture_pack_lookup(const void* data, int data_size, int w, int h, unsigned int fmt, const void* tlut_data,
                               int tlut_entries, int tlut_is_be, int* out_w, int* out_h, int* out_index,
                               unsigned long long* pending_key) {
     int hash_size, idx;

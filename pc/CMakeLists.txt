@@ -475,6 +475,7 @@ set(PC_SOURCES
     ${DATA_FIXUPS_C}
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_gx.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_gx_tev.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_gx_shader.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_gx_texture.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_os.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_dvd.c
@@ -509,6 +510,10 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_menu.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_textures.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_mp.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_render.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gfx/pc_gfx.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gfx/pc_gfx_vk.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gfx/pc_gfx_d3d12.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_keybindings.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_nes_fixnes.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_stubs.c
@@ -543,7 +548,6 @@ set(IMGUI_SOURCES
     ${IMGUI_DIR}/imgui_tables.cpp
     ${IMGUI_DIR}/imgui_widgets.cpp
     ${IMGUI_DIR}/backends/imgui_impl_sdl2.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_impl_opengl3.cpp
 )
 
 # =============================================================================
@@ -629,7 +633,7 @@ set_property(SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_texture_pack.c ${CMAKE_CU
 set_source_files_properties(${IMGUI_SOURCES} PROPERTIES COMPILE_OPTIONS "-O2;-w")
 set_property(SOURCE ${IMGUI_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_menu.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_textures.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_mp.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_mp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_render.cpp
     APPEND PROPERTY INCLUDE_DIRECTORIES ${IMGUI_DIR})
 set_property(SOURCE ${IMGUI_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_menu.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_textures.cpp
@@ -683,6 +687,23 @@ else()
     target_link_libraries(afe_pc ${SDL2_LIBRARIES})
 endif()
 
+# Vulkan (pc_gfx_vk.c): the loader is opened at run time through SDL, so the
+# build needs only the headers (pc/lib/vulkan)
+option(PC_VULKAN "Build the Vulkan renderer" ON)
+if(PC_VULKAN)
+    target_compile_definitions(afe_pc PRIVATE PC_GFX_VULKAN_BUILT)
+    target_include_directories(afe_pc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/vulkan/include)
+endif()
+# Direct3D 12 (pc_gfx_d3d12.c, Windows 10 or later): d3d12.dll, dxgi.dll and
+# d3dcompiler_47.dll are opened at run time, so the game still starts on older
+# Windows (with OpenGL)
+if(WIN32)
+    option(PC_D3D12 "Build the Direct3D 12 renderer" ON)
+    if(PC_D3D12)
+        target_compile_definitions(afe_pc PRIVATE PC_GFX_D3D12_BUILT)
+    endif()
+endif()
+
 if(PC_GLES)
     # OpenGL ES 3.0 (pc_gl.h); libGLESv2 carries the ES 3 entry points on desktops
     target_compile_definitions(afe_pc PRIVATE PC_GLES)
@@ -720,14 +741,7 @@ else()
     )
 endif()
 
-add_custom_command(TARGET afe_pc POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${PC_DATA_DIR}/shaders"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/shaders/default.vert"
-        "${CMAKE_CURRENT_SOURCE_DIR}/shaders/default.frag"
-        "${PC_DATA_DIR}/shaders/"
-    COMMENT "Copying shader files to ${PC_DATA_DIR}/shaders/"
-)
+# (the shaders are in the executable: pc/src/gen/pc_shaders.h, pc/tools/gen_shaders.py)
 # Notices of what the game carries: the menu font (SIL OFL) and the libraries
 add_custom_command(TARGET afe_pc POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${PC_DATA_DIR}/licenses"
@@ -774,7 +788,6 @@ if(PC_STRIP_ASSETS AND NOT ANDROID)
         COMMAND ${CMAKE_COMMAND} -E rm -rf "${CMAKE_BINARY_DIR}/dist"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${PC_DIST_DIR}"
         COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:afe_pc>" "${PC_DATA_DIR}/${PC_RELMAP_NAME}" "${PC_DIST_DIR}/"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${PC_DATA_DIR}/shaders" "${PC_DIST_DIR}/shaders"
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${PC_DATA_DIR}/licenses" "${PC_DIST_DIR}/licenses"
         COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE" "${PC_DIST_DIR}/LICENSE.txt")
     if(WIN32 AND SDL2_DLL_PATH)

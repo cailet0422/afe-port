@@ -43,6 +43,7 @@ int           g_pc_deterministic = 0;
 int           g_pc_autosave_test = 0;
 int           g_pc_deterministic_days = 0; /* --days: start that many days after the fixed date */
 int           g_pc_verbose = 0;
+int           g_pc_renderer_override = -1;
 int           g_pc_time_override = -1; /* -1=system clock, 0-23=override hour */
 int           g_pc_min_override = -1; /* -1=system clock, 0-59=override minute */
 int           g_pc_sec_override = -1; /* -1=system clock, 0-59=override second */
@@ -179,22 +180,12 @@ void pc_platform_init(void) {
         pc_fatal("SDL_Init failed: %s", SDL_GetError());
     }
 
-#ifdef PC_GLES
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-#else
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-#endif
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     {
-        Uint32 flags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
+        Uint32 flags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
         int win_w = g_pc_settings.window_width;
         int win_h = g_pc_settings.window_height;
         int samples = 0;
+        PCGfxApi api = (PCGfxApi)g_pc_settings.renderer;
 #ifdef PC_ENHANCEMENTS
         samples = g_pc_settings.msaa;
 #endif
@@ -208,38 +199,37 @@ void pc_platform_init(void) {
             flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
         }
 #endif
-        /* A GPU may not offer the MSAA asked for (a Galaxy Z Flip6 has no 8x
-         * EGL config, and the game then ended at every start because the
-         * setting was saved): try fewer samples, down to none */
-        for (;;) {
-            SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, samples > 0 ? 1 : 0);
-            SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, samples);
-            g_pc_window = SDL_CreateWindow(
-                PC_WINDOW_TITLE,
-                SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                win_w, win_h, flags
-            );
-            if (g_pc_window) {
-                g_pc_gl_context = SDL_GL_CreateContext(g_pc_window);
-                if (g_pc_gl_context) {
-                    break;
-                }
-                fprintf(stderr, "SDL_GL_CreateContext failed (MSAA %dx): %s\n", samples, SDL_GetError());
-                SDL_DestroyWindow(g_pc_window);
-                g_pc_window = NULL;
-            } else {
-                fprintf(stderr, "SDL_CreateWindow failed (MSAA %dx): %s\n", samples, SDL_GetError());
+        if (g_pc_renderer_override >= 0) {
+            api = (PCGfxApi)g_pc_renderer_override;
+        } else if (api != PC_GFX_OPENGL) {
+            /* a driver that crashes the game as it starts would keep it from
+             * reaching the settings: the mark stays when the last start with
+             * this API ended before it showed its first seconds (pc_gfx.c) */
+            FILE* mark = fopen(PC_GFX_START_MARK, "rb");
+
+            if (mark != NULL) {
+                fclose(mark);
+                remove(PC_GFX_START_MARK);
+                printf("[PC] %s stopped the last start: using OpenGL\n", pc_gfx_api_name(api));
+                api = PC_GFX_OPENGL;
+                g_pc_settings.renderer = PC_GFX_OPENGL;
+                pc_settings_save();
+            } else if ((mark = fopen(PC_GFX_START_MARK, "wb")) != NULL) {
+                fprintf(mark, "%s\n", pc_gfx_api_name(api));
+                fclose(mark);
             }
-            if (samples <= 0) {
-                pc_fatal("The game window could not be opened: %s", SDL_GetError());
-            }
-            samples = samples > 4 ? 4 : samples / 2;
         }
-#ifdef PC_ENHANCEMENTS
-        if (samples != g_pc_settings.msaa) {
-            printf("[PC] MSAA %dx is not available, using %dx\n", g_pc_settings.msaa, samples);
+        /* the graphics API chosen in the settings, or OpenGL when that one
+         * cannot be used here (no driver, an old GPU) */
+        if (api != PC_GFX_OPENGL &&
+            (!pc_gfx_api_built(api) || !pc_gfx_open_window(api, PC_WINDOW_TITLE, win_w, win_h, flags, samples))) {
+            printf("[PC] %s is not available here, using OpenGL\n", pc_gfx_api_name(api));
+            api = PC_GFX_OPENGL;
         }
-#endif
+        if (api == PC_GFX_OPENGL) {
+            pc_gfx_open_window(PC_GFX_OPENGL, PC_WINDOW_TITLE, win_w, win_h, flags, samples);
+        }
+        printf("[PC] Graphics: %s (%s)\n", pc_gfx_api_name(g_pc_gfx_api), pc_gfx_device_name());
     }
 #ifndef __ANDROID__
     {
@@ -262,24 +252,9 @@ void pc_platform_init(void) {
     SDL_StopTextInput();
 #endif
 
-#ifndef PC_GLES
-    if (!gladLoadGL((GLADloadfunc)SDL_GL_GetProcAddress)) {
-        pc_fatal("OpenGL 3.3 could not be loaded (gladLoadGL failed).");
-    }
-#endif
-
-    printf("[PC] OpenGL %s (%s, %s)\n", (const char*)glGetString(GL_VERSION), (const char*)glGetString(GL_RENDERER),
-           (const char*)glGetString(GL_VENDOR));
-
-    SDL_GL_SetSwapInterval(g_pc_settings.vsync);
+    pc_gfx_set_vsync(g_pc_settings.vsync);
 
     pc_platform_update_window_size();
-
-#if defined(PC_ENHANCEMENTS) && !defined(PC_GLES)
-    if (g_pc_settings.msaa > 0) {
-        glEnable(GL_MULTISAMPLE);
-    }
-#endif
 
     pc_gx_init();
     pc_texture_pack_init();
@@ -299,14 +274,7 @@ void pc_platform_shutdown(void) {
     pc_texture_pack_shutdown();
     pc_gx_shutdown();
 
-    if (g_pc_gl_context) {
-        SDL_GL_DeleteContext(g_pc_gl_context);
-        g_pc_gl_context = NULL;
-    }
-    if (g_pc_window) {
-        SDL_DestroyWindow(g_pc_window);
-        g_pc_window = NULL;
-    }
+    pc_gfx_close_window();
     SDL_Quit();
 #ifdef __ANDROID__
     /* Quit Game and the restart after the Korean patch end here (the game's
@@ -317,13 +285,13 @@ void pc_platform_shutdown(void) {
 }
 
 void pc_platform_update_window_size(void) {
-    SDL_GL_GetDrawableSize(g_pc_window, &g_pc_window_w, &g_pc_window_h);
+    pc_gfx_drawable_size(&g_pc_window_w, &g_pc_window_h);
     if (g_pc_window_w <= 0) g_pc_window_w = PC_SCREEN_WIDTH;
     if (g_pc_window_h <= 0) g_pc_window_h = PC_SCREEN_HEIGHT;
 }
 
 void pc_platform_swap_buffers(void) {
-    SDL_GL_SwapWindow(g_pc_window);
+    pc_gfx_present();
 }
 
 /* A left click on the minimap opens the town map (taps come as fingers,
@@ -351,6 +319,7 @@ int pc_platform_poll_events(void) {
     pc_typing_frame();
 
     while (SDL_PollEvent(&event)) {
+        pc_gfx_handle_event(&event);
         if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_AC_BACK) {
             event.key.keysym.sym = SDLK_ESCAPE; /* Android's back button */
         }
@@ -480,6 +449,7 @@ int main(int argc, char* argv[]) {
             printf("  --verbose, -v       Enable diagnostic output\n");
             printf("  --no-framelimit     Disable frame limiter\n");
             printf("  --sim-refresh HZ    Show frames as a VSync display of HZ Hz would (frame pacing tests)\n");
+            printf("  --renderer API      opengl, vulkan or d3d12 for this run (settings.ini: renderer)\n");
             printf("  --input-script F    Replay frame-indexed input from F (see pc_input_script.h)\n");
             printf("  --script-fast       With --input-script: draw only the frames it screenshots\n");
             printf("  --deterministic     Start the clock at a fixed date and advance it by frames,\n");
@@ -493,6 +463,12 @@ int main(int argc, char* argv[]) {
             return 0;
         } else if (strcmp(argv[i], "--no-framelimit") == 0) {
             g_pc_no_framelimit = 1;
+        } else if (strcmp(argv[i], "--renderer") == 0 && i + 1 < argc) {
+            const char* r = argv[++i];
+
+            g_pc_renderer_override = strcmp(r, "vulkan") == 0 || strcmp(r, "vk") == 0 ? PC_GFX_VULKAN
+                                   : strcmp(r, "d3d12") == 0 || strcmp(r, "dx12") == 0 ? PC_GFX_D3D12
+                                   : PC_GFX_OPENGL;
         } else if (strcmp(argv[i], "--sim-refresh") == 0 && i + 1 < argc) {
             g_pc_sim_refresh = atoi(argv[++i]);
         } else if (strcmp(argv[i], "--input-script") == 0 && i + 1 < argc) {

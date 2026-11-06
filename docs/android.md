@@ -200,7 +200,15 @@ never look, because the releases could not install over them anyway.
   smooth. Now frames the phone has no time to show are played without being drawn (docs/README.md "Frame pacing"), so
   the game keeps its speed. While that happens, `log.txt` gets a line once a minute such as `[VI] 60 s: 3600 game
   frames (100% of full speed), 2250 shown (37.5 a second); ...`: the frames the device really shows.
-- Graphics settings: the Video tab has only VSync, MSAA and Textures. Android always uses the full screen, so the PC
+- Vulkan (1.5.0): **Settings** → **Video** → **Graphics API** → **Vulkan** draws with Vulkan from the next start
+  (Android 7.0 and later with a Vulkan driver; OpenGL ES stays the default). SDL opens `libvulkan.so` at run time, so
+  the APK still starts on phones without it, with OpenGL ES. The surface is let go when the app goes to the background
+  (`SDL_APP_WILLENTERBACKGROUND`) and made again when it returns; a lost surface or an out-of-date swapchain (rotation,
+  a new size) is made again before the next frame. If the driver crashes the app as it starts, `graphics_starting.txt`
+  stays in the app's folder and the next start uses OpenGL ES (and sets it in the menu); a lost device ends the game
+  with a message and also sets OpenGL ES. The shaders built for the GPU are kept in `shader_cache/`. Checked on Mesa's
+  lavapipe on Linux (docs/README.md "Graphics"), not on a phone yet.
+- Graphics settings: the Video tab has Graphics API, VSync, MSAA and Textures. Android always uses the full screen, so the PC
   window mode and resolution (Display, Resolution) are hidden and not used even if they are in `settings.ini`. If the
   GPU does not support the chosen MSAA, window creation is retried with 8x→4x→2x→off
   (`[PC] MSAA 8x is not available, using 4x`). Before, choosing MSAA 8x on a Galaxy Z Flip6 failed to create the window

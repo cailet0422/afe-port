@@ -258,8 +258,27 @@ WINEPREFIX=/tmp/wineprefix WINEDEBUG=-all wine DobutsuNoMoriEPlus.exe --no-frame
 ## 7. OpenGL ES 경로 (Android용) 데스크톱 확인
 
 `apt-get install -y libgles-dev:i386 libegl-dev:i386` 후 `-DPC_GLES=ON`으로 따로 빌드한다
-(`pc/build32gles`). SDL이 ES 3.0 컨텍스트를 만들고, 셰이더의 `#version 330 core`는 `pc_gl.h`가
-`#version 300 es`로 바꾼다. 로그에 `OpenGL OpenGL ES 3.x Mesa`가 나오면 된다.
+(`pc/build32gles`). SDL이 ES 3.0 컨텍스트를 만들고, GL 백엔드가 셰이더 앞에 `#version 300 es`를 붙인다
+(`pc_gx_tev.c`, `pc_gfx.c`). 로그에 `OpenGL OpenGL ES 3.x Mesa`가 나오면 된다.
+
+## 7b. Vulkan과 Direct3D 12 확인
+
+- 셰이더: `pc/shaders/*`나 `pc/include/pc_gx_config.h`를 바꾼 뒤에는 `apt-get install -y glslang-tools spirv-cross`
+  후 `python3 pc/tools/gen_shaders.py`를 돌린다(`pc/src/gen/pc_shaders.h`를 쓴다. CI는 Ubuntu 24.04에서 `--check`로
+  돌리므로 다른 버전의 도구는 다른 헤더를 낼 수 있다).
+- 리눅스의 Vulkan: `apt-get install -y mesa-vulkan-drivers vulkan-validationlayers`(lavapipe, Mesa의 소프트웨어 Vulkan)
+  후 `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation ./DobutsuNoMoriEPlus --verbose --renderer vulkan ...`.
+  검증 메시지는 stderr로 나오고(`VUID-...`), 로그에 `[PC/Vulkan] llvmpipe ...`와 `[PC] Graphics: Vulkan`이 나온다.
+  `--deterministic` 입력 스크립트의 스크린샷을 OpenGL로 돌린 것과 비교할 수 있다(픽셀 몇 개에서 색 채널이 1 이하로만
+  다르다. MSAA면 폴리곤 가장자리).
+- Direct3D 12: Ubuntu의 Wine 9는 GX 셰이더를 컴파일하지 못하고(vkd3d-shader가 "reached unreachable code"로 멈춘다),
+  WineHQ의 `winehq-devel`(11.x, `https://dl.winehq.org/wine-builds/ubuntu/`)은 한다. 64비트 Windows판을 빌드하고(6절을
+  `Toolchain-mingw64.cmake`, `-DPC_ALLOW_64BIT=ON`, SDL2 패키지의 `x86_64-w64-mingw32`로) 
+  `WINEPREFIX=/tmp/wine11 VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json /opt/wine-devel/bin/wine DobutsuNoMoriEPlus.exe --verbose --renderer d3d12 ...`
+  로 돌린다(Wine의 d3d12는 호스트 Vulkan, 여기서는 lavapipe 위의 vkd3d이고, 지어낸 어댑터 이름을 알린다).
+  `VKD3D_DEBUG=err WINEDEBUG=err+d3d12`로 vkd3d의 오류를 본다. 첫 시작 때 우버 픽셀 셰이더를 컴파일하고(Wine에서 약 4초)
+  `shader_cache/d3d12.bin`에 둔다. Wine은 밖에서 창 크기를 바꾸면(`xdotool windowsize`) 따라가지 않는다(OpenGL도
+  마찬가지). **Settings** → **Video**에서 해상도를 바꾸면 크기가 바뀐다.
 
 ## 8. 게임큐브 세이브(GCI) 가져오기·내보내기
 

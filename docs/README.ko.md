@@ -30,7 +30,7 @@ afe-decomp를 기반으로 한 PC(Windows/Linux)·Android 포트와 한국어 �
 ## 구조
 
 ```
-게임 코드 (decomp/src/, 디컴프 그대로)  ── N64 디스플레이 리스트 ──▶ emu64 ──▶ GX ──▶ pc_gx (OpenGL 3.3)
+게임 코드 (decomp/src/, 디컴프 그대로)  ── N64 디스플레이 리스트 ──▶ emu64 ──▶ GX ──▶ pc_gx ──▶ pc_gfx: OpenGL 3.3 / ES 3.0, Vulkan, Direct3D 12
         │                                                          SDL2: 창/입력/오디오
         ├─ Dolphin SDK / OS 호출 ─▶ pc_os, pc_dvd(디스크 이미지 직접 읽기), pc_card, pc_aram, pc_sdk_extra ...
         └─ 패미컴 ─▶ FixNES
@@ -398,6 +398,74 @@ afe-decomp(`TARGET_PC`). `[Gameplay]`의 `seamless_blocks`(Settings → Gameplay
   일정 재시작, 보류), 없으면(Android에서는 `log.txt`에) 프레임을 건너뛴 경우 1분에 한 번. 창 제목은 1초에 보여 준
   프레임 수입니다. `--sim-refresh HZ`는 HZ Hz 화면의 VSync를 흉내 내어(보여 준 프레임이 다음 화면 갱신까지 기다림)
   빠른 PC에서 페이싱을 시험해 볼 수 있게 합니다.
+
+### 그래픽: OpenGL, Vulkan, Direct3D 12
+
+`pc/src/gfx/`(`pc/include/pc_gfx.h`), `pc/shaders/`, `pc/tools/gen_shaders.py`.
+
+- 층: pc_gx가 GX 상태를 셰이더 구성, 유니폼 블록 3개, 36바이트 정점으로 바꾸고(`pc_gx_shader.c`, `pc_gx_config.h`),
+  그 뒤는 모두 `pc_gfx.h`로 그린다. 렌더러가 기대던 OpenGL의 부분(유닛에 묶는, 모드를 스스로 가진 텍스처 객체,
+  왼쪽 아래 기준 뷰포트·시저, 깊이·블렌드·컬링·마스크, `glClear`, `glReadPixels`)에 GX 그리기와 UI 그리기(미니맵,
+  터치 패드, FixNES, `pc_gui_render.cpp`를 거치는 메뉴)를 더한 것이다. OpenGL 백엔드는 GL 호출을 하고, Vulkan과
+  Direct3D 12는 상태(`g_gfx_state`)를 두었다가 그릴 때마다 파이프라인으로 바꾸므로 모든 백엔드가 OpenGL의 규칙을 따른다.
+- 고르기: **설정** → **화면** → **그래픽 API**(`settings.ini`의 `renderer`: 0 OpenGL, 1 Vulkan, 2 Direct3D 12), 다음
+  시작부터. 한 번만은 `--renderer opengl|vulkan|d3d12`. 고른 API를 시작할 수 없으면(드라이버가 없거나 GPU가 지원하지
+  않음) OpenGL을 쓰고 메뉴에 그렇게 표시한다. Vulkan이나 Direct3D 12로 시작하기 전에 `graphics_starting.txt`를 쓰고
+  300프레임을 보여 준 뒤(또는 정상 종료 때) 지운다. 남아 있으면 지난 시작이 드라이버 안에서 죽은 것이므로 OpenGL을
+  쓰고 설정에도 넣는다. 장치를 잃으면(GPU 리셋) 안내와 함께 끝내고, 이때도 다음 시작은 OpenGL이다.
+- 빌드: Vulkan은 모든 빌드에 들어간다(`-DPC_VULKAN=OFF`로 뺄 수 있다). 헤더만 있으면 되고(`pc/lib/vulkan`, 1.3.275,
+  Apache-2.0) 로더는 실행 때 SDL로 연다(`vulkan-1.dll`, `libvulkan.so.1`, Android의 `libvulkan.so`, Android 7.0 이상).
+  Direct3D 12는 Windows 빌드에(`-DPC_D3D12=OFF`). `d3d12.dll`·`dxgi.dll`·`d3dcompiler_47.dll`을 실행 때 열기 때문에
+  Windows 7/8에서도 OpenGL로 시작한다.
+- 셰이더: 단계마다 GLSL 소스 하나에 매크로 몇 개(`pc/shaders/gx.vert`, `gx.frag`, `ui.vert`, `ui.frag`).
+  `gen_shaders.py`가 `pc/src/gen/pc_shaders.h`에 각각의 GLSL 텍스트(GL 백엔드가 실행 때 앞에 프렐류드를 붙인다),
+  Vulkan 1.0용 SPIR-V(glslangValidator. 구성 값은 특수화 상수: `constant_id` 0 = 우버, n + 1 = `pc_gx_config.h`의 n번째
+  값), Direct3D 12용 HLSL 셰이더 모델 5.0(같은 SPIR-V를 y 뒤집기 없이 spirv-cross로 바꾼 것. 실행 때 `D3DCompile`로
+  컴파일하고, 특수화 상수는 `SPIRV_CROSS_CONSTANT_ID_<n>` 정의)을 쓴다. 헤더는 커밋되어 있고, CI가 Ubuntu 24.04의
+  glslang-tools 15.1과 spirv-cross로 확인한다(`--check`).
+- 특수화 셰이더(모든 API): 같은 그림은 같은 구성을 쓰고(읽지 않는 값은 0), 그 구성용으로 컴파일한 셰이더는 그리기가
+  쓰지 않는 것을 버린다. 준비될 때까지는 우버 셰이더(구성을 블록에서 읽음)가 그리므로 새 구성이 프레임을 멈추지
+  않는다. OpenGL은 병렬로 컴파일하고(`GL_KHR_parallel_shader_compile`) 프로그램 바이너리를 둔다
+  (`shader_cache/opengl.bin`). Vulkan과 Direct3D 12는 구성과 고정 기능 상태마다 파이프라인을 작업 스레드에서 만들고,
+  본 구성을 두었다가(`shader_cache/vulkan_configs.bin`, `d3d12_configs.bin`) 다음 시작 때 다시 만든다. Vulkan의
+  파이프라인 캐시는 `vulkan.bin`, 컴파일한 Direct3D 셰이더는 `d3d12.bin`. `specialized_shaders = 0`이면 우버 셰이더만 쓴다.
+- Vulkan(`pc_gfx_vk.c`): 셰이더에서 깊이를 0..w로 옮기고 y를 뒤집으므로 그림과 감는 방향이 OpenGL과 같다. 프레임
+  2개를 동시에 처리하고, 프레임마다 정점·인덱스·유니폼 블록용 스트리밍 버퍼(8MB, 모자라면 더 만들어 둔다)가 있다.
+  블록은 동적 오프셋으로 묶는다(버퍼마다 디스크립터 세트 하나, 한 번 만든다). 텍스처의 디스크립터 세트는 이미지(이미지마다
+  고유 id)와 샘플러를 키로 프레임을 넘어 두고, 120프레임 동안 쓰지 않으면 놓는다. 업로드는 32MB 스테이징 버퍼를 거쳐
+  프레임의 그리기보다 먼저 제출하는 커맨드 버퍼로 하고, 텍스처를 다시 올리면 새 이미지를 받는다(옛것은 쓰던 프레임이
+  끝나면 놓는다. OpenGL 드라이버가 이름을 바꾸어 주는 것과 같다). 이미지는 64MB 장치 메모리 블록을 나눠 쓴다.
+  밉맵은 블릿, RGB565는 RGBA로 바꾼다. 프레임의 첫 렌더 패스가 지우고, 패스를 시작할 때의 지우기는 그 패스의 load op가
+  되며 그 밖에는 시저 상자 안에 `vkCmdClearAttachments`. 프레임은 보통 패스 하나이므로 깊이와 MSAA 샘플은 끝에서
+  저장하지 않는다(타일 GPU에서는 칩 밖으로 나가지 않는다). 화면을 복사하는 프레임만 저장하고(`pc_vi_frame_needs_draw`가 게임이
+  프레임을 만드는 동안 올리는 `g_pc_frame_copies`), 생각지 않은 곳에서 패스가 끝나면 다음 120프레임도 저장한다. `glReadPixels`(서브메뉴 뒤의 장면, 스크린샷)은 그림을 버퍼로
+  복사하고 기다린다. 그리기 중간에 GPU를 기다려야 하면(버퍼나 풀이 가득 참) 그 그리기는 다음 패스에서 다시 준비한다.
+  VSync면 FIFO, 아니면 MAILBOX나 IMMEDIATE. MSAA는 리졸브 첨부로. Android: `SDL_APP_WILLENTERBACKGROUND`에서 표면을
+  놓고 앱이 돌아오면 다시 만든다(`pc_gfx_handle_event`). 표면을 잃거나 스왑체인이 맞지 않게 되면 다시 만든다.
+  미리 회전하지 않으므로(시스템이 그림을 돌린다) Android는 표시할 때마다 `VK_SUBOPTIMAL_KHR`을 돌려주는데, 스왑체인은 표면의
+  크기나 방향이 바뀌었을 때만 다시 만든다.
+- Direct3D 12(`pc_gfx_d3d12.c`): D3D의 클립 공간은 깊이(셰이더에서 바꾼다) 말고는 OpenGL과 같다. 버퍼 3개의 플립 모델
+  스왑체인(DXGI가 지원하면 VSync를 끈 동안 티어링 허용). 블록 3개는 프레임의 업로드 버퍼를 가리키는 루트 상수 버퍼 뷰,
+  셰이더 리소스 뷰 5개와 샘플러 5개의 테이블은 프레임을 넘어 둔다(셰이더에서 보이는 힙에 테이블 8,192개, 샘플러 테이블은
+  본 조합마다). 텍스처는 64MB 힙에 놓는다(작은 것은 4KB 정렬). MSAA 렌더 타깃은 보여 주기 전과 `glReadPixels` 전에
+  리졸브한다. 트라이앵글 팬과 사각형은 고정 인덱스 버퍼로 그린다. 밉맵(HD 텍스처만 요청한다)은 방금 올린 이미지로
+  CPU에서 만든다. `AFE_D3D12_DEBUG=1`이면 디버그 레이어를 켠다.
+- 확인: lavapipe(Mesa의 소프트웨어 Vulkan)와 검증 레이어로 오류 없음. 스크린샷은 OpenGL(llvmpipe)과 픽셀의 약 0.02%에서
+  색 채널이 1 이하로만 다르다(결정적 타이틀 데모 16장, 장면 캡처가 있는 지도 서브메뉴, 일시정지 메뉴). 터치 패드의 고리
+  가장자리(`fwidth`)는 한 픽셀 다르고, MSAA 4x와 HD 텍스처 팩에서는 폴리곤 가장자리만 다르며(샘플 위치) 텍스처는 같다.
+  창 크기를 바꾸면(16:9, 세로, 720p) 오류 없이 스왑체인을 다시 만든다. Direct3D 12는 Wine 11(lavapipe 위의 vkd3d.
+  Ubuntu의 Wine 9는 GX 셰이더를 컴파일하지 못한다)에서 같은 스크린샷이 OpenGL과 똑같이 조금만 다르고(타이틀 데모, 지도
+  서브메뉴, 일시정지 메뉴), MSAA 4x와 HD 텍스처 팩(BC7, 밉맵은 CPU에서)에서는 Vulkan으로 돌린 것과 픽셀의 0.015%에서 1
+  이하로 다르다. 설정에서 해상도를 바꾸면 스왑체인 크기가 바뀐다. Windows판의 Vulkan(winevulkan)도 같게 그린다.
+- 스크립트 시나리오(dev_setup.ko.md)를 한글패치 디스크로 v1.4.14와 v1.5.0(OpenGL)에서, 세이브를 불러오는 대신 새 게임
+  실행(`make_newgame_script.py`) 뒤에 이어 붙여 돌렸다. 18번, 스크린샷 4,250장, 기록한 위치와 세이브는 같고, 39장이 픽셀
+  1~4개에서 1씩 다르다(전용 셰이더의 반올림). 이 비교에서 `famicom_draw()`가 게임큐브 NES 에뮬레이터의 그림(`result_bufp`,
+  NES 그림을 FixNES가 그리는 PC에서는 채워지지 않는다)을 그린다는 것을 찾았다. 예전 셰이더는 우연히 그 사각형을 버렸고, 새
+  셰이더는 패미컴 게임 위에 흰 사각형으로 그렸다. afe-decomp가 `TARGET_PC`에서는 그리지 않는다.
+- 컨테이너의 소프트웨어 렌더러에서의 속도는 GPU에 대해 알려 주는 것이 적다. 대기 중인 타이틀 데모는 OpenGL(llvmpipe)
+  42초, Vulkan(lavapipe) 58초인데, 여기서는 CPU가 GPU의 일을 한다. Vulkan과 Direct3D 12가 줄이는 것은 그리기와 상태
+  변경마다 드는 드라이버의 CPU 시간이다(파이프라인을 다른 스레드에서 미리 만들고, 그릴 때마다 상태를 검사하지 않고,
+  디스크립터 세트와 메모리를 둔다). 휴대폰에서, 그리고 그리기가 많을 때 가장 크다.
 
 ### 자동 테스트 입력
 

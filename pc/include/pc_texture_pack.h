@@ -40,7 +40,7 @@ void pc_texture_pack_shutdown(void);
  * (for pc_texture_pack_touch) or -1. When the replacement is still loading
  * on the thread, 0 and *pending_key gets a key that pc_gx_texture_hd_ready()
  * is called with once it is there (0 otherwise). */
-GLuint pc_texture_pack_lookup(const void* data, int data_size, int w, int h, unsigned int fmt, const void* tlut_data,
+PCTex pc_texture_pack_lookup(const void* data, int data_size, int w, int h, unsigned int fmt, const void* tlut_data,
                               int tlut_entries, int tlut_is_be, int* out_w, int* out_h, int* out_index,
                               unsigned long long* pending_key);
 

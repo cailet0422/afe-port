@@ -2,7 +2,6 @@
  * the theme and the shared widgets */
 #include "pc_gui_internal.h"
 
-#include "backends/imgui_impl_opengl3.h"
 #include "backends/imgui_impl_sdl2.h"
 
 extern "C" {
@@ -186,11 +185,15 @@ static void apply_scale() {
 
 static void set_ime_data(ImGuiContext*, ImGuiViewport*, ImGuiPlatformImeData* data);
 
+/* the draw lists through pc_gfx (pc_gui_render.cpp) */
+void pc_gui_render_init(void);
+void pc_gui_render_draw(ImDrawData* dd, int fb_w, int fb_h, int draw);
+
 static bool init() {
     if (s_ready || s_failed) {
         return s_ready;
     }
-    if (g_pc_window == NULL || g_pc_gl_context == NULL) {
+    if (g_pc_window == NULL) {
         return false;
     }
     IMGUI_CHECKVERSION();
@@ -205,23 +208,15 @@ static bool init() {
     g_touch = true;
 #endif
 
-    if (!ImGui_ImplSDL2_InitForOpenGL(g_pc_window, g_pc_gl_context)) {
+    if (!(g_pc_gfx_api == PC_GFX_OPENGL ? ImGui_ImplSDL2_InitForOpenGL(g_pc_window, g_pc_gl_context)
+                                        : g_pc_gfx_api == PC_GFX_VULKAN ? ImGui_ImplSDL2_InitForVulkan(g_pc_window)
+                                                                         : ImGui_ImplSDL2_InitForD3D(g_pc_window))) {
         s_failed = true;
         ImGui::DestroyContext();
         return false;
     }
     ImGui::GetPlatformIO().Platform_SetImeDataFn = set_ime_data;
-#ifdef PC_GLES
-    const char* glsl = "#version 300 es";
-#else
-    const char* glsl = "#version 330 core";
-#endif
-    if (!ImGui_ImplOpenGL3_Init(glsl)) {
-        s_failed = true;
-        ImGui_ImplSDL2_Shutdown();
-        ImGui::DestroyContext();
-        return false;
-    }
+    pc_gui_render_init();
 
     ImFontConfig cfg;
     cfg.FontDataOwnedByAtlas = false;
@@ -758,7 +753,6 @@ extern "C" void pc_gui_frame(void) {
         ImGui::GetIO().AddMouseButtonEvent(0, true);
         s_finger_press_pending = false;
     }
-    ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
 
@@ -773,10 +767,8 @@ extern "C" void pc_gui_frame(void) {
     }
 
     ImGui::Render();
+    pc_gui_render_draw(ImGui::GetDrawData(), g_pc_window_w, g_pc_window_h, !PC_DRAW_SKIPPED());
     if (!PC_DRAW_SKIPPED()) {
-        glViewport(0, 0, g_pc_window_w, g_pc_window_h);
-        glDisable(GL_SCISSOR_TEST);
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         pc_gx_restore_after_nes();
     }
     s_chat_drop_text = false; /* (only the events of the Chat key's frame) */

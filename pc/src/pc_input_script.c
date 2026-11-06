@@ -710,20 +710,7 @@ static void save_shot(const char* name) {
 #endif
     snprintf(path, sizeof(path), "shots/%s.ppm", name);
 
-    glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    glReadBuffer(GL_BACK);
-#ifdef PC_GLES
-    { /* ES only guarantees RGBA reads */
-        int i;
-
-        glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-        for (i = 0; i < w * h; i++) {
-            memmove(pixels + i * 3, pixels + i * 4, 3);
-        }
-    }
-#else
-    glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, pixels);
-#endif
+    pc_gfx_read_pixels(0, 0, w, h, 0, pixels);
 
     f = fopen(path, "wb");
     if (f != NULL) {

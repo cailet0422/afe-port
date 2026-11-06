@@ -30,7 +30,7 @@ and the `TARGET_PC` hooks in it) is the `decomp/` submodule ([cailet0422/afe-dec
 ## Architecture
 
 ```
-game code (decomp/src/, decomp as is)  ── N64 display lists ──▶ emu64 ──▶ GX ──▶ pc_gx (OpenGL 3.3)
+game code (decomp/src/, decomp as is)  ── N64 display lists ──▶ emu64 ──▶ GX ──▶ pc_gx ──▶ pc_gfx: OpenGL 3.3 / ES 3.0, Vulkan, Direct3D 12
         │                                                                        SDL2: window/input/audio
         ├─ Dolphin SDK / OS calls ─▶ pc_os, pc_dvd (reads the disc image directly), pc_card, pc_aram, pc_sdk_extra ...
         └─ Famicom ─▶ FixNES
@@ -437,6 +437,85 @@ frames played a second.
   schedule resets, holds); without it (and on Android in `log.txt`) once a minute when frames were skipped. The window
   title shows the frames shown a second. `--sim-refresh HZ` imitates a VSync display of HZ Hz (a shown frame waits for
   its next refresh) to try the pacing on a fast PC.
+
+### Graphics: OpenGL, Vulkan, Direct3D 12
+
+`pc/src/gfx/` (`pc/include/pc_gfx.h`), `pc/shaders/`, `pc/tools/gen_shaders.py`.
+
+- Layers: pc_gx turns the GX state into a shader configuration, three uniform blocks and 36-byte vertices
+  (`pc_gx_shader.c`, `pc_gx_config.h`); everything is then drawn through `pc_gfx.h`, the part of OpenGL the
+  renderer was written against (texture objects with their own modes bound to units, viewport and scissor from the
+  bottom left, depth/blend/cull/masks, `glClear`, `glReadPixels`) plus a GX draw and a UI draw (minimap, touch pad,
+  FixNES, the menus through `pc_gui_render.cpp`). The OpenGL backend makes the GL call; Vulkan and Direct3D 12 keep the
+  state (`g_gfx_state`) and turn it into a pipeline at each draw, so every backend follows OpenGL's rules.
+- Choosing: **Settings** → **Video** → **Graphics API** (`renderer` in `settings.ini`: 0 OpenGL, 1 Vulkan, 2
+  Direct3D 12), from the next start; `--renderer opengl|vulkan|d3d12` for one run. When the chosen API cannot start
+  (no driver, a GPU without it) the game uses OpenGL and the menu says so. `graphics_starting.txt` is written before a
+  start with Vulkan or Direct3D 12 and removed after 300 frames shown (or a normal quit): when it is still there, the
+  last start crashed in the driver, so the game uses OpenGL and sets it in the settings. A lost device (GPU reset)
+  ends the game with a message, also with OpenGL set for the next start.
+- Builds: Vulkan in every build (`-DPC_VULKAN=OFF` leaves it out): only the headers are needed (`pc/lib/vulkan`, 1.3.275,
+  Apache-2.0); the loader is opened at run time through SDL (`vulkan-1.dll`, `libvulkan.so.1`, Android's
+  `libvulkan.so`, Android 7.0+). Direct3D 12 in the Windows builds (`-DPC_D3D12=OFF`): `d3d12.dll`, `dxgi.dll` and
+  `d3dcompiler_47.dll` are opened at run time, so the game still starts on Windows 7/8 with OpenGL.
+- Shaders: one GLSL source per stage with a few macros (`pc/shaders/gx.vert`, `gx.frag`, `ui.vert`, `ui.frag`).
+  `gen_shaders.py` writes `pc/src/gen/pc_shaders.h` with, for each, the GLSL text (the GL backend puts its prelude in
+  front at run time), SPIR-V for Vulkan 1.0 (glslangValidator; the configuration values are specialization constants:
+  `constant_id` 0 = uber, n + 1 = value n of `pc_gx_config.h`) and HLSL shader model 5.0 for Direct3D 12 (spirv-cross
+  from the same SPIR-V without the y flip; compiled at run time by `D3DCompile`, the specialization constants as
+  `SPIRV_CROSS_CONSTANT_ID_<n>` defines). The header is committed; CI checks it with Ubuntu 24.04's glslang-tools 15.1
+  and spirv-cross (`--check`).
+- Specialized shaders, every API: equal drawings share a configuration (unread values zeroed), and a shader compiled
+  for it drops what the draw does not use; the uber shader (the configuration read from a block) draws until it is
+  ready, so a new configuration never stalls a frame. OpenGL compiles in parallel (`GL_KHR_parallel_shader_compile`)
+  and keeps program binaries (`shader_cache/opengl.bin`). Vulkan and Direct3D 12 build a pipeline per configuration
+  and fixed-function state on a worker thread; the configurations seen are kept (`shader_cache/vulkan_configs.bin`,
+  `d3d12_configs.bin`) and built again at the next start, the Vulkan pipeline cache in `vulkan.bin` and the compiled
+  Direct3D shaders in `d3d12.bin`. `specialized_shaders = 0` draws with the uber shader only.
+- Vulkan (`pc_gfx_vk.c`): depth goes to 0..w and y is flipped in the shader, so the picture and the winding are
+  OpenGL's. 2 frames in flight; each has streaming buffers (8 MB, more when a frame needs them, kept) for vertices,
+  indices and the uniform blocks (bound with dynamic offsets: one descriptor set per buffer, made once). The textures'
+  descriptor sets are kept across frames, keyed by the images (a unique id per image) and the samplers, and freed
+  after 120 frames unused. Uploads go through a 32 MB staging buffer in a command buffer submitted before the frame's
+  draws; uploading a texture again gives it a new image (the old one is freed when the frames using it are done), as an
+  OpenGL driver renames it. Images share 64 MB blocks of device memory. Mipmaps by blits, RGB565 converted to RGBA.
+  The frame's first render pass clears; a clear at the start of a pass becomes its load op, otherwise
+  `vkCmdClearAttachments` in the scissor box. A frame is normally one pass, so depth and the MSAA samples are not
+  stored at its end (on a tiled GPU they never leave the chip): only a frame that copies the screen keeps them
+  (`g_pc_frame_copies`, raised by `pc_vi_frame_needs_draw` while the game builds the frame), and if a pass ends where
+  none was expected, the next 120 frames keep them too. `glReadPixels` (the scene behind a submenu, screenshots) copies the
+  picture to a buffer and waits; a draw that has to wait for the GPU in the middle (a full buffer or pool) sets itself
+  up again in the next pass. FIFO present mode with VSync, MAILBOX or IMMEDIATE without; MSAA through a resolve
+  attachment. Android: the surface is let go at `SDL_APP_WILLENTERBACKGROUND` and made again when the app returns
+  (`pc_gfx_handle_event`); a lost surface or an out-of-date swapchain is made again. There is no pre-rotation (the
+  system turns the picture), and Android then answers `VK_SUBOPTIMAL_KHR` at every present: the swapchain is made
+  again only when the surface's size or turn changed.
+- Direct3D 12 (`pc_gfx_d3d12.c`): D3D's clip space is OpenGL's but for depth (changed in the shader). Flip-model
+  swapchain of 3 buffers (tearing allowed with VSync off where DXGI supports it); the three blocks are root constant
+  buffer views into the frame's upload buffer; tables of 5 shader resource views and 5 samplers are kept across frames
+  (a shader-visible heap of 8,192 tables, sampler tables for the combinations seen). Textures are placed in 64 MB heaps
+  (4 KB alignment for small ones). An MSAA render target is resolved before present and before `glReadPixels`.
+  Triangle fans and quads are drawn with fixed index buffers. Mipmaps (only the HD textures ask for them) are made on
+  the CPU from the image just uploaded. `AFE_D3D12_DEBUG=1` turns on the debug layer.
+- Checked: Vulkan on lavapipe (Mesa's software Vulkan) with the validation layers: no errors, and the screenshots
+  differ from OpenGL's (llvmpipe) by at most 1 in a color channel on about 0.02% of the pixels (the deterministic
+  title demo, 16 screenshots; the map submenu with its scene capture; the pause menu). The touch pad's ring edges
+  (`fwidth`) differ by a pixel; with 4x MSAA and the HD texture pack the polygon edges differ (sample positions) and
+  the textures are identical. Resizing the window (16:9, portrait, 720p) remakes the swapchain without errors.
+  Direct3D 12 under Wine 11 (vkd3d over lavapipe; Ubuntu's Wine 9 cannot compile the GX shader): the same screenshots
+  differ from OpenGL's as little (the title demo, the map submenu, the pause menu); with 4x MSAA and the HD texture
+  pack (BC7, mipmaps made on the CPU) they match the Vulkan run's within 1 on 0.015% of the pixels; a resolution
+  change in the settings resizes the swapchain. The Windows build's Vulkan (winevulkan) draws the same.
+- The scripted scenarios (dev_setup.md) on the Korean-patched disc, v1.4.14 against v1.5.0 with OpenGL, each spliced
+  after the new-game run (`make_newgame_script.py`) instead of loading a save: 18 runs, 4,250 screenshots, the logged
+  positions and the saves identical, 39 screenshots off by 1 on 1 to 4 pixels (rounding in the specialized shaders).
+  They found that `famicom_draw()` draws the GameCube NES emulator's picture (`result_bufp`, never filled on PC, where
+  FixNES draws the NES picture): the old shader happened to drop that quad, the new one drew a white box over the NES
+  games. afe-decomp leaves it out under `TARGET_PC`.
+- Speed on the container's software renderers says little about GPUs: the idle title demo takes 42 s with OpenGL
+  (llvmpipe) and 58 s with Vulkan (lavapipe), where the CPU does the GPU's work. What Vulkan and Direct3D 12 save is the
+  driver's CPU time per draw and state change (pipelines built ahead on another thread, no state validation at each
+  draw, descriptor sets and memory kept), which matters most on phones and with many draws.
 
 ### Scripted test input
 

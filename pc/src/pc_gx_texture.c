@@ -28,7 +28,7 @@ typedef struct {
     uintptr_t tlut_ptr;
     u32 tlut_hash;   /* FNV-1a of TLUT data + metadata */
     u32 data_hash;   /* FNV-1a of first N bytes */
-    GLuint gl_tex;
+    PCTex gl_tex;
     u32 wrap_s;
     u32 wrap_t;
     u32 min_filter;
@@ -115,7 +115,7 @@ static TexCacheEntry* tex_cache_find(uintptr_t data_ptr, int w, int h, u32 fmt, 
 }
 
 static TexCacheEntry* tex_cache_insert(uintptr_t data_ptr, int w, int h, u32 fmt, u32 tlut_name,
-                                       uintptr_t tlut_ptr, u32 tlut_hash, u32 data_hash, GLuint gl_tex) {
+                                       uintptr_t tlut_ptr, u32 tlut_hash, u32 data_hash, PCTex gl_tex) {
     if (tex_cache_count >= TEX_CACHE_SIZE) {
         /* evict oldest half */
         int half = TEX_CACHE_SIZE / 2;
@@ -126,7 +126,7 @@ static TexCacheEntry* tex_cache_insert(uintptr_t data_ptr, int w, int h, u32 fmt
                         g_gx.gl_textures[s] = 0;
                 }
                 if (!tex_cache[i].external)
-                    glDeleteTextures(1, &tex_cache[i].gl_tex);
+                    pc_gfx_tex_delete(tex_cache[i].gl_tex);
             }
         }
         memmove(&tex_cache[0], &tex_cache[half], (tex_cache_count - half) * sizeof(TexCacheEntry));
@@ -151,7 +151,7 @@ static TexCacheEntry* tex_cache_insert(uintptr_t data_ptr, int w, int h, u32 fmt
     return e;
 }
 
-static void forget_slots(GLuint tex) {
+static void forget_slots(PCTex tex) {
     for (int s = 0; s < 8; s++) {
         if (g_gx.gl_textures[s] == tex)
             g_gx.gl_textures[s] = 0;
@@ -169,7 +169,7 @@ void pc_gx_texture_hd_ready(unsigned long long key) {
         if (e->hd_pending == key && !e->external) {
             forget_slots(e->gl_tex);
             if (e->gl_tex)
-                glDeleteTextures(1, &e->gl_tex);
+                pc_gfx_tex_delete(e->gl_tex);
             continue;
         }
         tex_cache[out++] = *e;
@@ -178,7 +178,7 @@ void pc_gx_texture_hd_ready(unsigned long long key) {
 }
 
 /* The texture pack freed tex (one of its own) */
-void pc_gx_texture_forget(GLuint tex) {
+void pc_gx_texture_forget(PCTex tex) {
     int out = 0;
 
     for (int i = 0; i < tex_cache_count; i++) {
@@ -208,7 +208,7 @@ void pc_gx_texture_invalidate_data(const void* data) {
                     g_gx.gl_textures[s] = 0;
             }
             if (e->gl_tex)
-                glDeleteTextures(1, &e->gl_tex);
+                pc_gfx_tex_delete(e->gl_tex);
             continue;
         }
         tex_cache[out++] = *e;
@@ -219,7 +219,7 @@ void pc_gx_texture_invalidate_data(const void* data) {
 void pc_gx_texture_cache_invalidate(void) {
     for (int i = 0; i < tex_cache_count; i++) {
         if (tex_cache[i].gl_tex && !tex_cache[i].external) {
-            glDeleteTextures(1, &tex_cache[i].gl_tex);
+            pc_gfx_tex_delete(tex_cache[i].gl_tex);
         }
     }
     for (int s = 0; s < 8; s++) {
@@ -678,21 +678,20 @@ static void decode_gc_texture(const void* src, u8* dst_rgba, int w, int h, u32 f
     }
 }
 
-static GLenum gl_wrap(u32 wrap) {
-    return wrap == 2 ? GL_MIRRORED_REPEAT : wrap == 0 ? GL_CLAMP_TO_EDGE : GL_REPEAT;
+/* GX wrap modes: 0 clamp, 1 repeat, 2 mirror (pc_gfx's order) */
+static int gfx_wrap(u32 wrap) {
+    return wrap == 2 ? PC_WRAP_MIRROR : wrap == 0 ? PC_WRAP_CLAMP : PC_WRAP_REPEAT;
 }
 
 /* On the bound texture */
 static void set_wrap(u32 wrap_s, u32 wrap_t) {
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, gl_wrap(wrap_s));
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, gl_wrap(wrap_t));
+    pc_gfx_tex_wrap(gfx_wrap(wrap_s), gfx_wrap(wrap_t));
 }
 
 static void set_filter(u32 filter_mode) {
-    GLenum gl_filter = filter_mode ? GL_LINEAR : GL_NEAREST;
+    int f = filter_mode ? PC_FILTER_LINEAR : PC_FILTER_NEAREST;
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter);
+    pc_gfx_tex_filter(f, f);
 }
 
 /* The loaded palette (g_gx.tlut) a C4/C8 texture object names, or -1 */
@@ -706,7 +705,7 @@ static int obj_tlut(const u32* o, u32 format) {
 }
 
 /* The texture is what texture map id draws with */
-static void use_texture(u32* o, u32 id, GLuint tex, int width, int height, u32 format) {
+static void use_texture(u32* o, u32 id, PCTex tex, int width, int height, u32 format) {
     o[TEXOBJ_GL_TEX] = tex;
     g_gx.gl_textures[id] = tex;
     g_gx.tex_obj_w[id] = width;
@@ -716,13 +715,12 @@ static void use_texture(u32* o, u32 id, GLuint tex, int width, int height, u32 f
 }
 
 /* A new GL texture from the GameCube texture (a white texel when it has none) */
-static GLuint decode_new_texture(const void* image_ptr, int width, int height, u32 format, int tlut) {
+static PCTex decode_new_texture(const void* image_ptr, int width, int height, u32 format, int tlut) {
     static const u8 white[4] = { 255, 255, 255, 255 };
     u8* rgba = NULL;
-    GLuint tex;
+    PCTex tex = pc_gfx_tex_new();
 
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
+    pc_gfx_bind(tex);
     if (image_ptr && width > 0 && height > 0 && width <= 1024 && height <= 1024) {
         rgba = (u8*)malloc(width * height * 4);
     }
@@ -736,11 +734,10 @@ static GLuint decode_new_texture(const void* image_ptr, int width, int height, u
             build_palette(NULL, 0, 0, palette, 0);
         }
         decode_gc_texture(image_ptr, rgba, width, height, format, palette);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
-        PC_GL_CHECK("glTexImage2D");
+        pc_gfx_tex_image(width, height, PC_TEXF_RGBA8, rgba, (size_t)width * height * 4);
         free(rgba);
     } else {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, white);
+        pc_gfx_tex_image(1, 1, PC_TEXF_RGBA8, white, 4);
     }
     return tex;
 }
@@ -768,10 +765,10 @@ void GXLoadTexObj(void* obj, u32 id) {
 #ifdef PC_ENHANCEMENTS
     /* EFB capture bypass: use full-res FBO texture instead of re-decoding */
     {
-        GLuint efb_tex = pc_gx_efb_capture_find((uintptr_t)image_ptr);
+        PCTex efb_tex = pc_gx_efb_capture_find((uintptr_t)image_ptr);
 
         if (efb_tex) {
-            glBindTexture(GL_TEXTURE_2D, efb_tex);
+            pc_gfx_bind(efb_tex);
             set_filter(filter_mode);
             use_texture(o, id, efb_tex, width, height, format);
             return;
@@ -789,7 +786,7 @@ void GXLoadTexObj(void* obj, u32 id) {
         if (entry->hd_index >= 0) {
             pc_texture_pack_touch(entry->hd_index);
         }
-        glBindTexture(GL_TEXTURE_2D, entry->gl_tex);
+        pc_gfx_bind(entry->gl_tex);
         if (entry->wrap_s != wrap_s || entry->wrap_t != wrap_t) {
             set_wrap(wrap_s, wrap_t);
             entry->wrap_s = wrap_s;
@@ -809,13 +806,13 @@ void GXLoadTexObj(void* obj, u32 id) {
     if (pc_texture_pack_active()) {
         int data_size = (width * height * gc_format_bpp(format)) / 8;
         int hd_w = 0, hd_h = 0, hd_index = -1;
-        GLuint hd_tex = pc_texture_pack_lookup(image_ptr, data_size, width, height, format,
+        PCTex hd_tex = pc_texture_pack_lookup(image_ptr, data_size, width, height, format,
                                                tlut >= 0 ? g_gx.tlut[tlut].data : NULL,
                                                tlut >= 0 ? g_gx.tlut[tlut].n_entries : 0,
                                                tlut >= 0 ? g_gx.tlut[tlut].is_be : 1,
                                                &hd_w, &hd_h, &hd_index, &hd_pending);
         if (hd_tex) {
-            glBindTexture(GL_TEXTURE_2D, hd_tex);
+            pc_gfx_bind(hd_tex);
             set_wrap(wrap_s, wrap_t);
             entry = tex_cache_insert((uintptr_t)image_ptr, width, height, format, tlut_key, tlut_ptr_key,
                                      tlut_hash_key, hash, hd_tex);
@@ -829,7 +826,7 @@ void GXLoadTexObj(void* obj, u32 id) {
         }
     }
 
-    GLuint tex = decode_new_texture(image_ptr, width, height, format, tlut);
+    PCTex tex = decode_new_texture(image_ptr, width, height, format, tlut);
     set_filter(filter_mode);
     set_wrap(wrap_s, wrap_t);
     entry = tex_cache_insert((uintptr_t)image_ptr, width, height, format, tlut_key, tlut_ptr_key, tlut_hash_key,

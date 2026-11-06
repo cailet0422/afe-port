@@ -325,8 +325,28 @@ WINEPREFIX=/tmp/wineprefix WINEDEBUG=-all wine DobutsuNoMoriEPlus.exe --no-frame
 ## 7. OpenGL ES path (for Android) desktop check
 
 After `apt-get install -y libgles-dev:i386 libegl-dev:i386`, build separately with `-DPC_GLES=ON`
-(`pc/build32gles`). SDL creates an ES 3.0 context, and `pc_gl.h` rewrites the shaders' `#version 330 core` to
-`#version 300 es`. It works if the log shows `OpenGL OpenGL ES 3.x Mesa`.
+(`pc/build32gles`). SDL creates an ES 3.0 context, and the GL backend puts `#version 300 es` in front of the shaders
+(`pc_gx_tev.c`, `pc_gfx.c`). It works if the log shows `OpenGL OpenGL ES 3.x Mesa`.
+
+## 7b. Vulkan and Direct3D 12 checks
+
+- Shaders: after changing `pc/shaders/*` or `pc/include/pc_gx_config.h`, `apt-get install -y glslang-tools spirv-cross`
+  and run `python3 pc/tools/gen_shaders.py` (it writes `pc/src/gen/pc_shaders.h`; CI runs it with `--check` on Ubuntu
+  24.04, so other versions of the tools may give a different header).
+- Vulkan on Linux: `apt-get install -y mesa-vulkan-drivers vulkan-validationlayers` (lavapipe, Mesa's software
+  Vulkan), then run with
+  `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation ./DobutsuNoMoriEPlus --verbose --renderer vulkan ...`.
+  Validation messages go to stderr (`VUID-...`); the log has `[PC/Vulkan] llvmpipe ...` and `[PC] Graphics: Vulkan`.
+  The screenshots of a `--deterministic` input script can be compared with the OpenGL run's (they differ by at most 1
+  in a color channel on a few pixels; with MSAA, along polygon edges).
+- Direct3D 12: Ubuntu's Wine 9 cannot compile the GX shader (vkd3d-shader stops with "reached unreachable code"); WineHQ's
+  `winehq-devel` (11.x, from `https://dl.winehq.org/wine-builds/ubuntu/`) can. Build the 64-bit Windows game (section 6
+  with `Toolchain-mingw64.cmake`, `-DPC_ALLOW_64BIT=ON` and the SDL2 package's `x86_64-w64-mingw32`), then
+  `WINEPREFIX=/tmp/wine11 VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json /opt/wine-devel/bin/wine DobutsuNoMoriEPlus.exe --verbose --renderer d3d12 ...`
+  (Wine's d3d12 is vkd3d over the host's Vulkan, here lavapipe; it reports a made-up adapter name).
+  `VKD3D_DEBUG=err WINEDEBUG=err+d3d12` shows vkd3d's errors. The first start compiles the uber pixel shader (about 4 s
+  under Wine) and keeps it in `shader_cache/d3d12.bin`. Wine does not follow a resize of its window from outside
+  (`xdotool windowsize`), not with OpenGL either; a resolution change in **Settings** → **Video** resizes it.
 
 ## 8. Importing and exporting GameCube saves (GCI)
 

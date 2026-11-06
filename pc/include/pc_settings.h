@@ -31,6 +31,8 @@ typedef struct {
     int ui_scale;         /* menu size in percent, 0 = automatic (from the window and the screen) */
     int hd_textures;      /* 1 = use the installed HD texture pack (pc_texture_pack.c) */
     int hd_quality;       /* 0 = the pack's full size, 1 = half (less memory; phones) */
+    int renderer;         /* graphics API (pc_gfx.h): 0 = OpenGL, 1 = Vulkan, 2 = Direct3D 12; from the next start */
+    int specialized_shaders; /* 1 = a GX shader made for each configuration (pc_gx_tev.c), 0 = the uber shader only */
     int mp_port;          /* multiplayer: the UDP port a hosted room listens on (pc_mp.c) */
     char mp_name[32];     /* multiplayer: the name others see (UTF-8), "" = the player's own */
 } PCSettings;

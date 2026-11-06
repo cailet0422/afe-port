@@ -3,6 +3,8 @@
 #define PC_GX_INTERNAL_H
 
 #include "pc_platform.h"
+#include "pc_gx_config.h"
+#include "pc_gfx.h"
 
 /* Define PC_GL_DEBUG to check for GL errors after significant calls */
 #ifdef PC_GL_DEBUG
@@ -60,13 +62,36 @@ typedef struct {
     int stride;
 } PCGXVertexFormat;
 
-typedef struct {
+/* A vertex as the GPU takes it (36 bytes): the game only ever sets color 0
+ * and texture coordinate 0 (emu64 makes the others with texture matrices) */
+typedef struct PCGXVertex {
     float position[3];
     float normal[3];
     unsigned char color0[4];
-    unsigned char color1[4];
-    float texcoord[8][2];
+    float texcoord[2];
 } PCGXVertex;
+
+/* The GX shader's uniform blocks (std140; pc/shaders/gx.vert, gx.frag) */
+typedef struct {
+    float projection[16]; /* column-major */
+    float modelview[16];
+    float normal_mtx[12]; /* three columns */
+    float texmtx[16];     /* texgen 0's two rows, then texgen 1's */
+} PCGXVertBlock;
+
+typedef struct {
+    float tev_regs[4][4]; /* PREV, REG0, REG1, REG2 */
+    float kcolor[4][4];
+    float mat_color[4];
+    float amb_color[4];
+    float light_pos[8][4];
+    float light_color[8][4];
+    float fog_color[4];
+    float fog_range[4]; /* start, end */
+    float ind_mtx_r0[3][4];
+    float ind_mtx_r1[3][4];
+    float alpha_ref[4]; /* ref0, ref1 (0-255) */
+} PCGXFragBlock;
 
 typedef struct {
     int color_a, color_b, color_c, color_d;
@@ -123,7 +148,7 @@ typedef struct {
     int tex_gen_type[8];
     int tex_gen_src[8];
     int tex_gen_mtx[8];
-    GLuint gl_textures[8];
+    PCTex gl_textures[8];
     int tex_obj_w[8];
     int tex_obj_h[8];
     int tex_obj_fmt[8];
@@ -194,38 +219,13 @@ typedef struct {
     /* Deferred vertex commit: position starts vertex, commit on next position or GXEnd */
     int vertex_pending;
 
-    /* GL objects */
-    GLuint vao;
-    GLuint vbo;
-    GLuint ebo;
-    GLuint current_shader;
+    GLuint current_shader; /* OpenGL: the program in use (pc_gx_tev.c, pc_gfx.c) */
 
-    /* Uniform locations (looked up once per shader change) */
-    struct {
-        GLint projection, modelview, normal_mtx;
-        GLint tev_prev, tev_reg0, tev_reg1, tev_reg2;
-        GLint num_tev_stages;
-        GLint tev_color_in[PC_GX_MAX_TEV_STAGES], tev_alpha_in[PC_GX_MAX_TEV_STAGES];
-        GLint tev_color_op[PC_GX_MAX_TEV_STAGES], tev_alpha_op[PC_GX_MAX_TEV_STAGES];
-        GLint kcolor, tev_ksel;
-        GLint alpha_comp0, alpha_ref0, alpha_op, alpha_comp1, alpha_ref1;
-        GLint lighting_enabled, mat_color, amb_color;
-        GLint chan_mat_src, chan_amb_src, num_chans;
-        GLint alpha_lighting_enabled, alpha_mat_src;
-        GLint light_mask, light_pos[8], light_color[8];
-        GLint texmtx_enable[2], texmtx_row0[2], texmtx_row1[2], texgen_src[2];
-        GLint use_texture0, use_texture1, use_texture2;
-        GLint texture0, texture1, texture2;
-        GLint tev_tc_src[PC_GX_MAX_TEV_STAGES];
-        GLint num_ind_stages;
-        GLint ind_tex[4], ind_scale[4];
-        GLint ind_mtx_r0[PC_GX_MAX_TEV_STAGES], ind_mtx_r1[PC_GX_MAX_TEV_STAGES];
-        GLint tev_ind_cfg[PC_GX_MAX_TEV_STAGES], tev_ind_wrap[PC_GX_MAX_TEV_STAGES];
-        GLint fog_type, fog_start, fog_end, fog_color;
-        GLint tev_bsc[PC_GX_MAX_TEV_STAGES], tev_out[PC_GX_MAX_TEV_STAGES];
-        GLint swap_table;
-        GLint tev_swap[PC_GX_MAX_TEV_STAGES];
-    } uloc;
+    /* The shader's uniform blocks and configuration, kept up to date from
+     * the state groups that change (pc_gx_shader.c) */
+    PCGXVertBlock vert_block;
+    PCGXFragBlock frag_block;
+    PCGXShaderConfig shader_config;
 
     float clear_color[4];
     float clear_depth;
@@ -248,24 +248,31 @@ typedef struct {
 
 extern PCGXState g_gx;
 
-typedef struct PCGXShaderCacheEntry {
-    uint64_t key;
-    GLuint program;
-} PCGXShaderCacheEntry;
-
 /* --- Internal functions --- */
 void pc_gx_init(void);
 void pc_gx_shutdown(void);
 void pc_gx_flush_vertices(void);
 void pc_gx_flush_if_begin_complete(void);
 
-/* TEV shader */
-GLuint pc_gx_tev_get_shader(PCGXState* state);
+/* The GX shader's blocks and configuration from the state groups in dirty
+ * (pc_gx_shader.c); returns which of them changed (PC_GX_BLOCK_*) */
+#define PC_GX_BLOCK_VERT   1u
+#define PC_GX_BLOCK_FRAG   2u
+#define PC_GX_BLOCK_CONFIG 4u
+unsigned pc_gx_shader_update(unsigned int dirty);
+/* the GL texture of each sampler: stages 0-2, indirect stages 0-1 */
+void pc_gx_shader_textures(PCTex tex[5]);
+
+/* TEV shader programs (pc_gx_tev.c): makes the program for the current
+ * configuration current (the uber program while a specialized one is not
+ * ready) with the blocks up to date; changed is pc_gx_shader_update's */
+void   pc_gx_tev_use(unsigned changed);
 void   pc_gx_tev_init(void);
 void   pc_gx_tev_shutdown(void);
+void   pc_gx_tev_frame(void);
 
 /* Texture cache */
-GLuint pc_gx_texture_upload(void* data, int width, int height, int format, int ci_format,
+PCTex  pc_gx_texture_upload(void* data, int width, int height, int format, int ci_format,
                             void* tlut, int tlut_format, int tlut_count);
 void   pc_gx_texture_init(void);
 void   pc_gx_texture_shutdown(void);
@@ -273,12 +280,12 @@ void   pc_gx_texture_cache_invalidate(void);
 /* The texture pack (pc_texture_pack.c): a replacement that was loading is
  * there / one of its textures was freed */
 void   pc_gx_texture_hd_ready(unsigned long long key);
-void   pc_gx_texture_forget(GLuint tex);
+void   pc_gx_texture_forget(PCTex tex);
 
 #ifdef PC_ENHANCEMENTS
 /* EFB capture: store full-res GL texture from GXCopyTex, retrieve on texture load */
-void   pc_gx_efb_capture_store(uintptr_t dest_ptr, GLuint gl_tex);
-GLuint pc_gx_efb_capture_find(uintptr_t data_ptr);
+void   pc_gx_efb_capture_store(uintptr_t dest_ptr, PCTex gl_tex);
+PCTex  pc_gx_efb_capture_find(uintptr_t data_ptr);
 void   pc_gx_efb_capture_cleanup(void);
 #endif
 
