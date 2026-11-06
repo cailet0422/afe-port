@@ -7,6 +7,7 @@
 #include "pc_ko.h"
 #include "pc_minimap.h"
 #include "pc_gui.h"
+#include "pc_touch_full.h"
 
 #include <dolphin/pad.h>
 #include <math.h>
@@ -277,8 +278,9 @@ static int in_stick_zone(float x, float y) {
 
 /* --- Input ----------------------------------------------------------- */
 
+/* The GameCube pad: its own mode, or the full touch mode's when it wants it */
 static int enabled(void) {
-    return g_pc_settings.touch_controls == 1;
+    return g_pc_settings.touch_controls == 1 || (g_pc_settings.touch_controls == 2 && pc_touch_full_pad_shown());
 }
 
 static Finger* find_finger(s64 id) {
@@ -313,7 +315,13 @@ void pc_touch_finger_down(s64 id, float x, float y) {
     if (pc_ko_osk_touch(1, x, y)) {
         return; /* a key of the editor's on-screen keyboard */
     }
+    if (pc_touch_full_finger_down(id, x, y)) {
+        return; /* the full touch mode's (pc_touch_full.c) */
+    }
     if (!enabled()) {
+        if (pc_touch_full_on()) {
+            return;
+        }
         pc_minimap_touch(x, y); /* no pad: the minimap opens the map at once */
         return;
     }
@@ -361,6 +369,7 @@ void pc_touch_finger_move(s64 id, float x, float y) {
     Finger* f = find_finger(id);
 
     if (f == NULL) {
+        pc_touch_full_finger_move(id, x, y);
         pc_gui_touch(1, id, x, y);
         return;
     }
@@ -386,6 +395,9 @@ void pc_touch_finger_move(s64 id, float x, float y) {
 void pc_touch_finger_up(s64 id) {
     Finger* f = find_finger(id);
 
+    if (f == NULL && pc_touch_full_finger_up(id)) {
+        return;
+    }
     if (f == NULL && pc_gui_touch(2, id, 0.0f, 0.0f)) {
         return;
     }
@@ -421,6 +433,7 @@ void pc_touch_handle_event(const SDL_Event* event) {
 void pc_touch_read(u16* buttons, s8* stick_x, s8* stick_y) {
     int i;
 
+    pc_touch_full_read(buttons, stick_x, stick_y);
     if (!enabled()) {
         return;
     }

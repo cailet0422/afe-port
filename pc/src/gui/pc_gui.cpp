@@ -738,15 +738,16 @@ extern "C" void pc_gui_frame(void) {
     bool menu = menu_open();
     bool notes = NotificationsWanted();
     bool mp = MultiplayerOverlayWanted();
+    bool hud = !menu && TouchHudWanted();
 
     if ((menu || !mp) && ChatIsOpen()) {
         ChatClose(); /* the room ended or the menu opened (it has the chat too) */
     }
 
-    if (!menu && !notes && !mp && !s_drew_last_frame) {
+    if (!menu && !notes && !mp && !hud && !s_drew_last_frame) {
         return;
     }
-    s_drew_last_frame = menu || notes || mp;
+    s_drew_last_frame = menu || notes || mp || hud;
 
     apply_scale();
     if (s_finger_press_pending) {
@@ -756,6 +757,9 @@ extern "C" void pc_gui_frame(void) {
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
 
+    if (hud) {
+        TouchHud();
+    }
     if (mp && !menu) {
         MultiplayerOverlay();
     }

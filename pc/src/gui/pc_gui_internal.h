@@ -82,6 +82,10 @@ bool ChatButtonHit(float x, float y);      /* the touch screen's chat button */
 void DrawNotifications();
 bool NotificationsWanted();
 
+/* The full touch mode's icons (pc_gui_touch.cpp) */
+void TouchHud();
+bool TouchHudWanted();
+
 } // namespace gui
 
 #endif

@@ -3,6 +3,7 @@
 #include "pc_autosave.h"
 #include "pc_mp_game.h"
 #include "pc_touch.h"
+#include "pc_touch_internal.h"
 #include "pc_typing.h"
 #include "pc_minimap.h"
 #include "pc_gui.h"
@@ -104,6 +105,7 @@ typedef struct {
     s8 stick_y;
     float touch[4]; /* TOUCH: where the finger lands, then where it moves (0-1) */
     int touch_moves;
+    int touch_world; /* TOUCHW (1: a world point in touch[0], [1]) or TOUCHNPC (2: villager seek_id) */
     u16 seek_id;     /* SEEK: villager to walk to, or 0 for seek_pos */
     float seek_pos[2];
     u32 value[3]; /* GIVE item; LEDIT type and villager; RESETS count; CATCH villager; MENU
@@ -387,6 +389,23 @@ int pc_input_script_load(const char* path) {
             ev.touch_moves = n == 4;
             for (int i = 0; i < 4; i++) {
                 t[i] /= 100.0f; /* percent of the window */
+            }
+            ev.duration = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : SCRIPT_DEFAULT_HOLD;
+        } else if ((strcmp(word, "TOUCHW") == 0 || strcmp(word, "TOUCHNPC") == 0) && fields >= 3) {
+            /* TOUCHW x,z [frames]: a finger where that point of the ground is
+             * on the window; TOUCHNPC id [frames]: on that villager (the full
+             * touch mode's tests) */
+            ev.kind = SCRIPT_TOUCH;
+            if (word[5] == 'W') {
+                if (sscanf(arg, "%f,%f", &ev.touch[0], &ev.touch[1]) != 2) {
+                    fprintf(stderr, "[INPUT] %s:%d: expected 'TOUCHW x,z [frames]'\n", path, line_no);
+                    fclose(f);
+                    return 0;
+                }
+                ev.touch_world = 1;
+            } else {
+                ev.seek_id = (u16)strtoul(arg, NULL, 16);
+                ev.touch_world = 2;
             }
             ev.duration = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : SCRIPT_DEFAULT_HOLD;
         } else if (strcmp(word, "CLICK") == 0 && fields >= 3) {
@@ -1473,7 +1492,26 @@ int pc_input_script_frame(u32 real_frame) {
         if (ev->kind == SCRIPT_TOUCH) {
             s64 id = 0x5C000 + i;
 
-            if (frame == ev->frame) {
+            if (frame == ev->frame && ev->touch_world != 0) {
+                GAME_PLAY* tplay = (GAME_PLAY*)gamePT;
+                ACTOR* npc = ev->touch_world == 2 ? find_actor(ACTOR_PART_NPC, ev->seek_id) : NULL;
+                xyz_t wp = { ev->touch[0], 0.0f, ev->touch[1] };
+                float fx = 0.5f, fy = 0.5f;
+
+                if (npc != NULL) {
+                    wp = npc->world.position;
+                    wp.y += 18.0f;
+                } else if (ev->touch_world == 1) {
+                    wp.y = mCoBG_GetBgY_AngleS_FromWpos(NULL, wp, 0.0f);
+                }
+                if (tplay != NULL && tplay->game.exec == play_main &&
+                    (ev->touch_world == 1 || npc != NULL) && pc_touch_world_to_window(tplay, &wp, &fx, &fy)) {
+                    printf("[INPUT] frame %u: touch at %.1f%%, %.1f%%\n", (unsigned)frame, fx * 100.0f, fy * 100.0f);
+                    pc_touch_finger_down(id, fx, fy);
+                } else {
+                    printf("[INPUT] frame %u: nothing to touch\n", (unsigned)frame);
+                }
+            } else if (frame == ev->frame) {
                 pc_touch_finger_down(id, ev->touch[0], ev->touch[1]);
             } else if (frame == ev->frame + 1 && ev->touch_moves) {
                 pc_touch_finger_move(id, ev->touch[2], ev->touch[3]);
