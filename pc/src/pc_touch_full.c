@@ -732,7 +732,10 @@ int pc_touch_full_finger_down(s64 id, float x, float y) {
     f->y = f->y0 = f->ay = py;
     f->down_ms = SDL_GetTicks();
 
-    if (icon == PC_HUD_TOOL || icon == PC_HUD_TOOL_PREV || icon == PC_HUD_TOOL_NEXT) {
+    if (icon == PC_HUD_FURN_SLOT) {
+        f->kind = FK_ROOM; /* a piece in the pockets, to drag onto the floor */
+        pc_touch_room_finger(0, f->id, x, y);
+    } else if (icon == PC_HUD_TOOL || icon == PC_HUD_TOOL_PREV || icon == PC_HUD_TOOL_NEXT) {
         f->kind = FK_STRIP;
         f->hud = icon;
     } else if (icon != PC_HUD_KIND_COUNT) {

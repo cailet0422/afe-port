@@ -159,9 +159,11 @@ static void DrawTool(ImDrawList* dl, ImVec2 c, float r, int glyph, bool gold) {
             break;
         }
         case PC_GLYPH_AXE:
-            Line(dl, P(c, r, -0.50f, 0.66f), P(c, r, 0.30f, -0.56f), handle, t * 1.2f);
-            dl->AddQuadFilled(P(c, r, 0.04f, -0.62f), P(c, r, 0.62f, -0.30f), P(c, r, 0.48f, 0.06f),
-                              P(c, r, -0.10f, -0.22f), metal);
+            Line(dl, P(c, r, -0.50f, 0.66f), P(c, r, 0.22f, -0.64f), handle, t * 1.2f);
+            /* a head that flares out to its edge */
+            dl->AddQuadFilled(P(c, r, 0.06f, -0.50f), P(c, r, 0.60f, -0.76f), P(c, r, 0.68f, -0.02f),
+                              P(c, r, 0.12f, -0.26f), metal);
+            dl->AddLine(P(c, r, 0.60f, -0.76f), P(c, r, 0.68f, -0.02f), IM_COL32(0xFF, 0xFF, 0xFF, 0xB0), r * 0.06f);
             break;
         case PC_GLYPH_SHOVEL:
             Line(dl, P(c, r, 0.52f, -0.66f), P(c, r, -0.08f, 0.12f), handle, t);
