@@ -25,6 +25,8 @@
 
 extern int mCD_PC_AutoSaveSnapshot(Save* out, GAME_PLAY* play);
 extern int mCD_PC_FirstSave(void);
+extern int mCD_PC_FirstSaveDue(void);
+extern u32 pc_frame_counter;
 extern void aMR_PC_StorageIntoCopy(const void* floor, void* copy, int size);
 extern int mCD_PC_PatchTraveller(Save* file_save);
 extern int mCD_PC_LandFileInfo(const char** name, int* file_size, int* save_ofs0, int* save_ofs1);
@@ -39,8 +41,14 @@ static u32 s_last_ms = 0;
 static u32 s_quiet_since = 0; /* the player standing or walking since (an item in the air, a hole opening: done) */
 #define QUIET_MS 3000
 static GAME_PLAY* s_play = NULL;
-static int s_first_noted = 0; /* (the notice of a new town's first save, once) */
+static int s_town_made = 0;  /* save_now made a new town's file (and said so) */
 static int s_stopped = 0;     /* a town file deleted: no saving until the game restarts */
+static u32 s_first_try_ms = 0; /* the last try at a player's first save */
+static u32 s_first_due_frame = 0; /* (for the log) */
+/* A refusal is the game's or the card's, not the moment's: again in 30 s, as
+ * the timer. And should the first save still be due after it was made, it is
+ * not made again sooner either. */
+#define FIRST_RETRY_MS 30000
 
 int pc_resetti_enabled(void) {
     return !g_pc_settings.disable_resetti;
@@ -123,11 +131,9 @@ static int save_now(GAME_PLAY* play, const char* why, int force, int room) {
                 return SAVE_NOT_ALLOWED;
             }
             printf("[AUTOSAVE] %s: the town's first save (a new town file)\n", why);
-            if (!s_first_noted) {
-                s_first_noted = 1;
-                pc_gui_notify(pc_gui_korean() ? "자동 저장: 마을을 처음 저장했습니다. 이제 자동으로 저장됩니다."
-                                              : "Autosave: the town is saved for the first time; it now saves by itself.");
-            }
+            s_town_made = 1;
+            pc_gui_notify(pc_gui_korean() ? "자동 저장: 마을을 처음 저장했습니다. 이제 자동으로 저장됩니다."
+                                          : "Autosave: the town is saved for the first time; it now saves by itself.");
             if (!mCD_PC_AutoSaveSnapshot(s_buf, play)) {
                 s_last_ms = SDL_GetTicks();
                 return SAVE_DONE; /* (the first save is this one) */
@@ -233,6 +239,38 @@ void pc_autosave_scene_end(void) {
     save_now(NULL, "between scenes", 0, 0);
 }
 
+/* A player's first save (a new town's file, or a new resident's first save)
+ * is allowed on the first day once they have met a villager (the gyroid's
+ * rule). It is made at the first quiet moment after that talk, outdoors or
+ * in a building, rather than on the timer (every 30 s, outdoors). 1 while it
+ * is due (the timer waits). */
+static int first_save(GAME_PLAY* play) {
+    int r;
+
+    if (!mCD_PC_FirstSaveDue()) {
+        s_first_due_frame = 0;
+        return 0;
+    }
+    if (s_first_due_frame == 0) {
+        s_first_due_frame = pc_frame_counter;
+        printf("[AUTOSAVE] frame %u: a villager met, the first save can be made\n", (unsigned)pc_frame_counter);
+    }
+    if (s_first_try_ms != 0 && SDL_GetTicks() - s_first_try_ms < FIRST_RETRY_MS) return 1;
+    if (!quiet_place(play, 0, 0)) return 1;
+    s_town_made = 0;
+    r = save_now(play, "after meeting the first villager", 0, 0);
+    s_first_try_ms = SDL_GetTicks();
+    if (r != SAVE_DONE) return 1;
+    printf("[AUTOSAVE] frame %u: the first save, %u frames after the villager\n", (unsigned)pc_frame_counter,
+           (unsigned)(pc_frame_counter - s_first_due_frame));
+    if (!s_town_made) {
+        /* (a new town's first save has said so already) */
+        pc_gui_notify(pc_gui_korean() ? "자동 저장: 처음 저장했습니다. 이제 자동으로 저장됩니다."
+                                      : "Autosave: saved for the first time; it now saves by itself.");
+    }
+    return 1;
+}
+
 void pc_autosave_frame(struct game_s* game) {
     GAME_PLAY* play = (game != NULL && game->exec == play_main) ? (GAME_PLAY*)game : NULL;
     u32 every = (u32)g_pc_settings.autosave_minutes * 60000u;
@@ -244,6 +282,7 @@ void pc_autosave_frame(struct game_s* game) {
     }
     if (play == NULL || !g_pc_settings.autosave) return;
     if (s_last_ms == 0) s_last_ms = SDL_GetTicks(); /* (from the start of play) */
+    if (first_save(play)) return;
     if (SDL_GetTicks() - s_last_ms < every) return;
     if (!quiet_place(play, 1, 0)) {
         if (g_pc_verbose && SDL_GetTicks() % 5000 < 20) printf("[AUTOSAVE] waiting for a quiet moment outside (%d)\n", s_why);
