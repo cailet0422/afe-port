@@ -131,6 +131,11 @@ PLAYER_ACTOR* pc_touch_player(GAME_PLAY* play) {
     return play != NULL ? GET_PLAYER_ACTOR(play) : NULL;
 }
 
+/* The title screen: its logo and the demo played under it */
+int pc_touch_title(void) {
+    return pc_touch_play() != NULL && mEv_CheckTitleDemo() != mEv_TITLEDEMO_NONE;
+}
+
 int pc_touch_msg_open(void) {
     mMsg_Window_c* msg = mMsg_Get_base_window_p();
 
@@ -142,7 +147,7 @@ int pc_touch_player_free(GAME_PLAY* play) {
     int index;
 
     if (play == NULL || pc_touch_player(play) == NULL || pc_touch_msg_open() ||
-        play->submenu.process_status != mSM_PROCESS_WAIT || mEv_CheckTitleDemo() > 0) {
+        play->submenu.process_status != mSM_PROCESS_WAIT || pc_touch_title()) {
         return FALSE;
     }
     index = mPlib_get_player_actor_main_index((GAME*)play);
@@ -454,7 +459,7 @@ static int tool_neighbour(int dir) {
 }
 
 static int tool_can_change(GAME_PLAY* play) {
-    return pc_touch_player_free(play) && mPlib_able_submenu_type1((GAME*)play) && !mEv_CheckTitleDemo();
+    return pc_touch_player_free(play) && mPlib_able_submenu_type1((GAME*)play) && !pc_touch_title();
 }
 
 static void tool_take(int slot, int dir) {
@@ -517,7 +522,7 @@ static int hud_mode(GAME_PLAY* play) {
     if (menu == mSM_OVL_INVENTORY || menu == mSM_OVL_MAP) {
         return play->submenu.process_status == mSM_PROCESS_PLAY ? 2 : 0;
     }
-    if (menu != mSM_OVL_NONE || pc_touch_msg_open() || mEv_CheckTitleDemo() > 0) {
+    if (menu != mSM_OVL_NONE || pc_touch_msg_open() || pc_touch_title()) {
         return 0;
     }
     index = mPlib_get_player_actor_main_index((GAME*)play);
@@ -674,8 +679,8 @@ int pc_touch_full_pad_shown(void) {
         return FALSE;
     }
     play = pc_touch_play();
-    if (play == NULL || mEv_CheckTitleDemo() != 0) {
-        return TRUE; /* the title (its demo is played), the save screens: START and the buttons */
+    if (play == NULL) {
+        return TRUE; /* the screens before the game (the memory card's ...): the buttons */
     }
     menu = submenu_type(play);
     if (menu == mSM_OVL_INVENTORY && play->submenu.overlay != NULL &&
@@ -720,6 +725,12 @@ int pc_touch_full_finger_down(s64 id, float x, float y) {
 
     if (!pc_touch_full_on()) {
         return FALSE;
+    }
+    if (pc_touch_title() && !s_pad_wanted) {
+        /* the title: a touch anywhere is START (its logo waits for START or A) */
+        press(PAD_BUTTON_START, 0);
+        printf("[TOUCH] title: START\n");
+        return TRUE;
     }
     icon = icon_at(px, py, &index);
     if (pc_touch_full_pad_shown() && icon != PC_HUD_PAD) {

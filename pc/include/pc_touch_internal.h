@@ -16,6 +16,8 @@ GAME_PLAY* pc_touch_play(void);
 PLAYER_ACTOR* pc_touch_player(GAME_PLAY* play);
 /* A message window is up */
 int pc_touch_msg_open(void);
+/* The title screen (its logo, the demo under it) */
+int pc_touch_title(void);
 /* Standing or walking, no message, no menu */
 int pc_touch_player_free(GAME_PLAY* play);
 /* A world point on the window (fractions; FALSE behind the camera), and the

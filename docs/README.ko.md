@@ -237,7 +237,9 @@ ninja -C pc/build32strip
   - 도구 칸은 `Now_Private->equipment`를 소지품 한 칸과 맞바꾼다(소지품 메뉴가 하듯이, m_hand_ovl.c
     `mHD_drop_item`; 플레이어는 다음 서기·걷기·달리기에서 꺼내 든다). 빈 손과 소지품을 차례로 돌고, 손에 든 도구는 두
     자리 사이에 있어 한 번 넘겼다 돌아오면 같은 도구가 온다.
-  - 다른 메뉴, 패미컴 게임, 플레이 전 화면에서는 패드가 뜬다(`pc_touch_full_pad_shown`).
+  - 타이틀 화면(로고와 데모가 `play_main`에서 돈다, `mEv_CheckTitleDemo() != 0`)에서는 아무 곳이나 누르면 START이고 패드와
+    아이콘은 없다. 다른 메뉴, 패미컴 게임, `play_main` 밖의 화면(메모리 카드 등)에서는 패드가 뜬다
+    (`pc_touch_full_pad_shown`).
 - 소지품(`pc_touch_menu.c`): m_tag_ovl.c의 표에서 가져온 칸 위치(640x480 화면, `pc_gx_window_to_ui`). 커서는
   `mTG_PC_touch_cursor`(m_tag_ovl.c, TARGET_PC)로 손가락 쪽으로 간다: 스틱이 커서를 옮기는 자리에서, 손에 든 것에 대한
   같은 규칙으로. 그다음 A(탭), L(끌기는 물건을 집음), 손가락을 뗀 곳에서 A(칸 밖이면 B). 명령 목록의 줄은

@@ -374,8 +374,9 @@ pad is the default on Android):
   - **Furniture mode** (the chair icon, in your own house): tap a piece to pick it, drag it to move it (green where it
     fits), turn it with the arrows, put it in your pockets with the satchel, or drag a piece from the pockets at the
     bottom onto the floor. The check mark ends the mode.
-  - Everything else that wants buttons (other menus, the NES games, the title) brings the GameCube pad up by itself;
-    the gamepad icon shows it at any time.
+  - On the title screen, a touch anywhere starts (START).
+  - Everything else that wants buttons (other menus, the NES games) brings the GameCube pad up by itself; the gamepad
+    icon shows it at any time.
 
 ## Known limitations
 

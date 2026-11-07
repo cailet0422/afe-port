@@ -262,7 +262,9 @@ full touch mode (`pc_touch_full.c`, `pc_touch_menu.c`, `pc_touch_room.c`, icons 
   - The tool strip swaps `Now_Private->equipment` with a pocket (as the pockets' menu does, m_hand_ovl.c
     `mHD_drop_item`; the player takes it out at its next wait, walk or run). It moves round the empty hand and the
     pockets in order; the tool in hand is between two places, so a step back takes back the same one.
-  - Other menus, the NES games and the screens before play bring the pad up (`pc_touch_full_pad_shown`).
+  - The title screen (its logo and demo run in `play_main`, `mEv_CheckTitleDemo() != 0`): a touch anywhere is START,
+    no pad, no icons. Other menus, the NES games and the screens outside `play_main` (the memory card's) bring the pad
+    up (`pc_touch_full_pad_shown`).
 - The pockets (`pc_touch_menu.c`): slots from the tables of m_tag_ovl.c in the 640x480 picture
   (`pc_gx_window_to_ui`). The cursor goes where the finger is through `mTG_PC_touch_cursor` (m_tag_ovl.c, TARGET_PC):
   at the point where the stick would move it, under the same rules for what the hand holds; then A (a tap), L (a drag
