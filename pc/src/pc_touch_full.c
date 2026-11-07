@@ -422,17 +422,21 @@ static int thing_at(GAME_PLAY* play, const xyz_t* ground, float px, float py, fl
             xyz_t c = { x * 40.0f + 20.0f, 0.0f, z * 40.0f + 20.0f };
             mActor_name_t* fg = mFI_GetUnitFG(c);
             float h, bx, by, tx, ty, ex, ey, hw;
-            xyz_t top, edge;
+            xyz_t base, top, edge;
 
             if (fg == NULL || (h = thing_height(*fg)) <= 0.0f) {
                 continue;
             }
             c.y = mCoBG_GetBgY_AngleS_FromWpos(NULL, c, 0.0f);
-            top = c;
+            base = c;
+            if (obj_kind(*fg) == OBJ_BOARD) {
+                base.z += 20.0f; /* (a board stands on its units' south edge) */
+            }
+            top = base;
             top.y += h;
-            edge = c;
+            edge = base;
             edge.x += 20.0f;
-            if (!pc_touch_world_to_window(play, &c, &bx, &by) || !pc_touch_world_to_window(play, &top, &tx, &ty) ||
+            if (!pc_touch_world_to_window(play, &base, &bx, &by) || !pc_touch_world_to_window(play, &top, &tx, &ty) ||
                 !pc_touch_world_to_window(play, &edge, &ex, &ey)) {
                 continue;
             }
