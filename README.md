@@ -374,13 +374,17 @@ pad is the default on Android):
   - Icons at the top: the pause menu, save and the gamepad (top left), the map and the pockets (top right). In the
     pockets, tap a slot for its commands (or to put down what the hand holds), tap a command, and **drag an item** to
     another slot or onto yourself to wear or hold it; in the map, tap an acre. The X closes them.
+  - **The mailbox** works as the pockets: tap a letter for its commands, drag one from the mailbox to your letters.
+    Its question when your letters are full: tap its left half for yes, its right half for no. **The notice board**:
+    swipe (or tap the page's left or right half) to turn its pages, swipe up or down (or tap its buttons below) for
+    the newest or the first, tap its buttons to write or quit. **A letter being read**: a tap closes it.
   - **Tools**: the strip in the middle shows the tool in hand with the ones before and after it in your pockets;
     **swipe** it left or right (or tap a side) to take another one out.
   - **Furniture mode** (the chair icon, in your own house): tap a piece to pick it, drag it to move it (green where it
     fits), turn it with the arrows, put it in your pockets with the satchel, or drag a piece from the pockets at the
     bottom onto the floor. A tap on a piece, in the room or in the row, shows its name. The check mark ends the mode.
   - On the title screen, a touch anywhere starts (START).
-  - Everything else that wants buttons (other menus, the NES games) brings the GameCube pad up by itself; the gamepad
+  - Everything else that wants buttons (the other menus, the NES games) brings the GameCube pad up by itself; the gamepad
     icon shows it at any time.
 
 ## Known limitations

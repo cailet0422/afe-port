@@ -38,6 +38,9 @@ void pc_touch_menu_read(u16* buttons, s8* stick_x, s8* stick_y);
 void pc_touch_menu_frame(GAME_PLAY* play);
 /* The close icon: B until the pockets or the map close */
 void pc_touch_menu_close(void);
+/* The open menu is one this mode works by touch (the pockets, the map, the
+ * mailbox, the notice board, a letter being read, the pockets' questions) */
+int pc_touch_menu_owns(GAME_PLAY* play);
 
 /* --- pc_touch_room.c: the furniture mode ----------------------------------- */
 

@@ -248,13 +248,19 @@ ninja -C pc/build32strip
     `mHD_drop_item`; 플레이어는 다음 서기·걷기·달리기에서 꺼내 든다). 빈 손과 소지품을 차례로 돌고, 손에 든 도구는 두
     자리 사이에 있어 한 번 넘겼다 돌아오면 같은 도구가 온다.
   - 타이틀 화면(로고와 데모가 `play_main`에서 돈다, `mEv_CheckTitleDemo() != 0`)에서는 아무 곳이나 누르면 START이고 패드와
-    아이콘은 없다. 다른 메뉴, 패미컴 게임, `play_main` 밖의 화면(메모리 카드 등)에서는 패드가 뜬다
+    아이콘은 없다. 터치로 다루지 않는 메뉴, 패미컴 게임, `play_main` 밖의 화면(메모리 카드 등)에서는 패드가 뜬다
     (`pc_touch_full_pad_shown`).
 - 소지품(`pc_touch_menu.c`): m_tag_ovl.c의 표에서 가져온 칸 위치(640x480 화면, `pc_gx_window_to_ui`). 커서는
   `mTG_PC_touch_cursor`(m_tag_ovl.c, TARGET_PC)로 손가락 쪽으로 간다: 스틱이 커서를 옮기는 자리에서, 손에 든 것에 대한
   같은 규칙으로. 그다음 A(탭), L(끌기는 물건을 집음), 손가락을 뗀 곳에서 A(칸 밖이면 B). 명령 목록의 줄은
   `mTG_PC_touch_select_row`로 고르고 `mTG_PC_select_geometry`가 줄 위치를 알려 준다. 지도: 손가락 아래 구역을 스틱
   한 걸음처럼 고른다(`sel_bx`, `sel_bz`, 커서 목표, `mSM_OVL_PROC_WAIT`).
+- 터치로 다루는 메뉴(`pc_touch_menu_owns`; 나머지는 패드가 뜬다): 소지품(편지 복사 옆의 소지품 제외), 지도, 우편함,
+  게시판, 읽고 있는 편지(읽기로 연 `mSM_OVL_BOARD`), 소지품의 경고창(`mSM_OVL_WARNING`). 우편함은 소지품 메뉴에
+  우편함 표(`mTG_TABLE_MBOX`, (248, 162)부터 2 x 5)가 내 편지 옆에 붙은 것이고, `mTG_PC_touch_cursor`는 스틱처럼
+  손이 비었을 때만 그 표로 간다(`mTG_move_cursol_between_table_mailbox`). 게시판(m_notice_ovl.c)은 스틱 밀기(6프레임:
+  좌우는 쪽 넘김, 위는 최신 글, 아래는 첫 글)와 버튼 위의 A(쓰기)·B(그만두기)로 다룬다. 질문이 있는 경고창(0번, 우편함의
+  "편지가 가득, 버려도 돼?")은 왼쪽으로 밀고 A(좋아) 또는 B(안돼)로 답하고, 질문이 없는 것은 A로 닫는다.
 - `pc_gx_window_to_ui`는 이제 `g_pc_widescreen_stretch`를 읽지 않는다. emu64가 그리는 동안 바꾸는 값이라(전환
   효과의 늘인 그림) 프레임 사이에는 마지막에 그린 것의 값이 남아 있어, 한글 편집기 키보드와 메뉴의 터치가 옆 칸으로
   갈 수 있었다.

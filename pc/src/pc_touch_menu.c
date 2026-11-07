@@ -64,6 +64,8 @@ static struct {
 
 static u16 s_press;
 static u32 s_press_from;
+static s8 s_stick_x, s_stick_y; /* a push of the stick (the notice board's pages), until s_stick_until */
+static u32 s_stick_until;
 static u32 s_close_until;
 static int s_map_tap;
 static float s_map_ux, s_map_uy;
@@ -73,6 +75,12 @@ static void press(u16 buttons, u32 delay) {
     s_press_from = pc_frame_counter + delay;
 }
 
+static void push_stick(s8 x, s8 y) {
+    s_stick_x = x;
+    s_stick_y = y;
+    s_stick_until = pc_frame_counter + 6;
+}
+
 static Submenu* submenu_of(GAME_PLAY* play) {
     if (play == NULL || play->submenu.process_status != mSM_PROCESS_PLAY || play->submenu.overlay == NULL) {
         return NULL;
@@ -80,19 +88,26 @@ static Submenu* submenu_of(GAME_PLAY* play) {
     return &play->submenu;
 }
 
-/* The pockets on their main page, taking input */
+/* The pockets (or the mailbox, the same kind of menu) taking input */
 static mSM_MenuInfo_c* inventory_ready(Submenu* sm) {
     mSM_MenuInfo_c* info;
+    int type;
 
-    if (sm == NULL || sm->menu_type != mSM_OVL_INVENTORY) {
+    if (sm == NULL || (sm->menu_type != mSM_OVL_INVENTORY && sm->menu_type != mSM_OVL_MAILBOX)) {
         return NULL;
     }
-    info = &sm->overlay->menu_info[mSM_OVL_INVENTORY];
+    type = sm->menu_type;
+    info = &sm->overlay->menu_info[type];
     if (info->proc_status != mSM_OVL_PROC_PLAY || sm->overlay->tag_ovl == NULL || sm->overlay->hand_ovl == NULL ||
-        sm->overlay->inventory_ovl == NULL) {
+        (type == mSM_OVL_INVENTORY && sm->overlay->inventory_ovl == NULL)) {
         return NULL;
     }
     return info;
+}
+
+/* The pockets in their own menu (not the mailbox's) */
+static int is_pockets(const mSM_MenuInfo_c* info) {
+    return info->menu_type == mSM_OVL_INVENTORY;
 }
 
 /* Which slot a point of the 640x480 picture is on */
@@ -101,6 +116,23 @@ static int cell_at(const mSM_MenuInfo_c* info, float ux, float uy, Cell* c) {
     float y = uy + 2.0f * info->position[1];
     int col, row;
 
+    if (info->menu_type == mSM_OVL_MAILBOX) {
+        /* the mailbox's letters: 2 x 5 from (248, 162) (mTG_mbox_col_pos, mTG_mbox_line_pos) */
+        col = (int)floorf((x - 224.0f) / 48.0f);
+        row = (int)floorf((y - 138.0f) / 48.0f);
+        if (col >= 0 && col < 2 && row >= 0 && row < 5) {
+            *c = (Cell){ mTG_TABLE_MBOX, col, row };
+            return TRUE;
+        }
+        /* the player's letters, as in the pockets */
+        col = (int)floorf((x - 406.0f) / 48.0f);
+        row = (int)floorf((y - 140.0f) / 48.0f);
+        if (col >= 0 && col < 2 && row >= 0 && row < 5) {
+            *c = (Cell){ mTG_TABLE_MAIL, col, row };
+            return TRUE;
+        }
+        return FALSE;
+    }
     /* the 15 pockets: 5 x 3, 48 apart, centres from (166, 260) */
     col = (int)floorf((x - 142.0f) / 48.0f);
     row = (int)floorf((y - 236.0f) / 48.0f);
@@ -154,11 +186,12 @@ static int cursor_is(Submenu* sm, const Cell* c) {
 static int hand_idle(Submenu* sm) {
     mHD_Ovl_c* hand = sm->overlay->hand_ovl;
     mTG_Ovl_c* tag = sm->overlay->tag_ovl;
+    mIV_Ovl_c* inv = sm->overlay->inventory_ovl;
 
     return hand->info.move_flag == mHD_MOVE_NONE && hand->info.wait_timer == 0 &&
            (hand->info.act == mHD_ACTION_CLOSE_KEEP || hand->info.act == mHD_ACTION_SASU) && tag->sel_tag_idx == 0 &&
-           tag->tags[0].type == mTG_TYPE_NONE && sm->overlay->inventory_ovl->page_move_timer == 0 &&
-           sm->overlay->segment.player_anime_timer <= 0 && sm->overlay->inventory_ovl->remove_timer == 0;
+           tag->tags[0].type == mTG_TYPE_NONE && (inv == NULL || (inv->page_move_timer == 0 && inv->remove_timer == 0)) &&
+           sm->overlay->segment.player_anime_timer <= 0;
 }
 
 static int hand_holds(Submenu* sm) {
@@ -175,6 +208,9 @@ static int cell_has_item(const Cell* c) {
     if (c->table == mTG_TABLE_MAIL) {
         return !mMl_check_not_used_mail(&Now_Private->mail[c->col + c->row * 2]);
     }
+    if (c->table == mTG_TABLE_MBOX) {
+        return TRUE; /* (an empty one: the hand takes nothing and the drag ends) */
+    }
     return FALSE;
 }
 
@@ -187,12 +223,77 @@ static void set_phase(int phase, const Cell* c) {
     s_inv.pressed = 0;
 }
 
+/* The notice board (m_notice_ovl.c mNT_Play_page_read): the stick turns its
+ * pages (left, right; up to the newest, down to the first), A writes, B or
+ * START closes. A swipe on it turns them, a tap on its left or right half too;
+ * its own buttons below (640x480: write by (467, 352), quit by (452, 395), the
+ * newest and the first by (105, 408) and (280, 408)) are pressed by a tap. */
+static void notice_tap(float x0, float y0, float x1, float y1) {
+    float dx = x1 - x0, dy = y1 - y0;
+
+    if (fabsf(dx) > 40.0f && fabsf(dx) > fabsf(dy)) {
+        push_stick(dx < 0.0f ? 60 : -60, 0); /* a swipe to the left brings the next page */
+    } else if (fabsf(dy) > 40.0f) {
+        push_stick(0, dy < 0.0f ? 60 : -60); /* up: the newest; down: the first */
+    } else if (x1 > 420.0f && x1 < 530.0f && y1 > 325.0f && y1 < 377.0f) {
+        press(PAD_BUTTON_A, 0); /* write */
+    } else if (x1 > 410.0f && x1 < 530.0f && y1 >= 377.0f && y1 < 430.0f) {
+        press(PAD_BUTTON_B, 0); /* quit */
+    } else if (x1 > 50.0f && x1 < 170.0f && y1 > 385.0f && y1 < 430.0f) {
+        push_stick(0, 60);
+    } else if (x1 > 220.0f && x1 < 330.0f && y1 > 385.0f && y1 < 430.0f) {
+        push_stick(0, -60);
+    } else if (y1 < 385.0f) {
+        push_stick(x1 < 320.0f ? -60 : 60, 0);
+    }
+    printf("[TOUCH] notice board: %.0f,%.0f -> %.0f,%.0f\n", x0, y0, x1, y1);
+}
+
+/* The warning's question (m_warning_ovl.c mWR_move_Play; "the letters are
+ * full, throw away ...?"): the stick to the left or right moves between its
+ * two answers, A takes one, B is no. A tap on the window's left half answers
+ * yes, on its right half no; one with only a message takes a tap anywhere. */
+static void warning_tap(Submenu* sm, float ux, float uy) {
+    mSM_MenuInfo_c* info = &sm->overlay->menu_info[mSM_OVL_WARNING];
+
+    if (info->data0 != 0) {
+        press(PAD_BUTTON_A, 0);
+    } else if (ux < 80.0f || ux > 560.0f || uy < 110.0f || uy > 390.0f) {
+        return; /* (beside the window) */
+    } else if (ux < 320.0f) {
+        push_stick(-60, 0); /* yes: to the left, then A */
+        press(PAD_BUTTON_A, 10);
+    } else {
+        press(PAD_BUTTON_B, 0);
+    }
+    printf("[TOUCH] warning: %.0f,%.0f\n", ux, uy);
+}
+
 void pc_touch_menu_finger(int kind, s64 id, float x, float y) {
     GAME_PLAY* play = pc_touch_play();
     Submenu* sm = submenu_of(play);
     float ux, uy;
 
     pc_gx_window_to_ui(x, y, &ux, &uy);
+    if (sm != NULL &&
+        (sm->menu_type == mSM_OVL_NOTICE || sm->menu_type == mSM_OVL_BOARD || sm->menu_type == mSM_OVL_WARNING)) {
+        if (kind == 0) {
+            s_inv.finger = 1;
+            s_inv.id = id;
+            s_inv.ux0 = ux;
+            s_inv.uy0 = uy;
+        } else if (kind == 2 && s_inv.finger && id == s_inv.id) {
+            s_inv.finger = 0;
+            if (sm->menu_type == mSM_OVL_BOARD) {
+                press(PAD_BUTTON_A, 0); /* a letter read: a tap closes it */
+            } else if (sm->menu_type == mSM_OVL_WARNING) {
+                warning_tap(sm, ux, uy);
+            } else {
+                notice_tap(s_inv.ux0, s_inv.uy0, ux, uy);
+            }
+        }
+        return;
+    }
     if (sm != NULL && sm->menu_type == mSM_OVL_MAP) {
         if (kind == 2) {
             s_map_tap = 1;
@@ -224,7 +325,8 @@ void pc_touch_menu_finger(int kind, s64 id, float x, float y) {
             if (info != NULL) {
                 printf("[TOUCH] pockets: drag from %.0f,%.0f\n", s_inv.ux0, s_inv.uy0);
             }
-            if (info != NULL && (info->data0 == mSM_IV_OPEN_NORMAL || info->data0 == mSM_IV_OPEN_EXCHANGE) &&
+            if (info != NULL &&
+                (!is_pockets(info) || info->data0 == mSM_IV_OPEN_NORMAL || info->data0 == mSM_IV_OPEN_EXCHANGE) &&
                 s_inv.phase == PH_NONE && cell_at(info, s_inv.ux0, s_inv.uy0, &c) &&
                 cell_has_item(&c) && !hand_holds(sm) && sm->overlay->tag_ovl->sel_tag_idx == 0) {
                 set_phase(PH_GRAB, &c);
@@ -276,7 +378,7 @@ void pc_touch_menu_finger(int kind, s64 id, float x, float y) {
             return;
         }
         if (cell_at(info, ux, uy, &c)) {
-            if (info->data0 != mSM_IV_OPEN_NORMAL && info->data0 != mSM_IV_OPEN_EXCHANGE &&
+            if (is_pockets(info) && info->data0 != mSM_IV_OPEN_NORMAL && info->data0 != mSM_IV_OPEN_EXCHANGE &&
                 c.table != sm->overlay->tag_ovl->tags[0].table) {
                 return; /* (selling, giving ...: the cursor stays in its table) */
             }
@@ -286,7 +388,8 @@ void pc_touch_menu_finger(int kind, s64 id, float x, float y) {
         {
             int tab = tab_at(info, ux, uy);
 
-            if (tab >= 0 && info->data0 == mSM_IV_OPEN_NORMAL && sm->overlay->inventory_ovl->page_order[0] != tab) {
+            if (tab >= 0 && is_pockets(info) && info->data0 == mSM_IV_OPEN_NORMAL &&
+                sm->overlay->inventory_ovl->page_order[0] != tab) {
                 press(PAD_TRIGGER_R, 0);
             }
         }
@@ -401,7 +504,7 @@ void pc_touch_menu_frame(GAME_PLAY* play) {
     if (sm->overlay->tag_ovl == NULL || sm->overlay->tag_ovl->sel_tag_idx < 1) {
         mTG_PC_touch_select_row(-1); /* no list open: a line tapped as it closed is forgotten */
     }
-    if (sm->menu_type == mSM_OVL_INVENTORY) {
+    if (sm->menu_type == mSM_OVL_INVENTORY || sm->menu_type == mSM_OVL_MAILBOX) {
         inventory_frame(sm);
     } else {
         mTG_PC_touch_cursor(-1, 0, 0);
@@ -416,8 +519,10 @@ void pc_touch_menu_close(void) {
 }
 
 void pc_touch_menu_read(u16* buttons, s8* stick_x, s8* stick_y) {
-    (void)stick_x;
-    (void)stick_y;
+    if ((s32)(s_stick_until - pc_frame_counter) > 0) {
+        *stick_x = s_stick_x;
+        *stick_y = s_stick_y;
+    }
     if (s_press != 0 && (s32)(pc_frame_counter - s_press_from) >= 0 &&
         (s32)(pc_frame_counter - s_press_from) < PRESS_FRAMES) {
         *buttons |= s_press;
@@ -431,5 +536,35 @@ void pc_touch_menu_read(u16* buttons, s8* stick_x, s8* stick_y) {
         } else {
             s_close_until = 0;
         }
+    }
+}
+
+/* The menus this mode works by touch: the pockets (but beside the letters'
+ * copy), the map, the mailbox, the notice board, a letter being read, the
+ * pockets' questions */
+int pc_touch_menu_owns(GAME_PLAY* play) {
+    Submenu* sm;
+    int type;
+
+    if (play == NULL || play->submenu.process_status == mSM_PROCESS_WAIT || play->submenu.overlay == NULL) {
+        return FALSE;
+    }
+    sm = &play->submenu;
+    type = sm->menu_type;
+    switch (type) {
+        case mSM_OVL_INVENTORY:
+            return sm->overlay->menu_info[mSM_OVL_INVENTORY].data0 != mSM_IV_OPEN_CPMAIL;
+        case mSM_OVL_MAP:
+        case mSM_OVL_MAILBOX:
+        case mSM_OVL_NOTICE:
+        case mSM_OVL_WARNING: /* (the pockets' and the mailbox's questions) */
+            return TRUE;
+        case mSM_OVL_BOARD: {
+            int mode = sm->overlay->menu_info[mSM_OVL_BOARD].data0;
+
+            return mode == mSM_BD_OPEN_READ || mode == mSM_BD_OPEN_READ_ISLAND;
+        }
+        default:
+            return FALSE;
     }
 }

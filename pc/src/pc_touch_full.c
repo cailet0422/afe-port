@@ -699,7 +699,7 @@ static int hud_mode(GAME_PLAY* play) {
         return 0;
     }
     menu = submenu_type(play);
-    if (menu == mSM_OVL_INVENTORY || menu == mSM_OVL_MAP) {
+    if (pc_touch_menu_owns(play)) {
         return play->submenu.process_status == mSM_PROCESS_PLAY ? 2 : 0;
     }
     if (menu != mSM_OVL_NONE || pc_touch_msg_open() || pc_touch_title()) {
@@ -863,12 +863,8 @@ int pc_touch_full_pad_shown(void) {
         return TRUE; /* the screens before the game (the memory card's ...): the buttons */
     }
     menu = submenu_type(play);
-    if (menu == mSM_OVL_INVENTORY && play->submenu.overlay != NULL &&
-        play->submenu.overlay->menu_info[mSM_OVL_INVENTORY].data0 == mSM_IV_OPEN_CPMAIL) {
-        return TRUE; /* (the pockets beside the letters' copy: another layout) */
-    }
-    /* the menus other than the pockets and the map want buttons */
-    return menu != mSM_OVL_NONE && menu != mSM_OVL_INVENTORY && menu != mSM_OVL_MAP;
+    /* the menus but those worked by touch want buttons (pc_touch_menu.c) */
+    return menu != mSM_OVL_NONE && !pc_touch_menu_owns(play);
 }
 
 /* --- Fingers ---------------------------------------------------------- */
@@ -943,7 +939,7 @@ int pc_touch_full_finger_down(s64 id, float x, float y) {
     } else if (pc_touch_room_on()) {
         f->kind = FK_ROOM;
         pc_touch_room_finger(0, f->id, x, y);
-    } else if (play != NULL && (submenu_type(play) == mSM_OVL_INVENTORY || submenu_type(play) == mSM_OVL_MAP)) {
+    } else if (play != NULL && pc_touch_menu_owns(play)) {
         f->kind = FK_MENU;
         pc_touch_menu_finger(0, f->id, x, y);
     } else if (pc_minimap_at(x, y) && pc_touch_player_free(play)) {

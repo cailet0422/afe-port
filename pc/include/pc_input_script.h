@@ -29,6 +29,8 @@
  *     <frame> SOUND <kind> <id> <n> [<frames>]  play n sounds from that hex id, each for
  *                                     frames (120): BGM, SE (system), HANIWA (a gyroid's
  *                                     rhythm, 1-127), INST (a furniture instrument)
+ *     <frame> LETTERS <n> [<m>]       debug: n letters (to the player, from the player) in
+ *                                     the house's mailbox, m in the player's letters
  *     <frame> NOJOB                   debug: end the part-time job for Nook (day one), so
  *                                     the shops, post office and houses act as later on
  *     <frame> UNSAVED                 debug: the player's house as never saved at its gyroid
