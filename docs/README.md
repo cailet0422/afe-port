@@ -275,8 +275,8 @@ full touch mode (`pc_touch_full.c`, `pc_touch_menu.c`, `pc_touch_room.c`, icons 
     `mHD_drop_item`; the player takes it out at its next wait, walk or run). It moves round the empty hand and the
     pockets in order; the tool in hand is between two places, so a step back takes back the same one.
   - The title screen (its logo and demo run in `play_main`, `mEv_CheckTitleDemo() != 0`): a touch anywhere is START,
-    no pad, no icons. The menus not worked by touch, the NES games and the screens outside `play_main` (the memory
-    card's) bring the pad up (`pc_touch_full_pad_shown`).
+    no pad, no icons. The NES games (with a door icon to leave) and the screens outside `play_main` (the Nintendo
+    logo) bring the pad up (`pc_touch_full_pad_shown`); every menu of the game is worked by touch.
 - The pockets (`pc_touch_menu.c`): slots from the tables of m_tag_ovl.c in the 640x480 picture
   (`pc_gx_window_to_ui`). The cursor goes where the finger is through `mTG_PC_touch_cursor` (m_tag_ovl.c, TARGET_PC):
   at the point where the stick would move it, under the same rules for what the hand holds; then A (a tap), L (a drag
@@ -291,6 +291,34 @@ full touch mode (`pc_touch_full.c`, `pc_touch_menu.c`, `pc_touch_room.c`, icons 
   by stick pushes (6 frames: left and right turn its pages, up the newest, down the first) and A (write) or B (quit)
   on its buttons. A warning with a question (type 0, the mailbox's "letters full, throw away?") is answered by a
   push to the left and A (yes) or by B (no); one without a question takes A.
+- The other menus of tables are the pockets' kind too (`table_menu`): the catalog (`mTG_TABLE_CATALOG`, 7 names, and
+  its 9 tabs; the hook sets `change_flag` so the picked name and its picture follow), the designs' list
+  (`mTG_TABLE_NEEDLEWORK`), the music player's records (`mTG_TABLE_MUSIC_MAIN`), the gyroid's 4 with the pockets
+  (`mTG_TABLE_HANIWA`; its price tag by stick pushes), the memory card's designs and letters (`mTG_TABLE_CPORIGINAL*`,
+  `mTG_TABLE_CPMAIL*`; their cursor is a tag a level up, `cur_tag`). `mTG_pc_touch_move` (m_tag_ovl.c, TARGET_PC)
+  takes each into its tables where the stick could go; the lists' pages are the raw C-stick (`push_cstick`).
+- The rest (`pc_touch_menus.c`, `pc_touch_menus_owns`) are given the pad a step at a time: a queue of presses
+  (stick, C-stick, buttons; on and off frames, so each is a fresh edge for `mSM_make_trigger_data`), and a walker that
+  pushes the stick (or the D-pad) toward a target and reads the menu's own cursor back until it is there, then
+  presses A if a tap means that (waiting while the menu takes no input: sliding, the town tune playing). The text
+  editor (all its kinds, the address book over it), the "is this right?" question, the diary's question, the clock,
+  the alarm, a birthday, the calendar and the diary, the savings and the loan, the town tune, the design editor. Their
+  keys (`PC_HUD_KEY`, a glyph or a label) and the done key (`PC_HUD_DONE`, START) stand on the right; the close icon
+  presses the menu's own way out once (B; R for the town tune; none where only done leaves).
+- The design editor (m_design_ovl.c, TARGET_PC): `mDE_PC_set_cursor` puts the cursor on a pixel (with its fixed
+  point copies), `mDE_PC_pen_line` draws the pen's brush along the way between two frames (the game draws only where
+  the cursor is while A is held), `mDE_PC_set_color` and `mDE_PC_palette_step` pick a colour and a palette. Fills,
+  stamps, undo and shapes are the game's own A where the cursor was put; tools are its D-pad rows.
+- Outside the menus: the C-stick is given too (`pc_touch_read`'s cstick): the room's camera icons step
+  `indoor_direction_addition_idx` and `indoor_distance_addition_idx` round their three values (C right or down, twice
+  C left or up back to the first), and in the morning exercise (`exercise_possible`, as
+  `Player_actor_Check_AbleRadioExercise`) a flick is the C-stick that way. The light icon is a D-pad press
+  (m_kankyo.c). A finger kept on the player holds A (the net raised, a piece grabbed: furniture pushed or pulled
+  where the furniture mode does not reach, the island's cottage). A tap on furniture in a room plans its four sides,
+  the one it faces first (the item's low two bits), presses A there and then pushes the stick into it for 30 frames
+  (ac_my_room_action.c_inc `aMR_SitDownFurniture` sits the player after 14). On a chair or in bed (`SITDOWN_WAIT`,
+  `WAIT_BED`) a tap pushes the stick toward it for 12 frames. A tap while a message's text is still coming is B (it hurries it).
+  The NES games' door icon holds L+R+Z for 20 frames.
 - `pc_gx_window_to_ui` no longer reads `g_pc_widescreen_stretch`: emu64 sets it while it draws (stretched blits of
   transitions) and between frames it held whatever was drawn last, so the Korean editor's keyboard and the menus could
   get a touch a step to the side.

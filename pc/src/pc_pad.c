@@ -224,7 +224,7 @@ u32 PADRead(PADStatus* status) {
     }
     chat_button((pad & BIT(PC_BIND_CHAT)) != 0);
 
-    pc_touch_read(&buttons, &stickX, &stickY);
+    pc_touch_read(&buttons, &stickX, &stickY, &cstickX, &cstickY);
     pc_input_script_apply(&buttons, &stickX, &stickY);
     pc_minimap_pad((held & BIT(PC_BIND_MAP)) != 0, &buttons);
     pc_ko_osk_pad(&buttons, &stickX, &stickY);

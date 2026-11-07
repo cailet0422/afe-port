@@ -430,10 +430,10 @@ void pc_touch_handle_event(const SDL_Event* event) {
     }
 }
 
-void pc_touch_read(u16* buttons, s8* stick_x, s8* stick_y) {
+void pc_touch_read(u16* buttons, s8* stick_x, s8* stick_y, s8* cstick_x, s8* cstick_y) {
     int i;
 
-    pc_touch_full_read(buttons, stick_x, stick_y);
+    pc_touch_full_read(buttons, stick_x, stick_y, cstick_x, cstick_y);
     if (!enabled()) {
         return;
     }

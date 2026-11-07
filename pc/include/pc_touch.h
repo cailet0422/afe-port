@@ -32,8 +32,9 @@ void pc_touch_finger_down(s64 id, float x, float y);
 void pc_touch_finger_move(s64 id, float x, float y);
 void pc_touch_finger_up(s64 id);
 
-/* Adds the pad's buttons and stick to a controller reading */
-void pc_touch_read(u16* buttons, s8* stick_x, s8* stick_y);
+/* Adds the pad's buttons and sticks to a controller reading (the C-stick
+ * only from the full touch mode: the room's camera, the morning exercise) */
+void pc_touch_read(u16* buttons, s8* stick_x, s8* stick_y, s8* cstick_x, s8* cstick_y);
 
 /* Draws the pad over the finished frame */
 void pc_touch_draw(void);

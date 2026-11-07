@@ -248,7 +248,7 @@ ninja -C pc/build32strip
     `mHD_drop_item`; 플레이어는 다음 서기·걷기·달리기에서 꺼내 든다). 빈 손과 소지품을 차례로 돌고, 손에 든 도구는 두
     자리 사이에 있어 한 번 넘겼다 돌아오면 같은 도구가 온다.
   - 타이틀 화면(로고와 데모가 `play_main`에서 돈다, `mEv_CheckTitleDemo() != 0`)에서는 아무 곳이나 누르면 START이고 패드와
-    아이콘은 없다. 터치로 다루지 않는 메뉴, 패미컴 게임, `play_main` 밖의 화면(메모리 카드 등)에서는 패드가 뜬다
+    아이콘은 없다. 패미컴 게임(나가는 문 아이콘이 있음)과 `play_main` 밖의 화면(닌텐도 로고)에서는 패드가 뜨고, 게임의 모든 메뉴는 터치로 다룬다
     (`pc_touch_full_pad_shown`).
 - 소지품(`pc_touch_menu.c`): m_tag_ovl.c의 표에서 가져온 칸 위치(640x480 화면, `pc_gx_window_to_ui`). 커서는
   `mTG_PC_touch_cursor`(m_tag_ovl.c, TARGET_PC)로 손가락 쪽으로 간다: 스틱이 커서를 옮기는 자리에서, 손에 든 것에 대한
@@ -261,6 +261,29 @@ ninja -C pc/build32strip
   손이 비었을 때만 그 표로 간다(`mTG_move_cursol_between_table_mailbox`). 게시판(m_notice_ovl.c)은 스틱 밀기(6프레임:
   좌우는 쪽 넘김, 위는 최신 글, 아래는 첫 글)와 버튼 위의 A(쓰기)·B(그만두기)로 다룬다. 질문이 있는 경고창(0번, 우편함의
   "편지가 가득, 버려도 돼?")은 왼쪽으로 밀고 A(좋아) 또는 B(안돼)로 답하고, 질문이 없는 것은 A로 닫는다.
+- 표로 된 다른 메뉴도 소지품과 같은 방식이다(`table_menu`): 카탈로그(`mTG_TABLE_CATALOG` 이름 7줄과 탭 9개; 고른 이름과
+  그림이 따라오도록 훅이 `change_flag`를 켬), 마이디자인 목록(`mTG_TABLE_NEEDLEWORK`), 음악 플레이어의 음반
+  (`mTG_TABLE_MUSIC_MAIN`), 하니와의 4칸과 소지품(`mTG_TABLE_HANIWA`; 값은 스틱 밀기), 메모리 카드의 디자인과 편지
+  (`mTG_TABLE_CPORIGINAL*`, `mTG_TABLE_CPMAIL*`; 커서가 한 단계 위의 태그라 `cur_tag`로 읽음). `mTG_pc_touch_move`
+  (m_tag_ovl.c, TARGET_PC)가 각 메뉴의 표 안에서 스틱이 갈 수 있는 곳으로 옮긴다. 목록의 쪽 넘김은 C스틱이다(`push_cstick`).
+- 나머지(`pc_touch_menus.c`, `pc_touch_menus_owns`)에는 패드 입력을 한 단계씩 준다: 누르기 큐(스틱·C스틱·버튼, 누르는
+  프레임과 떼는 프레임이 있어 `mSM_make_trigger_data`가 매번 새로 누른 것으로 봄)와, 목표 쪽으로 스틱(또는 십자 버튼)을
+  밀고 메뉴의 커서를 다시 읽어 닿을 때까지 가는 워커(닿으면 누르기가 뜻하는 대로 A; 메뉴가 입력을 받지 않는 동안은 기다림).
+  대상은 글쓰기 편집기(모든 종류, 그 위의 주소록), "괜찮아?" 질문, 일기 질문, 시계, 알람, 생일, 달력과 일기, 저금과 빚
+  갚기, 마을 멜로디, 디자인 편집기. 키(`PC_HUD_KEY`, 그림이나 글자)와 완료 키(`PC_HUD_DONE`, START)는 오른쪽에 있고,
+  닫기 아이콘은 메뉴의 나가는 버튼을 한 번 누른다(B, 마을 멜로디는 R, 완료로만 나가는 메뉴는 없음).
+- 디자인 편집기(m_design_ovl.c, TARGET_PC): `mDE_PC_set_cursor`가 커서를 그 칸에(고정소수점 사본과 함께),
+  `mDE_PC_pen_line`이 두 프레임 사이의 길을 펜 크기대로 그린다(게임은 A를 누르는 동안 커서 자리에만 그림).
+  `mDE_PC_set_color`, `mDE_PC_palette_step`은 색과 팔레트를 고른다. 채우기·스탬프·되돌리기·도형은 커서를 놓은 곳에서
+  게임 자신의 A이고, 도구는 십자 버튼의 줄이다.
+- 메뉴 밖: C스틱도 준다(`pc_touch_read`의 cstick). 방 카메라 아이콘은 `indoor_direction_addition_idx`,
+  `indoor_distance_addition_idx`를 세 값 사이에서 돌리고(C 오른쪽·아래로 다음, 마지막에서는 C 왼쪽·위 두 번으로 처음),
+  아침 체조(`exercise_possible`, `Player_actor_Check_AbleRadioExercise`와 같은 조건)에서는 튕기기가 그 방향 C스틱이다.
+  전등 아이콘은 십자 버튼(m_kankyo.c). 캐릭터를 꾹 누르면 A를 누르고 있다(잠자리채 들기, 가구 잡기: 가구 배치 모드가
+  닿지 않는 섬 별장에서 밀고 당기기). 방의 가구를 누르면 네 쪽을 계획해 가구가 향한 쪽(아이템 번호의 아래 두 비트)부터
+  가서 A를 누르고, 이어 30프레임 동안 가구 쪽으로 스틱을 민다(ac_my_room_action.c_inc `aMR_SitDownFurniture`가 14프레임
+  뒤에 앉힘). 의자·침대(`SITDOWN_WAIT`, `WAIT_BED`)에서는 누르면 그쪽으로 12프레임 스틱을 민다.
+  대사 글자가 아직 나오는 중일 때 누르면 B(빨리 나옴). 패미컴의 문 아이콘은 L+R+Z를 20프레임 누른다.
 - `pc_gx_window_to_ui`는 이제 `g_pc_widescreen_stretch`를 읽지 않는다. emu64가 그리는 동안 바꾸는 값이라(전환
   효과의 늘인 그림) 프레임 사이에는 마지막에 그린 것의 값이 남아 있어, 한글 편집기 키보드와 메뉴의 터치가 옆 칸으로
   갈 수 있었다.

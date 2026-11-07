@@ -64,10 +64,11 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
   away by default ([Saving](#saving)).
 - Korean fan patch support: install the patch zip from inside the game, switch between Korean and
   Japanese at any time, and type Hangul with a real keyboard (2-set layout) or an on-screen keyboard.
-- Android: on-screen touch gamepad (its buttons can be moved and resized), a **full touch mode** played with the
-  fingers on the world (tap to walk, tap villagers and things, icons for the pockets and the map, a tool strip, a
-  furniture mode in your house; [Touch controls](#touch-controls)), physical gamepads, and a crash report shown on
-  the next launch.
+- Android: on-screen touch gamepad (its buttons can be moved and resized), a **full touch mode** in which the whole
+  game is played with the fingers (tap to walk, tap villagers and things, every menu by tap and swipe: the catalog,
+  the designs drawn with a finger, letters, the post office, the town tune, ...; icons for the pockets and the map, a
+  tool strip, the room's camera and light, a furniture mode in your house; [Touch controls](#touch-controls)),
+  physical gamepads, and a crash report shown on the next launch.
 - Minimap: outside in town, a small map of the town sits in the bottom left corner (you, facing the
   way you walk, and the villagers' houses). **M** opens the game's full map at any time, even before
   you have the map from the police station; on Android, tap the minimap. Turn it off under
@@ -360,32 +361,61 @@ pad is the default on Android):
 - **On-screen pad**: a GameCube pad drawn over the game. **Edit pad layout...** under it shows the pad: drag a
   button, the D-pad or the stick to move it, pick one and make it bigger or smaller (50-200%); **Reset all** puts
   everything back.
-- **Full touch**: no pad; you play with your fingers on the world.
-  - **Tap** the ground to walk there; keep a finger **held** to run to where it is; **drag** to run that way.
-  - **Tap a villager** to walk up and talk; while a message is up, a tap goes on; tap a choice to pick it.
-  - **Tap a thing** to walk up and use it: items, flowers and weeds are picked up, trees shaken (or chopped with the
-    axe), signs, mailboxes and furniture used; with the shovel a tap on the ground digs there (or fills the hole);
-    with the net or the rod a tap nearby swings or casts that way. A tap on yourself is A.
+- **Full touch**: no pad; you play with your fingers, and every part of the game takes them.
+  - **Moving**: **tap** the ground to walk there; keep a finger **held** to run to where it is; **drag** to run that
+    way.
+  - **Talking**: **tap a villager** to walk up and talk; while a message is up, a tap goes on (or hurries the text
+    still coming); tap a choice to pick it.
+  - **Things**: **tap a thing** to walk up and use it: items, flowers and weeds are picked up, trees shaken (or
+    chopped with the axe), signs, mailboxes and furniture used; with the shovel a tap on the ground digs there (or
+    fills the hole); with the net or the rod a tap nearby swings or casts that way. A tap on yourself is A (what is in
+    front of you: an exhibit in the museum, the lighthouse's switch, ...).
+  - **Keep a finger on yourself** to hold A: the net is raised (drag to sneak with it, let go to swing), a piece of
+    furniture is grabbed (drag to push or pull it, as in the island's cottage).
   - **Mailboxes, the notice board, the map and music boards, signs, gyroids and villagers' doors**: tap them (their
     top counts too); you go to the side they answer from (the notice board from the front, a mailbox from its front)
     and use them. If nothing happens there, the other sides are tried.
+  - **Furniture in a room**: a tap goes to the side it faces and uses it; a chair or a sofa is sat on (the game
+    sits you down when you walk into its front). **On a chair or in bed**: a tap or a drag gets up and goes that way.
   - **Events**: whatever wants A (climbing out of a pitfall, the scenes of the events, the boat) takes a tap anywhere;
-    a snowball is pushed by walking with it; the morning exercises follow a drag as they would the stick.
-  - Icons at the top: the pause menu, save and the gamepad (top left), the map and the pockets (top right). In the
-    pockets, tap a slot for its commands (or to put down what the hand holds), tap a command, and **drag an item** to
-    another slot or onto yourself to wear or hold it; in the map, tap an acre. The X closes them.
-  - **The mailbox** works as the pockets: tap a letter for its commands, drag one from the mailbox to your letters.
-    Its question when your letters are full: tap its left half for yes, its right half for no. **The notice board**:
-    swipe (or tap the page's left or right half) to turn its pages, swipe up or down (or tap its buttons below) for
-    the newest or the first, tap its buttons to write or quit. **A letter being read**: a tap closes it.
+    a snowball is pushed by walking with it; in the morning exercises (and in a room where a radio plays their music)
+    a **flick** moves the way you flick it (the game reads them from the C-stick).
+  - **Icons** at the top: the pause menu, save and the gamepad (top left), the map and the pockets (top right). In a
+    room whose camera turns (the houses' rooms, the museum's halls), the camera's angle and distance; in your own house
+    the light (left). In an NES game a door icon leaves it.
   - **Tools**: the strip in the middle shows the tool in hand with the ones before and after it in your pockets;
     **swipe** it left or right (or tap a side) to take another one out.
   - **Furniture mode** (the chair icon, in your own house): tap a piece to pick it, drag it to move it (green where it
     fits), turn it with the arrows, put it in your pockets with the satchel, or drag a piece from the pockets at the
     bottom onto the floor. A tap on a piece, in the room or in the row, shows its name. The check mark ends the mode.
+  - **Every menu** takes taps and swipes, and its keys on the right: ▲▼ change a value, the check mark finishes, the X
+    leaves.
+    - **The pockets**: tap a slot for its commands (or to put down what the hand holds), tap a command, **drag an
+      item** to another slot or onto yourself to wear or hold it. **The map**: tap an acre.
+    - **The mailbox** works as the pockets: tap a letter for its commands, drag one from the mailbox to your letters;
+      its question when your letters are full: the left half for yes, the right half for no. **The notice board**:
+      swipe (or tap the page's left or right half) to turn its pages, swipe up or down (or tap its buttons below) for
+      the newest or the first, tap its buttons to write or quit. **A letter being read**: a tap closes it.
+    - **Writing** (letters, the notice board, the diary, the gyroid's message, names): the address book (tap a name,
+      swipe for its pages), the text (the Korean patch's keyboard; on the original disc a tap on the wheel picks
+      characters, with keys for its sets, dakuten, space and backspace), arrows for the text's cursor, the check mark
+      to finish; the answers of "is this right?" are tapped.
+    - **Nook's catalog**: tap an item to order it, a tab for another kind, swipe (or tap its arrows) for the next page.
+    - **Designs**: the list by tap; in the design editor **draw with your finger** on the canvas (the pen follows it;
+      fills, stamps and undo where you tap; a shape from where the finger lands to where it is lifted), tap a colour,
+      the palette's button for another palette, a tool to pick it (again for its other kinds); keys for undo, the
+      grid and the eyedropper; the check mark to keep the design.
+    - **The post office**: savings and the loan (tap a digit, ▲▼ or a swipe, then OK or the check mark); the memory
+      card's letters as the pockets.
+    - **The clock, the alarm, a birthday**: tap a field, ▲▼ or a swipe, the check mark.
+    - **The calendar and the diary**: swipe for the months, tap a day (once more to open that month's diary); swipe
+      the diary, tap its write button; its question as the others.
+    - **The town tune**: tap a note, ▲▼ or a swipe to change it, ▶ to play it, the clear key, the check mark to keep
+      it (the X leaves it as it was).
+    - **The gyroid** (leave things with it by dragging, its price with swipes), **the music player's records**, **the
+      memory card's designs**: as the pockets.
   - On the title screen, a touch anywhere starts (START).
-  - Everything else that wants buttons (the other menus, the NES games) brings the GameCube pad up by itself; the gamepad
-    icon shows it at any time.
+  - The gamepad icon brings the GameCube pad up at any time; the NES games are played with it.
 
 ## Known limitations
 
@@ -395,6 +425,8 @@ pad is the default on Android):
   Japanese word table; it behaves the same on a GameCube.
 - A save made with the Japanese disc and loaded with the Korean-patched disc shows saved names mixed
   with Hangul glyphs (same on a GameCube).
+- With the Korean patch, Tom Nook's passwords cannot be typed: the password's characters are the original disc's
+  kana, which the patch's keyboard does not have (with a pad or by touch alike).
 
 ## Building from source
 

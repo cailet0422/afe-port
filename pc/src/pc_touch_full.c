@@ -25,6 +25,9 @@
 #include "m_event.h"
 #include "m_actor.h"
 #include "m_demo.h"
+#include "m_room_type.h"
+#include "m_random_field_h.h"
+#include "ac_my_room.h"
 
 #include <dolphin/pad.h>
 #include <math.h>
@@ -36,6 +39,7 @@ extern u32 pc_frame_counter;
 #define TAP_MS 300       /* a finger up this soon, */
 #define TAP_SLOP 0.035f  /* having moved less than this (of the shorter side), is a tap */
 #define HOLD_MS 280      /* a finger kept still this long runs to where it is */
+#define FLICK_MS 300     /* a drag let go this soon is a flick (the morning exercise) */
 #define DRAG_REACH 0.11f /* a drag this long (of the shorter side) is full tilt; the anchor follows past it */
 #define STICK_FULL 72    /* past the game's full tilt (61, m_controller.h) */
 #define TOUCH_STICK_MIN 14 /* just past the game's dead zone (9.9) */
@@ -63,8 +67,11 @@ typedef struct {
     Uint32 down_ms;
     int kind;
     int hud;      /* the icon it landed on (FK_HUD) */
+    int hud_index; /* and its index (a menu's key) */
     int moved;    /* went past the tap slop */
     int holding;  /* kept still past HOLD_MS: runs to where it is */
+    int on_self;  /* landed on the player */
+    int hold_a;   /* landed on the player and kept there: A held (the net raised, a piece grabbed) */
 } TFinger;
 
 static TFinger s_fingers[MAX_FINGERS];
@@ -101,6 +108,7 @@ static struct {
     int detour;       /* frames of a step aside left (something in the way) */
     int detours;      /* steps aside taken */
     int detour_sign;
+    int push;         /* after the press, the stick into the thing (a chair, a sofa: one sits by walking into its front) */
 } s_go;
 
 #define FACE_UNIT 0x7FFF
@@ -112,6 +120,27 @@ static u32 s_press_from;
 static int s_face_pending;      /* turn the player to s_face_yaw at the next game frame, then press */
 static s16 s_face_yaw;
 static u16 s_face_button;
+
+/* The C-stick pushed for a while (the room's camera, the morning exercise) */
+static s8 s_cstick_x, s_cstick_y;
+static u32 s_cstick_until;
+/* The stick pushed for a while out of a state the drag does not steer (up
+ * from a chair, out of bed) */
+static s8 s_pulse_x, s_pulse_y;
+static u32 s_pulse_from, s_pulse_until;
+/* A held (a finger held on the player); buttons held together for a while
+ * (the NES games' exit, L+R+Z) */
+static int s_hold_a;
+static u16 s_combo;
+static u32 s_combo_until;
+
+/* C-stick steps still to give, one every few frames (the room's camera) */
+static int s_cam_steps;
+static s8 s_cam_dx, s_cam_dy;
+static u32 s_cam_next;
+
+static int exercise_possible(GAME_PLAY* play, PLAYER_ACTOR* player);
+static void push_cstick(s8 x, s8 y, int frames);
 
 /* A tap waiting for the game frame (window fractions) */
 static int s_tap_pending;
@@ -681,6 +710,13 @@ static void tool_take(int slot, int dir) {
 
 /* --- The icons -------------------------------------------------------- */
 
+/* A room whose camera the C-stick turns and draws nearer or farther
+ * (m_player_common.c_inc Player_actor_Set_Indoor_Camera_Index: the houses'
+ * rooms, the museum's halls), not where the morning exercise takes it */
+static int room_camera_wanted(GAME_PLAY* play) {
+    return mPlib_Check_scene_able_change_camera_pos() && !exercise_possible(play, pc_touch_player(play));
+}
+
 static int furniture_icon_wanted(GAME_PLAY* play) {
     return pc_touch_room_available(play);
 }
@@ -690,8 +726,11 @@ static int hud_mode(GAME_PLAY* play) {
     int index;
     int menu;
 
-    if (!pc_touch_full_on() || g_pc_paused || g_pc_nes_active || pc_gui_chat_active()) {
+    if (!pc_touch_full_on() || g_pc_paused || pc_gui_chat_active()) {
         return 0;
+    }
+    if (g_pc_nes_active) {
+        return 5; /* the pad, and a way out */
     }
     if (pc_touch_room_on()) {
         return 4;
@@ -732,11 +771,12 @@ static int add_icon(PCTouchHudIcon* out, int n, int max, int kind, float px, flo
     return n + 1;
 }
 
-static int finger_on_icon(int kind) {
+static int finger_on_icon(int kind, int index) {
     int i;
 
     for (i = 0; i < MAX_FINGERS; i++) {
-        if (s_fingers[i].active && s_fingers[i].kind == FK_HUD && s_fingers[i].hud == kind) {
+        if (s_fingers[i].active && s_fingers[i].kind == FK_HUD && s_fingers[i].hud == kind &&
+            (kind != PC_HUD_KEY || s_fingers[i].hud_index == index)) {
             return TRUE;
         }
     }
@@ -763,9 +803,18 @@ static int build_hud(PCTouchHudIcon* out, int max) {
     if (mode == 3) {
         n = add_icon(out, n, max, PC_HUD_PAD, w * 0.5f, 0.19f * u, 0.045f * u);
         out[0].active = 1;
+    } else if (mode == 5) {
+        n = add_icon(out, n, max, PC_HUD_NES_EXIT, w * 0.5f, 0.19f * u, 0.045f * u);
     } else if (mode == 2) {
         n = add_icon(out, n, max, PC_HUD_PAD, 0.08f * u, y, r);
-        n = add_icon(out, n, max, PC_HUD_CLOSE, w - 0.08f * u, y, r);
+        if (play != NULL && pc_touch_menus_owns(&play->submenu) &&
+            !(play->submenu.menu_type == mSM_OVL_BOARD &&
+              (play->submenu.overlay->menu_info[mSM_OVL_BOARD].data0 == mSM_BD_OPEN_READ ||
+               play->submenu.overlay->menu_info[mSM_OVL_BOARD].data0 == mSM_BD_OPEN_READ_ISLAND))) {
+            n = pc_touch_menus_hud(&play->submenu, out, n, max);
+        } else {
+            n = add_icon(out, n, max, PC_HUD_CLOSE, w - 0.08f * u, y, r);
+        }
     } else if (mode == 4) {
         n = pc_touch_room_hud(out, n, max);
     } else {
@@ -776,6 +825,19 @@ static int build_hud(PCTouchHudIcon* out, int max) {
         n = add_icon(out, n, max, PC_HUD_MAP, w - 0.20f * u, y, r);
         if (play != NULL && furniture_icon_wanted(play)) {
             n = add_icon(out, n, max, PC_HUD_FURNITURE, w - 0.32f * u, y, r);
+        }
+        /* a room: its camera (where the C-stick turns it) and its light */
+        {
+            float ly = y + 0.13f * u;
+
+            if (play != NULL && room_camera_wanted(play)) {
+                n = add_icon(out, n, max, PC_HUD_CAM_ANGLE, 0.08f * u, ly, r * 0.9f);
+                n = add_icon(out, n, max, PC_HUD_CAM_ZOOM, 0.08f * u, ly + 0.12f * u, r * 0.9f);
+                ly += 0.24f * u;
+            }
+            if (play != NULL && mRmTp_PleaseDrawLightSwitch()) {
+                n = add_icon(out, n, max, PC_HUD_LIGHT, 0.08f * u, ly, r * 0.9f);
+            }
         }
         /* the tools: the one in hand, and the ones a step left and right */
         {
@@ -814,7 +876,7 @@ static int build_hud(PCTouchHudIcon* out, int max) {
         }
     }
     for (i = 0; i < n; i++) {
-        out[i].pressed = finger_on_icon(out[i].kind);
+        out[i].pressed = finger_on_icon(out[i].kind, out[i].index);
         if (out[i].kind == PC_HUD_PAD) {
             out[i].active = s_pad_wanted;
         }
@@ -913,7 +975,7 @@ int pc_touch_full_finger_down(s64 id, float x, float y) {
         return TRUE;
     }
     icon = icon_at(px, py, &index);
-    if (pc_touch_full_pad_shown() && icon != PC_HUD_PAD) {
+    if (pc_touch_full_pad_shown() && icon != PC_HUD_PAD && icon != PC_HUD_NES_EXIT) {
         return FALSE; /* the GameCube pad's */
     }
     for (i = 0; f == NULL && i < MAX_FINGERS; i++) {
@@ -940,6 +1002,7 @@ int pc_touch_full_finger_down(s64 id, float x, float y) {
     } else if (icon != PC_HUD_KIND_COUNT) {
         f->kind = FK_HUD;
         f->hud = icon;
+        f->hud_index = index;
     } else if (pc_touch_room_on()) {
         f->kind = FK_ROOM;
         pc_touch_room_finger(0, f->id, x, y);
@@ -960,6 +1023,12 @@ int pc_touch_full_finger_down(s64 id, float x, float y) {
         s_go.kind = GO_NONE;
         s_go.sides = 0;
         s_go.check = 0;
+        if (play != NULL) {
+            PLAYER_ACTOR* player = pc_touch_player(play);
+            float score;
+
+            f->on_self = player != NULL && hit_actor(play, &player->actor_class, 34.0f, f->x, f->y, &score);
+        }
     }
     return TRUE;
 }
@@ -994,7 +1063,7 @@ void pc_touch_full_finger_move(s64 id, float x, float y) {
     }
 }
 
-static void icon_tapped(int icon) {
+static void icon_tapped(int icon, int index) {
     GAME_PLAY* play = pc_touch_play();
 
     switch (icon) {
@@ -1030,6 +1099,35 @@ static void icon_tapped(int icon) {
         case PC_HUD_FURN_STORE:
             pc_touch_room_icon(icon, -1);
             break;
+        case PC_HUD_CAM_ANGLE:
+        case PC_HUD_CAM_ZOOM:
+            /* round the camera's three steps: C right (or down) to the next,
+             * C left (or up) twice from the last back to the first */
+            if (play != NULL && s_cam_steps == 0) {
+                int zoom = icon == PC_HUD_CAM_ZOOM;
+                int idx = zoom ? play->camera.indoor_distance_addition_idx : play->camera.indoor_direction_addition_idx;
+                int back = idx >= 2;
+
+                s_cam_steps = back ? 2 : 1;
+                s_cam_dx = zoom ? 0 : (back ? -60 : 60);
+                s_cam_dy = zoom ? (back ? 60 : -60) : 0;
+                s_cam_next = pc_frame_counter;
+                printf("[TOUCH] camera %s %d -> %d\n", zoom ? "zoom" : "angle", idx, back ? 0 : idx + 1);
+            }
+            break;
+        case PC_HUD_LIGHT:
+            press(PAD_BUTTON_UP, 0); /* any of the D-pad (m_kankyo.c) */
+            printf("[TOUCH] light switch\n");
+            break;
+        case PC_HUD_DONE:
+        case PC_HUD_KEY:
+            pc_touch_menus_icon(icon, index);
+            break;
+        case PC_HUD_NES_EXIT:
+            s_combo = PAD_TRIGGER_L | PAD_TRIGGER_R | PAD_TRIGGER_Z;
+            s_combo_until = pc_frame_counter + 20;
+            printf("[TOUCH] NES: exit\n");
+            break;
         default:
             break;
     }
@@ -1046,8 +1144,9 @@ int pc_touch_full_finger_up(s64 id) {
     if (f->kind == FK_HUD) {
         int index = -1;
 
-        if (icon_at(f->x, f->y, &index) == f->hud || (f->hud == PC_HUD_MAP && !f->moved)) {
-            icon_tapped(f->hud);
+        if ((icon_at(f->x, f->y, &index) == f->hud && (f->hud != PC_HUD_KEY || index == f->hud_index)) ||
+            (f->hud == PC_HUD_MAP && !f->moved)) {
+            icon_tapped(f->hud, f->hud_index);
         }
     } else if (f->kind == FK_STRIP) {
         float dx = f->x - f->x0;
@@ -1065,13 +1164,26 @@ int pc_touch_full_finger_up(s64 id) {
     } else if (f->kind == FK_ROOM) {
         pc_touch_room_finger(2, f->id, f->x / g_pc_window_w, f->y / g_pc_window_h);
     } else if (f->kind == FK_WORLD) {
-        if (!f->moved && !f->holding && held <= TAP_MS) {
+        GAME_PLAY* play = pc_touch_play();
+        float dx = f->x - f->x0, dy = f->y - f->y0;
+        float len = sqrtf(dx * dx + dy * dy);
+
+        if (f->hold_a) {
+            /* A let go: the net swings, the piece is let go */
+        } else if (f->moved && held <= FLICK_MS && len > 0.06f * shorter_side() &&
+                   exercise_possible(play, pc_touch_player(play))) {
+            /* a flick where the morning exercise may be done: the C-stick
+             * that way (m_player_controller.c_inc: past 0.6 of its tilt) */
+            push_cstick((s8)lrintf(dx / len * 60.0f), (s8)lrintf(-dy / len * 60.0f), 10);
+            printf("[TOUCH] exercise %.0f,%.0f\n", dx / len, -dy / len);
+        } else if (!f->moved && !f->holding && held <= TAP_MS) {
             s_tap_pending = 1;
             s_tap_x = f->x / g_pc_window_w;
             s_tap_y = f->y / g_pc_window_h;
         }
         s_stick_x = s_stick_y = 0;
         s_dash = 0;
+        s_hold_a = 0;
     }
     f->active = 0;
     return TRUE;
@@ -1079,11 +1191,24 @@ int pc_touch_full_finger_up(s64 id) {
 
 /* --- Input for the game ------------------------------------------------- */
 
-void pc_touch_full_read(u16* buttons, s8* stick_x, s8* stick_y) {
+void pc_touch_full_read(u16* buttons, s8* stick_x, s8* stick_y, s8* cstick_x, s8* cstick_y) {
     if (!pc_touch_full_on() || g_pc_paused) {
         return;
     }
-    if (s_stick_x != 0 || s_stick_y != 0) {
+    if ((s32)(s_cstick_until - pc_frame_counter) > 0) {
+        *cstick_x = s_cstick_x;
+        *cstick_y = s_cstick_y;
+    }
+    if ((s32)(s_combo_until - pc_frame_counter) > 0) {
+        *buttons |= s_combo;
+    }
+    if (s_hold_a) {
+        *buttons |= PAD_BUTTON_A;
+    }
+    if ((s32)(pc_frame_counter - s_pulse_from) >= 0 && (s32)(s_pulse_until - pc_frame_counter) > 0) {
+        *stick_x = s_pulse_x;
+        *stick_y = s_pulse_y;
+    } else if (s_stick_x != 0 || s_stick_y != 0) {
         *stick_x = s_stick_x;
         *stick_y = s_stick_y;
         if (s_dash) {
@@ -1094,7 +1219,7 @@ void pc_touch_full_read(u16* buttons, s8* stick_x, s8* stick_y) {
         (s32)(pc_frame_counter - s_press_from) < PRESS_FRAMES) {
         *buttons |= s_press;
     }
-    pc_touch_menu_read(buttons, stick_x, stick_y);
+    pc_touch_menu_read(buttons, stick_x, stick_y, cstick_x, cstick_y);
 }
 
 /* --- The game frame ----------------------------------------------------- */
@@ -1126,6 +1251,55 @@ static void face_and_press(PLAYER_ACTOR* player, float x, float z, u16 button) {
     s_face_button = button;
 }
 
+static void push_cstick(s8 x, s8 y, int frames) {
+    s_cstick_x = x;
+    s_cstick_y = y;
+    s_cstick_until = pc_frame_counter + frames;
+}
+
+static void push_stick_after(s8 x, s8 y, int delay, int frames) {
+    s_pulse_x = x;
+    s_pulse_y = y;
+    s_pulse_from = pc_frame_counter + delay;
+    s_pulse_until = s_pulse_from + frames;
+}
+
+static void push_stick_for(s8 x, s8 y, int frames) {
+    push_stick_after(x, y, 0, frames);
+}
+
+/* Sitting on a chair, lying in bed: the stick gets up (or rolls over) */
+static int seated_index(int index) {
+    return index == mPlayer_INDEX_SITDOWN_WAIT || index == mPlayer_INDEX_WAIT_BED;
+}
+
+/* The morning exercise may be done here (m_player_common.c_inc
+ * Player_actor_Check_AbleRadioExercise): the shrine's acre while the morning
+ * or the sports fair's exercise runs, or a room with a radio playing it, and
+ * nothing in hand. It takes the C-stick's eight directions. */
+static int exercise_possible(GAME_PLAY* play, PLAYER_ACTOR* player) {
+    int index;
+
+    if (play == NULL || player == NULL || mPlib_Check_now_handin_item()) {
+        return FALSE;
+    }
+    index = mPlib_get_player_actor_main_index((GAME*)play);
+    if (index == mPlayer_INDEX_RADIO_EXERCISE) {
+        return TRUE;
+    }
+    if (Common_Get(field_type) == mFI_FIELDTYPE2_FG) {
+        int bx, bz, pbx, pbz;
+
+        if (!mEv_check_status(mEv_EVENT_MORNING_AEROBICS, mEv_STATUS_RUN) &&
+            !mEv_check_status(mEv_EVENT_SPORTS_FAIR_AEROBICS, mEv_STATUS_RUN)) {
+            return FALSE;
+        }
+        return mFI_BlockKind2BkNum(&bx, &bz, mRF_BLOCKKIND_SHRINE) &&
+               mFI_Wpos2BlockNum(&pbx, &pbz, player->actor_class.world.position) && pbx == bx && pbz == bz;
+    }
+    return aMR_RadioBgmNow();
+}
+
 static void tap(GAME_PLAY* play, float fx, float fy) {
     PLAYER_ACTOR* player = pc_touch_player(play);
     float px = fx * g_pc_window_w, py = fy * g_pc_window_h;
@@ -1141,6 +1315,7 @@ static void tap(GAME_PLAY* play, float fx, float fy) {
     }
     s_go.sides = 0;
     s_go.check = 0;
+    s_go.push = 0;
     /* a message: on; a choice: that one */
     if (pc_touch_msg_open()) {
         mChoice_c* choice = mChoice_Get_base_window_p();
@@ -1151,7 +1326,11 @@ static void tap(GAME_PLAY* play, float fx, float fy) {
             press(PAD_BUTTON_A, 1);
             printf("[TOUCH] choice %d\n", row);
         } else if (choice == NULL || choice->main_index == mChoice_MAIN_HIDE) {
-            press(PAD_BUTTON_A, 0);
+            /* the text still coming: B hurries it (A and B alike end it where
+             * it may be cut short, m_msg_cursol.c_inc); then A goes on */
+            mMsg_Window_c* msg = mMsg_Get_base_window_p();
+
+            press(msg != NULL && mMsg_Check_main_index(msg, mMsg_INDEX_CURSOL) ? PAD_BUTTON_B : PAD_BUTTON_A, 0);
         }
         return;
     }
@@ -1159,6 +1338,22 @@ static void tap(GAME_PLAY* play, float fx, float fy) {
         return;
     }
     index = mPlib_get_player_actor_main_index((GAME*)play);
+    if (seated_index(index)) {
+        /* on a chair or in bed: the stick toward the tap gets up (the
+         * stick's way: screen up is the camera's forward) */
+        xyz_t g;
+
+        if (pc_touch_window_to_ground(play, fx, fy, &g)) {
+            float dx = g.x - player->actor_class.world.position.x;
+            float dz = g.z - player->actor_class.world.position.z;
+            s8 sx, sy;
+
+            stick_for_yaw(play, (dx * dx + dz * dz) > 1.0f ? yaw_to(dx, dz) : 0, STICK_FULL, &sx, &sy);
+            push_stick_for(sx, sy, 12);
+            printf("[TOUCH] up toward %.0f,%.0f\n", g.x, g.z);
+        }
+        return;
+    }
     if (!steerable_index(index)) {
         /* busy (a rod in the water, a net held, a pitfall to climb out of,
          * an event's scene): A, as the game asks */
@@ -1229,6 +1424,76 @@ static void tap(GAME_PLAY* play, float fx, float fy) {
 
         if (button == 0 && mPlayer_ITEM_IS_SHOVEL(kind) && !in_room) {
             button = PAD_BUTTON_A; /* dig here */
+        }
+        if (in_room && item == RSV_FE1F) {
+            /* a piece's other unit: its anchor is within one unit */
+            int tx = (int)floorf(ux / 40.0f), tz = (int)floorf(uz / 40.0f);
+            int dx, dz;
+
+            for (dz = -1; dz <= 1 && item == RSV_FE1F; dz++) {
+                for (dx = -1; dx <= 1 && item == RSV_FE1F; dx++) {
+                    xyz_t p = { ux + dx * 40.0f, 0.0f, uz + dz * 40.0f };
+                    mActor_name_t* a = mFI_GetUnitFG(p);
+                    mRmTp_FtrPlaceInfoOne_t info[mRmTp_FTR_UNIT_MAX];
+                    int i;
+
+                    if (a == NULL || !ITEM_IS_FTR(*a) || mRmTp_GetFurnitureData(*a, tx + dx, tz + dz, info) < 0) {
+                        continue;
+                    }
+                    for (i = 0; i < mRmTp_FTR_UNIT_MAX; i++) {
+                        if (info[i].exists && info[i].ut_x == tx && info[i].ut_z == tz) {
+                            item = *a;
+                            ux = p.x;
+                            uz = p.z;
+                            break;
+                        }
+                    }
+                }
+            }
+            button = item_button(item, in_room);
+        }
+        if (button == PAD_BUTTON_A && in_room && ITEM_IS_FTR(item)) {
+            /* a piece of furniture: from the side it faces first (a chair,
+             * a sofa, a bed are sat on or lain on from there by walking into
+             * them; a dresser opens, a radio plays with A), then the others;
+             * a little off its edges (all its units: mRmTp_GetFurnitureData) */
+            static const s16 dir_yaw[4] = { 0x0000, 0x4000, (s16)0x8000, (s16)0xC000 }; /* south, east, north, west */
+            mRmTp_FtrPlaceInfoOne_t info[mRmTp_FTR_UNIT_MAX];
+            int ax = (int)floorf(ux / 40.0f), az = (int)floorf(uz / 40.0f);
+            int x0 = ax, x1 = ax, z0 = az, z1 = az;
+            s16 front = dir_yaw[item & 3];
+            float cx, cz;
+            int i;
+
+            if (mRmTp_GetFurnitureData(item, ax, az, info) >= 0) {
+                for (i = 0; i < mRmTp_FTR_UNIT_MAX; i++) {
+                    if (info[i].exists) {
+                        x0 = info[i].ut_x < x0 ? info[i].ut_x : x0;
+                        x1 = info[i].ut_x > x1 ? info[i].ut_x : x1;
+                        z0 = info[i].ut_z < z0 ? info[i].ut_z : z0;
+                        z1 = info[i].ut_z > z1 ? info[i].ut_z : z1;
+                    }
+                }
+            }
+            cx = (x0 + x1 + 1) * 20.0f;
+            cz = (z0 + z1 + 1) * 20.0f;
+            s_go.sides = 0;
+            for (i = 0; i < 4; i++) {
+                s16 d = (s16)(front + i * 0x4000);
+                /* the half the piece reaches that way, and 14 more */
+                float half = (d == 0x0000 || d == (s16)0x8000) ? (z1 - z0 + 1) * 20.0f : (x1 - x0 + 1) * 20.0f;
+
+                add_side(cx, cz, d, half + 14.0f, FACE_UNIT);
+            }
+            ux = cx;
+            uz = cz;
+            s_go.side = 0;
+            go_to(GO_USE, s_go.side_x[0], s_go.side_z[0], 5.0f, 60.0f, PAD_BUTTON_A, NULL);
+            s_go.ux = ux;
+            s_go.uz = uz;
+            s_go.push = 1;
+            printf("[TOUCH] furniture %04X at %.0f,%.0f\n", (unsigned)item, ux, uz);
+            return;
         }
         if (button != 0) {
             /* stand a unit off it, facing it: B looks 10 to 35 ahead
@@ -1316,6 +1581,14 @@ static void go_step(GAME_PLAY* play, PLAYER_ACTOR* player) {
                     if (s_go.side_yaw[s_go.side] != FACE_UNIT) {
                         s_face_yaw = s_go.side_yaw[s_go.side];
                     }
+                    if (s_go.push) {
+                        /* into it for a while (ac_my_room_action.c_inc aMR_SitDownFurniture: 14
+                         * frames), after A's own answer had its time to come (and not into it) */
+                        s8 sx, sy;
+
+                        stick_for_yaw(play, s_face_yaw, STICK_FULL, &sx, &sy);
+                        push_stick_after(sx, sy, 6, 30);
+                    }
                     s_go.check = 40; /* (see whether it took: pc_touch_full_game_frame) */
                     s_go.scene = Save_Get(scene_no);
                 } else if (s_go.side + 1 < s_go.sides) {
@@ -1351,8 +1624,13 @@ static void go_step(GAME_PLAY* play, PLAYER_ACTOR* player) {
 static void world_finger_step(GAME_PLAY* play, PLAYER_ACTOR* player, TFinger* f) {
     float u = shorter_side();
 
-    if (!f->moved && !f->holding && SDL_GetTicks() - f->down_ms >= HOLD_MS) {
+    if (!f->moved && !f->holding && !f->on_self && SDL_GetTicks() - f->down_ms >= HOLD_MS) {
         f->holding = 1;
+    }
+    if (f->moved && !f->holding && SDL_GetTicks() - f->down_ms < FLICK_MS && exercise_possible(play, player)) {
+        /* (a flick for the morning exercise: the player stays where it is) */
+        s_stick_x = s_stick_y = 0;
+        return;
     }
     if (f->holding) {
         /* runs to where the finger is held */
@@ -1404,6 +1682,11 @@ void pc_touch_full_game_frame(GAME* game) {
     }
     pc_touch_room_frame(play);
     pc_touch_menu_frame(play);
+    if (s_cam_steps > 0 && (s32)(pc_frame_counter - s_cam_next) >= 0) {
+        push_cstick(s_cam_dx, s_cam_dy, 3); /* (an edge each: let go between) */
+        s_cam_steps--;
+        s_cam_next = pc_frame_counter + 6;
+    }
     if (play == NULL || player == NULL || g_pc_paused) {
         s_go.kind = GO_NONE;
         s_stick_x = s_stick_y = 0;
@@ -1426,6 +1709,9 @@ void pc_touch_full_game_frame(GAME* game) {
         }
     }
 
+    if (pc_touch_msg_open() || play->submenu.process_status != mSM_PROCESS_WAIT) {
+        s_pulse_until = pc_frame_counter; /* (a message or a menu came: the stick is theirs no more) */
+    }
     if (s_tap_pending) {
         s_tap_pending = 0;
         tap(play, s_tap_x, s_tap_y);
@@ -1474,12 +1760,46 @@ void pc_touch_full_game_frame(GAME* game) {
             }
         }
     }
+    /* a finger kept on the player: A held, and moved, the stick its way too
+     * (the net raised, the player sneaking with it; a piece of furniture
+     * grabbed, then pushed or pulled) */
+    if (f != NULL && f->on_self && !f->moved && !f->hold_a && SDL_GetTicks() - f->down_ms >= HOLD_MS &&
+        play->submenu.process_status == mSM_PROCESS_WAIT && !pc_touch_msg_open() && !pc_touch_full_pad_shown()) {
+        f->hold_a = 1;
+        s_go.kind = GO_NONE;
+        printf("[TOUCH] A held\n");
+    }
+    s_hold_a = f != NULL && f->hold_a;
+    if (s_hold_a) {
+        float u = shorter_side();
+        float dx = f->x - f->x0, dy = f->y - f->y0;
+        float len = sqrtf(dx * dx + dy * dy);
+
+        s_stick_x = s_stick_y = 0;
+        s_dash = 0;
+        if (len > TAP_SLOP * u) {
+            float mag = len / (DRAG_REACH * u);
+
+            if (mag > 1.0f) mag = 1.0f;
+            mag = TOUCH_STICK_MIN + (STICK_FULL - TOUCH_STICK_MIN) * mag;
+            s_stick_x = (s8)lrintf(dx / len * mag);
+            s_stick_y = (s8)lrintf(-dy / len * mag);
+        }
+        return;
+    }
     if (!pc_touch_player_free(play)) {
+        int index = mPlib_get_player_actor_main_index((GAME*)play);
+
         if (s_go.kind != GO_NONE && (pc_touch_msg_open() || play->submenu.process_status != mSM_PROCESS_WAIT)) {
             s_go.kind = GO_NONE;
         }
         s_stick_x = s_stick_y = 0;
         s_dash = 0;
+        if (seated_index(index) && f != NULL && (f->moved || f->holding) && !pc_touch_full_pad_shown() &&
+            !pc_touch_msg_open() && play->submenu.process_status == mSM_PROCESS_WAIT) {
+            world_finger_step(play, player, f); /* a drag gets up and goes that way */
+            s_dash = 0;
+        }
         return;
     }
     s_stick_x = s_stick_y = 0;
