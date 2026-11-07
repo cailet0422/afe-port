@@ -485,6 +485,7 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_touch.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_touch_full.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_touch_menu.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_touch_menus.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_touch_room.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_minimap.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_autosave.c

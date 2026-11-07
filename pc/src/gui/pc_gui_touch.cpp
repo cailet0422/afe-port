@@ -140,6 +140,82 @@ static void DrawDone(ImDrawList* dl, ImVec2 c, float r) {
     dl->PathStroke(Rgb(0x2E, 0x7D, 0x3E), 0, r * 0.20f);
 }
 
+/* A camera with a turning arrow (the room's angle) */
+static void DrawCamAngle(ImDrawList* dl, ImVec2 c, float r) {
+    dl->PathArcTo(c, r * 0.62f, PI * 0.15f, PI * 1.55f, 16);
+    dl->PathStroke(kInk, 0, r * 0.12f);
+    ImVec2 tip = P(c, r, 0.62f * cosf(PI * 0.15f), 0.62f * sinf(PI * 0.15f));
+    dl->AddTriangleFilled(P(tip, r, -0.22f, -0.02f), P(tip, r, 0.22f, -0.02f), P(tip, r, 0.0f, 0.26f), kInk);
+    dl->AddRectFilled(P(c, r, -0.28f, -0.18f), P(c, r, 0.28f, 0.20f), Rgb(0x6C, 0x7C, 0x90), r * 0.06f);
+    dl->AddCircleFilled(c, r * 0.11f, Rgb(0xE0, 0xEC, 0xF8));
+}
+
+/* A magnifier (the room's camera nearer or farther) */
+static void DrawZoom(ImDrawList* dl, ImVec2 c, float r) {
+    ImVec2 g = P(c, r, -0.12f, -0.12f);
+    dl->AddCircle(g, r * 0.40f, kInk, 0, r * 0.13f);
+    Line(dl, P(c, r, 0.18f, 0.18f), P(c, r, 0.58f, 0.58f), kInk, r * 0.18f);
+    Line(dl, P(g, r, -0.20f, 0.0f), P(g, r, 0.20f, 0.0f), kInk, r * 0.09f);
+    Line(dl, P(g, r, 0.0f, -0.20f), P(g, r, 0.0f, 0.20f), kInk, r * 0.09f);
+}
+
+/* A light bulb (the house's light switch) */
+static void DrawLight(ImDrawList* dl, ImVec2 c, float r) {
+    dl->AddCircleFilled(P(c, r, 0.0f, -0.16f), r * 0.40f, kGold);
+    dl->AddCircle(P(c, r, 0.0f, -0.16f), r * 0.40f, Rgb(0xB0, 0x80, 0x20), 0, r * 0.06f);
+    dl->AddRectFilled(P(c, r, -0.18f, 0.22f), P(c, r, 0.18f, 0.50f), Rgb(0x9C, 0xA6, 0xB0), r * 0.05f);
+    Line(dl, P(c, r, -0.18f, 0.34f), P(c, r, 0.18f, 0.34f), Rgb(0x70, 0x78, 0x80), r * 0.05f);
+}
+
+/* A door and an arrow out of it (leaves the NES game) */
+static void DrawExit(ImDrawList* dl, ImVec2 c, float r) {
+    dl->AddRect(P(c, r, -0.50f, -0.56f), P(c, r, 0.06f, 0.56f), kInk, r * 0.04f, 0, r * 0.10f);
+    Line(dl, P(c, r, -0.18f, 0.0f), P(c, r, 0.48f, 0.0f), Rgb(0xC0, 0x50, 0x50), r * 0.14f);
+    dl->AddTriangleFilled(P(c, r, 0.66f, 0.0f), P(c, r, 0.36f, -0.24f), P(c, r, 0.36f, 0.24f), Rgb(0xC0, 0x50, 0x50));
+}
+
+/* A menu's key: an arrow, a play mark, a backspace or its label */
+static void DrawKey(ImDrawList* dl, ImVec2 c, float r, int glyph, const char* label) {
+    ImU32 ink = kInk;
+    switch (glyph) {
+        case PC_KEYG_UP:
+            dl->AddTriangleFilled(P(c, r, 0.0f, -0.46f), P(c, r, 0.46f, 0.30f), P(c, r, -0.46f, 0.30f), ink);
+            break;
+        case PC_KEYG_DOWN:
+            dl->AddTriangleFilled(P(c, r, 0.0f, 0.46f), P(c, r, -0.46f, -0.30f), P(c, r, 0.46f, -0.30f), ink);
+            break;
+        case PC_KEYG_LEFT:
+            dl->AddTriangleFilled(P(c, r, -0.46f, 0.0f), P(c, r, 0.30f, -0.46f), P(c, r, 0.30f, 0.46f), ink);
+            break;
+        case PC_KEYG_RIGHT:
+            dl->AddTriangleFilled(P(c, r, 0.46f, 0.0f), P(c, r, -0.30f, 0.46f), P(c, r, -0.30f, -0.46f), ink);
+            break;
+        case PC_KEYG_PLAY:
+            dl->AddTriangleFilled(P(c, r, 0.52f, 0.0f), P(c, r, -0.34f, 0.50f), P(c, r, -0.34f, -0.50f),
+                                  Rgb(0x2E, 0x7D, 0x3E));
+            break;
+        case PC_KEYG_BACK:
+            dl->PathLineTo(P(c, r, -0.62f, 0.0f));
+            dl->PathLineTo(P(c, r, -0.26f, -0.38f));
+            dl->PathLineTo(P(c, r, 0.56f, -0.38f));
+            dl->PathLineTo(P(c, r, 0.56f, 0.38f));
+            dl->PathLineTo(P(c, r, -0.26f, 0.38f));
+            dl->PathStroke(ink, ImDrawFlags_Closed, r * 0.10f);
+            Line(dl, P(c, r, -0.04f, -0.16f), P(c, r, 0.30f, 0.16f), ink, r * 0.10f);
+            Line(dl, P(c, r, -0.04f, 0.16f), P(c, r, 0.30f, -0.16f), ink, r * 0.10f);
+            break;
+        default:
+            if (label != nullptr) {
+                float size = ImGui::GetFontSize();
+                ImVec2 ts = ImGui::CalcTextSize(label);
+                float s = ts.x > r * 1.5f ? r * 1.5f / ts.x : 1.0f;
+                ImVec2 p(c.x - ts.x * s * 0.5f, c.y - ts.y * s * 0.5f);
+                dl->AddText(ImGui::GetFont(), size * s, p, ink, label);
+            }
+            break;
+    }
+}
+
 /* The tools: a handle and what is on it */
 static void DrawTool(ImDrawList* dl, ImVec2 c, float r, int glyph, bool gold) {
     ImU32 metal = gold ? kGold : kMetal;
@@ -288,6 +364,12 @@ static void DrawIcon(ImDrawList* dl, const PCTouchHudIcon& ic, float W, float H,
         case PC_HUD_FURN_ROT_L: DrawRotate(dl, c, g, -1); break;
         case PC_HUD_FURN_ROT_R: DrawRotate(dl, c, g, 1); break;
         case PC_HUD_FURN_STORE: DrawStore(dl, c, g); break;
+        case PC_HUD_CAM_ANGLE: DrawCamAngle(dl, c, g); break;
+        case PC_HUD_CAM_ZOOM: DrawZoom(dl, c, g); break;
+        case PC_HUD_LIGHT: DrawLight(dl, c, g); break;
+        case PC_HUD_NES_EXIT: DrawExit(dl, c, g); break;
+        case PC_HUD_DONE: DrawDone(dl, c, g); break;
+        case PC_HUD_KEY: DrawKey(dl, c, g, ic.glyph, ic.label); break;
         case PC_HUD_TOOL:
         case PC_HUD_TOOL_PREV:
         case PC_HUD_TOOL_NEXT:

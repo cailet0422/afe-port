@@ -43,8 +43,8 @@ void pc_touch_full_finger_move(s64 id, float x, float y);
 /* 1 if the finger was this mode's */
 int pc_touch_full_finger_up(s64 id);
 
-/* Adds the stick and buttons this mode presses for the player */
-void pc_touch_full_read(u16* buttons, s8* stick_x, s8* stick_y);
+/* Adds the sticks and buttons this mode presses for the player */
+void pc_touch_full_read(u16* buttons, s8* stick_x, s8* stick_y, s8* cstick_x, s8* cstick_y);
 
 /* After game_main (pc_pause_menu_draw): what is changed in the game itself
  * (the tool in hand, the cursor of the pockets, the room's furniture) */
@@ -73,6 +73,12 @@ enum {
     PC_HUD_FURN_ROT_R,
     PC_HUD_FURN_STORE,
     PC_HUD_FURN_SLOT, /* a piece in the pockets (item = its item, index = the slot) */
+    PC_HUD_CAM_ANGLE, /* in a room: the camera's angle (C left/right) */
+    PC_HUD_CAM_ZOOM,  /* in a room: the camera's distance (C up/down) */
+    PC_HUD_LIGHT,     /* in one's own house: the light switch (the D-pad) */
+    PC_HUD_NES_EXIT,  /* an NES game: leaves it (L+R+Z) */
+    PC_HUD_DONE,      /* a menu: finishes (the text editor's START, ...) */
+    PC_HUD_KEY,       /* a menu's key (label; index = the key, pc_touch_menus.c) */
     PC_HUD_KIND_COUNT
 };
 
@@ -93,16 +99,28 @@ enum {
     PC_GLYPH_FURNITURE,
 };
 
+/* What a menu's key shows (PC_HUD_KEY) */
+enum {
+    PC_KEYG_TEXT,  /* its label */
+    PC_KEYG_UP,
+    PC_KEYG_DOWN,
+    PC_KEYG_LEFT,
+    PC_KEYG_RIGHT,
+    PC_KEYG_PLAY,
+    PC_KEYG_BACK,  /* backspace */
+};
+
 typedef struct {
     int kind;      /* PC_HUD_ */
     float x, y;    /* centre, fractions of the window's width and height */
     float r;       /* radius, fraction of the window's shorter side */
-    int glyph;     /* PC_GLYPH_ (tools, the furniture slots) */
+    int glyph;     /* PC_GLYPH_ (tools, the furniture slots), PC_KEYG_ (PC_HUD_KEY) */
     int gold;      /* a golden tool */
     int pressed;   /* under a finger */
     int active;    /* on (the gamepad shown, the furniture mode) or picked */
-    int index;     /* the pocket slot (PC_HUD_FURN_SLOT) */
+    int index;     /* the pocket slot (PC_HUD_FURN_SLOT), the key (PC_HUD_KEY) */
     u16 item;
+    const char* label; /* PC_HUD_KEY: its text (UTF-8) */
 } PCTouchHudIcon;
 
 /* The icons to draw now; returns how many (0: none) */
