@@ -65,6 +65,12 @@ static int s_qn, s_qi, s_qt;
 static void q_add(u16 buttons, int sx, int sy, int cx, int cy, int on, int off) {
     Step* s;
 
+    if (s_qn >= (int)(sizeof(s_q) / sizeof(s_q[0])) && s_qi > 0) {
+        /* (the steps given so far make room: the one being given stays first) */
+        memmove(&s_q[0], &s_q[s_qi], (size_t)(s_qn - s_qi) * sizeof(s_q[0]));
+        s_qn -= s_qi;
+        s_qi = 0;
+    }
     if (s_qn >= (int)(sizeof(s_q) / sizeof(s_q[0]))) {
         return;
     }
@@ -403,8 +409,10 @@ static void endchk_tap(Submenu* sm, float x, float y) {
 static void cpwarning_tap(Submenu* sm, float x, float y) {
     int side = x < 160.0f ? -1 : 1;
 
-    (void)sm;
     (void)y;
+    if (!playing(sm, mSM_OVL_CPWARNING)) {
+        return; /* (still growing: it takes no input) */
+    }
     q_add(0, side * STICK, 0, 0, 0, 3, 3);
     q_button(PAD_BUTTON_A);
     printf("[TOUCH] diary question: %s\n", side < 0 ? "yes" : "no");
@@ -491,12 +499,25 @@ static void calendar_tap(Submenu* sm, float x, float y) {
     int col, row, cell;
 
     local(sm, mSM_OVL_CALENDAR, x, y, &lx, &ly);
+    if (cd->move_proc_idx == mCD_MVPL_DAY && in_box(lx, ly, 112.0f, 156.0f, 272.0f, 180.0f) && ly > 160.0f) {
+        /* the day's events (more than one): the next, round to the first
+         * (the stick down past the last would go a week down instead) */
+        if (cd->_1043 > 1) {
+            int i;
+
+            if (cd->_1042 + 1 < cd->_1043) {
+                q_stick(0, 1);
+            } else {
+                for (i = 0; i < cd->_1042; i++) {
+                    q_stick(0, -1);
+                }
+            }
+        }
+        return;
+    }
     col = (int)floorf((lx - 48.0f) / 32.0f);
     row = (int)floorf((ly - 57.0f) / 20.0f);
     if (col < 0 || col > 6 || row < 0 || row > 5) {
-        if (cd->move_proc_idx == mCD_MVPL_DAY && in_box(lx, ly, 112.0f, 156.0f, 272.0f, 179.0f)) {
-            q_stick(0, 1); /* the day's events: the next */
-        }
         return;
     }
     cell = 7 * row + col;
@@ -979,9 +1000,18 @@ int pc_touch_menus_hud(Submenu* sm, PCTouchHudIcon* out, int n, int max) {
         ADD(PC_HUD_DONE, w - (close_button(sm) != 0 ? 0.20f : 0.08f) * u, y, r);
     }
     for (i = 0; i < nk; i++) {
-        float ky = y + 0.13f * u + 0.115f * u * i;
+        /* down the right edge, in a second column when the window is short */
+        int rows = (int)((h - 0.06f * u - (y + 0.13f * u)) / (0.115f * u)) + 1;
+        int col, row;
+        float ky;
 
-        ADD(PC_HUD_KEY, w - 0.08f * u, ky, r * 0.85f);
+        if (rows < 1) {
+            rows = 1;
+        }
+        col = i / rows;
+        row = i % rows;
+        ky = y + 0.13f * u + 0.115f * u * row;
+        ADD(PC_HUD_KEY, w - (0.08f + 0.12f * col) * u, ky, r * 0.85f);
         if (n > 0 && out[n - 1].kind == PC_HUD_KEY) {
             out[n - 1].index = keys[i].key;
             out[n - 1].glyph = keys[i].glyph;
@@ -1036,6 +1066,29 @@ void pc_touch_menus_icon(int kind, int index) {
     printf("[TOUCH] menu %d: icon %d %d\n", sm->menu_type, kind, index);
 }
 
+/* The top menu's overlay is there (a menu opened over another takes the top
+ * at once, its overlay only in the next frame: m_submenu_ovl.c mSM_set_proc) */
+static int menu_built(Submenu* sm) {
+    Submenu_Overlay_c* o = sm->overlay;
+
+    switch (sm->menu_type) {
+        case mSM_OVL_EDITOR: return o->editor_ovl != NULL;
+        case mSM_OVL_ADDRESS: return o->address_ovl != NULL;
+        case mSM_OVL_EDITENDCHK: return o->editEndChk_ovl != NULL;
+        case mSM_OVL_CPWARNING: return o->cpwarning_ovl != NULL;
+        case mSM_OVL_TIMEIN: return o->timeIn_ovl != NULL;
+        case mSM_OVL_ALARMIN: return o->alarmIn_ovl != NULL;
+        case mSM_OVL_BIRTHDAY: return o->birthday_ovl != NULL;
+        case mSM_OVL_CALENDAR: return o->calendar_ovl != NULL;
+        case mSM_OVL_DIARY: return o->diary_ovl != NULL;
+        case mSM_OVL_BANK: return o->bank_ovl != NULL;
+        case mSM_OVL_REPAY: return o->repay_ovl != NULL;
+        case mSM_OVL_MSCORE: return o->mscore_ovl != NULL;
+        case mSM_OVL_DESIGN: return o->design_ovl != NULL;
+        default: return TRUE;
+    }
+}
+
 /* --- Fingers ------------------------------------------------------------------ */
 
 static struct {
@@ -1083,6 +1136,9 @@ void pc_touch_menus_finger(Submenu* sm, int kind, s64 id, float ux, float uy) {
         return;
     }
     s_f.down = 0;
+    if (!menu_built(sm)) {
+        return; /* (just opened: its overlay comes in the next frame) */
+    }
     if (address_active(sm)) {
         if (!s_f.moved) {
             address_tap(sm, s_f.x0, s_f.y0);

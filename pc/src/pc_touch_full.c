@@ -67,6 +67,7 @@ typedef struct {
     Uint32 down_ms;
     int kind;
     int hud;      /* the icon it landed on (FK_HUD) */
+    int hud_index; /* and its index (a menu's key) */
     int moved;    /* went past the tap slop */
     int holding;  /* kept still past HOLD_MS: runs to where it is */
     int on_self;  /* landed on the player */
@@ -126,7 +127,7 @@ static u32 s_cstick_until;
 /* The stick pushed for a while out of a state the drag does not steer (up
  * from a chair, out of bed) */
 static s8 s_pulse_x, s_pulse_y;
-static u32 s_pulse_until;
+static u32 s_pulse_from, s_pulse_until;
 /* A held (a finger held on the player); buttons held together for a while
  * (the NES games' exit, L+R+Z) */
 static int s_hold_a;
@@ -770,11 +771,12 @@ static int add_icon(PCTouchHudIcon* out, int n, int max, int kind, float px, flo
     return n + 1;
 }
 
-static int finger_on_icon(int kind) {
+static int finger_on_icon(int kind, int index) {
     int i;
 
     for (i = 0; i < MAX_FINGERS; i++) {
-        if (s_fingers[i].active && s_fingers[i].kind == FK_HUD && s_fingers[i].hud == kind) {
+        if (s_fingers[i].active && s_fingers[i].kind == FK_HUD && s_fingers[i].hud == kind &&
+            (kind != PC_HUD_KEY || s_fingers[i].hud_index == index)) {
             return TRUE;
         }
     }
@@ -874,7 +876,7 @@ static int build_hud(PCTouchHudIcon* out, int max) {
         }
     }
     for (i = 0; i < n; i++) {
-        out[i].pressed = finger_on_icon(out[i].kind);
+        out[i].pressed = finger_on_icon(out[i].kind, out[i].index);
         if (out[i].kind == PC_HUD_PAD) {
             out[i].active = s_pad_wanted;
         }
@@ -1000,6 +1002,7 @@ int pc_touch_full_finger_down(s64 id, float x, float y) {
     } else if (icon != PC_HUD_KIND_COUNT) {
         f->kind = FK_HUD;
         f->hud = icon;
+        f->hud_index = index;
     } else if (pc_touch_room_on()) {
         f->kind = FK_ROOM;
         pc_touch_room_finger(0, f->id, x, y);
@@ -1141,8 +1144,9 @@ int pc_touch_full_finger_up(s64 id) {
     if (f->kind == FK_HUD) {
         int index = -1;
 
-        if (icon_at(f->x, f->y, &index) == f->hud || (f->hud == PC_HUD_MAP && !f->moved)) {
-            icon_tapped(f->hud, index);
+        if ((icon_at(f->x, f->y, &index) == f->hud && (f->hud != PC_HUD_KEY || index == f->hud_index)) ||
+            (f->hud == PC_HUD_MAP && !f->moved)) {
+            icon_tapped(f->hud, f->hud_index);
         }
     } else if (f->kind == FK_STRIP) {
         float dx = f->x - f->x0;
@@ -1201,7 +1205,7 @@ void pc_touch_full_read(u16* buttons, s8* stick_x, s8* stick_y, s8* cstick_x, s8
     if (s_hold_a) {
         *buttons |= PAD_BUTTON_A;
     }
-    if ((s32)(s_pulse_until - pc_frame_counter) > 0) {
+    if ((s32)(pc_frame_counter - s_pulse_from) >= 0 && (s32)(s_pulse_until - pc_frame_counter) > 0) {
         *stick_x = s_pulse_x;
         *stick_y = s_pulse_y;
     } else if (s_stick_x != 0 || s_stick_y != 0) {
@@ -1253,10 +1257,15 @@ static void push_cstick(s8 x, s8 y, int frames) {
     s_cstick_until = pc_frame_counter + frames;
 }
 
-static void push_stick_for(s8 x, s8 y, int frames) {
+static void push_stick_after(s8 x, s8 y, int delay, int frames) {
     s_pulse_x = x;
     s_pulse_y = y;
-    s_pulse_until = pc_frame_counter + frames;
+    s_pulse_from = pc_frame_counter + delay;
+    s_pulse_until = s_pulse_from + frames;
+}
+
+static void push_stick_for(s8 x, s8 y, int frames) {
+    push_stick_after(x, y, 0, frames);
 }
 
 /* Sitting on a chair, lying in bed: the stick gets up (or rolls over) */
@@ -1416,18 +1425,68 @@ static void tap(GAME_PLAY* play, float fx, float fy) {
         if (button == 0 && mPlayer_ITEM_IS_SHOVEL(kind) && !in_room) {
             button = PAD_BUTTON_A; /* dig here */
         }
+        if (in_room && item == RSV_FE1F) {
+            /* a piece's other unit: its anchor is within one unit */
+            int tx = (int)floorf(ux / 40.0f), tz = (int)floorf(uz / 40.0f);
+            int dx, dz;
+
+            for (dz = -1; dz <= 1 && item == RSV_FE1F; dz++) {
+                for (dx = -1; dx <= 1 && item == RSV_FE1F; dx++) {
+                    xyz_t p = { ux + dx * 40.0f, 0.0f, uz + dz * 40.0f };
+                    mActor_name_t* a = mFI_GetUnitFG(p);
+                    mRmTp_FtrPlaceInfoOne_t info[mRmTp_FTR_UNIT_MAX];
+                    int i;
+
+                    if (a == NULL || !ITEM_IS_FTR(*a) || mRmTp_GetFurnitureData(*a, tx + dx, tz + dz, info) < 0) {
+                        continue;
+                    }
+                    for (i = 0; i < mRmTp_FTR_UNIT_MAX; i++) {
+                        if (info[i].exists && info[i].ut_x == tx && info[i].ut_z == tz) {
+                            item = *a;
+                            ux = p.x;
+                            uz = p.z;
+                            break;
+                        }
+                    }
+                }
+            }
+            button = item_button(item, in_room);
+        }
         if (button == PAD_BUTTON_A && in_room && ITEM_IS_FTR(item)) {
             /* a piece of furniture: from the side it faces first (a chair,
              * a sofa, a bed are sat on or lain on from there by walking into
-             * them; a dresser opens, a radio plays with A), then the others */
+             * them; a dresser opens, a radio plays with A), then the others;
+             * a little off its edges (all its units: mRmTp_GetFurnitureData) */
             static const s16 dir_yaw[4] = { 0x0000, 0x4000, (s16)0x8000, (s16)0xC000 }; /* south, east, north, west */
+            mRmTp_FtrPlaceInfoOne_t info[mRmTp_FTR_UNIT_MAX];
+            int ax = (int)floorf(ux / 40.0f), az = (int)floorf(uz / 40.0f);
+            int x0 = ax, x1 = ax, z0 = az, z1 = az;
             s16 front = dir_yaw[item & 3];
+            float cx, cz;
             int i;
 
+            if (mRmTp_GetFurnitureData(item, ax, az, info) >= 0) {
+                for (i = 0; i < mRmTp_FTR_UNIT_MAX; i++) {
+                    if (info[i].exists) {
+                        x0 = info[i].ut_x < x0 ? info[i].ut_x : x0;
+                        x1 = info[i].ut_x > x1 ? info[i].ut_x : x1;
+                        z0 = info[i].ut_z < z0 ? info[i].ut_z : z0;
+                        z1 = info[i].ut_z > z1 ? info[i].ut_z : z1;
+                    }
+                }
+            }
+            cx = (x0 + x1 + 1) * 20.0f;
+            cz = (z0 + z1 + 1) * 20.0f;
             s_go.sides = 0;
             for (i = 0; i < 4; i++) {
-                add_side(ux, uz, (s16)(front + i * 0x4000), 34.0f, FACE_UNIT);
+                s16 d = (s16)(front + i * 0x4000);
+                /* the half the piece reaches that way, and 14 more */
+                float half = (d == 0x0000 || d == (s16)0x8000) ? (z1 - z0 + 1) * 20.0f : (x1 - x0 + 1) * 20.0f;
+
+                add_side(cx, cz, d, half + 14.0f, FACE_UNIT);
             }
+            ux = cx;
+            uz = cz;
             s_go.side = 0;
             go_to(GO_USE, s_go.side_x[0], s_go.side_z[0], 5.0f, 60.0f, PAD_BUTTON_A, NULL);
             s_go.ux = ux;
@@ -1523,11 +1582,12 @@ static void go_step(GAME_PLAY* play, PLAYER_ACTOR* player) {
                         s_face_yaw = s_go.side_yaw[s_go.side];
                     }
                     if (s_go.push) {
-                        /* into it for a while (ac_my_room_action.c_inc aMR_SitDownFurniture: 14 frames) */
+                        /* into it for a while (ac_my_room_action.c_inc aMR_SitDownFurniture: 14
+                         * frames), after A's own answer had its time to come (and not into it) */
                         s8 sx, sy;
 
                         stick_for_yaw(play, s_face_yaw, STICK_FULL, &sx, &sy);
-                        push_stick_for(sx, sy, 30);
+                        push_stick_after(sx, sy, 6, 30);
                     }
                     s_go.check = 40; /* (see whether it took: pc_touch_full_game_frame) */
                     s_go.scene = Save_Get(scene_no);
@@ -1649,6 +1709,9 @@ void pc_touch_full_game_frame(GAME* game) {
         }
     }
 
+    if (pc_touch_msg_open() || play->submenu.process_status != mSM_PROCESS_WAIT) {
+        s_pulse_until = pc_frame_counter; /* (a message or a menu came: the stick is theirs no more) */
+    }
     if (s_tap_pending) {
         s_tap_pending = 0;
         tap(play, s_tap_x, s_tap_y);

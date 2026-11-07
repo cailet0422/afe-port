@@ -69,6 +69,7 @@ static u32 s_stick_until;
 static s8 s_cstick_x, s_cstick_y; /* a push of the C-stick (the catalog's and the music's pages) */
 static u32 s_cstick_until;
 static u32 s_close_until;
+static int s_close_menu; /* the menu the close icon closes (another one come back up stops it) */
 static int s_map_tap;
 static float s_map_ux, s_map_uy;
 
@@ -339,7 +340,6 @@ static int cursor_is(Submenu* sm, const Cell* c) {
 /* The hand at rest over the cursor, no list open: the menu takes a step */
 static int hand_idle(Submenu* sm) {
     mHD_Ovl_c* hand = sm->overlay->hand_ovl;
-    mTG_Ovl_c* tag = sm->overlay->tag_ovl;
     mIV_Ovl_c* inv = sm->overlay->inventory_ovl;
 
     return hand->info.move_flag == mHD_MOVE_NONE && hand->info.wait_timer == 0 &&
@@ -612,9 +612,8 @@ void pc_touch_menu_finger(int kind, s64 id, float x, float y) {
                     return;
                 }
             }
-            printf("[TOUCH] pockets: beside the list (%.0f,%.0f, list %d type %d): back\n", ux * 0.5f, uy * 0.5f,
-                   sm->overlay->tag_ovl->sel_tag_idx,
-                   sm->overlay->tag_ovl->tags[sm->overlay->tag_ovl->sel_tag_idx].type);
+            printf("[TOUCH] pockets: beside the list (%.0f,%.0f, list %d): back\n", ux * 0.5f, uy * 0.5f,
+                   sm->overlay->tag_ovl->sel_tag_idx);
             press(PAD_BUTTON_B, 0); /* beside the list: back */
             return;
         }
@@ -653,16 +652,20 @@ static void inventory_frame(Submenu* sm) {
     switch (s_inv.phase) {
         case PH_MOVE_THEN_A:
         case PH_DROP:
-            if (!cursor_is(sm, &s_inv.target)) {
+            if (s_inv.pressed) {
+                /* (A given: whatever it opened, a list is no cursor to follow) */
+                mTG_PC_touch_cursor(-1, 0, 0);
+                if (pc_frame_counter - s_press_from > PRESS_FRAMES) {
+                    s_inv.phase = PH_NONE;
+                }
+            } else if (!cursor_is(sm, &s_inv.target)) {
                 mTG_PC_touch_cursor(s_inv.target.table, s_inv.target.col, s_inv.target.row);
-            } else if (hand_idle(sm) && !s_inv.pressed) {
+            } else if (hand_idle(sm)) {
                 mTG_PC_touch_cursor(-1, 0, 0);
                 press(PAD_BUTTON_A, 0);
                 s_inv.pressed = 1;
                 printf("[TOUCH] pockets: A at table %d %d,%d\n", s_inv.target.table, s_inv.target.col,
                        s_inv.target.row);
-            } else if (s_inv.pressed && pc_frame_counter - s_press_from > PRESS_FRAMES) {
-                s_inv.phase = PH_NONE;
             }
             break;
         case PH_GRAB:
@@ -769,6 +772,7 @@ void pc_touch_menu_close(void) {
     }
     /* B a few times: the hand gives back what it holds, a list closes, then the menu */
     s_close_until = pc_frame_counter + 40;
+    s_close_menu = sm != NULL ? sm->menu_type : -1;
 }
 
 void pc_touch_menu_read(u16* buttons, s8* stick_x, s8* stick_y, s8* cstick_x, s8* cstick_y) {
@@ -789,10 +793,12 @@ void pc_touch_menu_read(u16* buttons, s8* stick_x, s8* stick_y, s8* cstick_x, s8
     if ((s32)(s_close_until - pc_frame_counter) > 0 && (s_close_until - pc_frame_counter) % 8 < 3) {
         GAME_PLAY* play = pc_touch_play();
 
-        if (submenu_of(play) != NULL) {
+        Submenu* sm = submenu_of(play);
+
+        if (sm != NULL && sm->menu_type == s_close_menu) {
             *buttons |= PAD_BUTTON_B;
-        } else {
-            s_close_until = 0;
+        } else if (sm == NULL || sm->menu_type != s_close_menu) {
+            s_close_until = 0; /* (closed, or back to the menu under it: that one stays) */
         }
     }
 }
