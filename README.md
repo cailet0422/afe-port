@@ -375,7 +375,8 @@ pad is the default on Android):
   - **Mailboxes, the notice board, the map and music boards, signs, gyroids and villagers' doors**: tap them (their
     top counts too); you go to the side they answer from (the notice board from the front, a mailbox from its front)
     and use them. If nothing happens there, the other sides are tried.
-  - **On a chair or in bed**: a tap or a drag gets up and goes that way.
+  - **Furniture in a room**: a tap goes to the side it faces and uses it; a chair or a sofa is sat on (the game
+    sits you down when you walk into its front). **On a chair or in bed**: a tap or a drag gets up and goes that way.
   - **Events**: whatever wants A (climbing out of a pitfall, the scenes of the events, the boat) takes a tap anywhere;
     a snowball is pushed by walking with it; in the morning exercises (and in a room where a radio plays their music)
     a **flick** moves the way you flick it (the game reads them from the C-stick).

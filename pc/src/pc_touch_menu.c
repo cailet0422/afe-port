@@ -757,8 +757,14 @@ void pc_touch_menu_frame(GAME_PLAY* play) {
 }
 
 void pc_touch_menu_close(void) {
-    if (other_menu(submenu_of(pc_touch_play()))) {
+    Submenu* sm = submenu_of(pc_touch_play());
+
+    if (other_menu(sm)) {
         pc_touch_menus_icon(PC_HUD_CLOSE, 0); /* (its own way out, once) */
+        return;
+    }
+    if (sm != NULL && (sm->menu_type == mSM_OVL_CPMAIL || sm->menu_type == mSM_OVL_CPORIGINAL)) {
+        press(PAD_BUTTON_B, 0); /* (once: B asks "finished?", and B there goes back to the menu) */
         return;
     }
     /* B a few times: the hand gives back what it holds, a list closes, then the menu */

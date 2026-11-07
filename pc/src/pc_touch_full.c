@@ -107,6 +107,7 @@ static struct {
     int detour;       /* frames of a step aside left (something in the way) */
     int detours;      /* steps aside taken */
     int detour_sign;
+    int push;         /* after the press, the stick into the thing (a chair, a sofa: one sits by walking into its front) */
 } s_go;
 
 #define FACE_UNIT 0x7FFF
@@ -1305,6 +1306,7 @@ static void tap(GAME_PLAY* play, float fx, float fy) {
     }
     s_go.sides = 0;
     s_go.check = 0;
+    s_go.push = 0;
     /* a message: on; a choice: that one */
     if (pc_touch_msg_open()) {
         mChoice_c* choice = mChoice_Get_base_window_p();
@@ -1414,6 +1416,26 @@ static void tap(GAME_PLAY* play, float fx, float fy) {
         if (button == 0 && mPlayer_ITEM_IS_SHOVEL(kind) && !in_room) {
             button = PAD_BUTTON_A; /* dig here */
         }
+        if (button == PAD_BUTTON_A && in_room && ITEM_IS_FTR(item)) {
+            /* a piece of furniture: from the side it faces first (a chair,
+             * a sofa, a bed are sat on or lain on from there by walking into
+             * them; a dresser opens, a radio plays with A), then the others */
+            static const s16 dir_yaw[4] = { 0x0000, 0x4000, (s16)0x8000, (s16)0xC000 }; /* south, east, north, west */
+            s16 front = dir_yaw[item & 3];
+            int i;
+
+            s_go.sides = 0;
+            for (i = 0; i < 4; i++) {
+                add_side(ux, uz, (s16)(front + i * 0x4000), 34.0f, FACE_UNIT);
+            }
+            s_go.side = 0;
+            go_to(GO_USE, s_go.side_x[0], s_go.side_z[0], 5.0f, 60.0f, PAD_BUTTON_A, NULL);
+            s_go.ux = ux;
+            s_go.uz = uz;
+            s_go.push = 1;
+            printf("[TOUCH] furniture %04X at %.0f,%.0f\n", (unsigned)item, ux, uz);
+            return;
+        }
         if (button != 0) {
             /* stand a unit off it, facing it: B looks 10 to 35 ahead
              * (Search_putin_item), A the next unit (trees, the shovel) */
@@ -1499,6 +1521,13 @@ static void go_step(GAME_PLAY* play, PLAYER_ACTOR* player) {
                     face_and_press(player, s_go.ux, s_go.uz, s_go.button);
                     if (s_go.side_yaw[s_go.side] != FACE_UNIT) {
                         s_face_yaw = s_go.side_yaw[s_go.side];
+                    }
+                    if (s_go.push) {
+                        /* into it for a while (ac_my_room_action.c_inc aMR_SitDownFurniture: 14 frames) */
+                        s8 sx, sy;
+
+                        stick_for_yaw(play, s_face_yaw, STICK_FULL, &sx, &sy);
+                        push_stick_for(sx, sy, 30);
                     }
                     s_go.check = 40; /* (see whether it took: pc_touch_full_game_frame) */
                     s_go.scene = Save_Get(scene_no);

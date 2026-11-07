@@ -314,8 +314,10 @@ full touch mode (`pc_touch_full.c`, `pc_touch_menu.c`, `pc_touch_room.c`, icons 
   C left or up back to the first), and in the morning exercise (`exercise_possible`, as
   `Player_actor_Check_AbleRadioExercise`) a flick is the C-stick that way. The light icon is a D-pad press
   (m_kankyo.c). A finger kept on the player holds A (the net raised, a piece grabbed: furniture pushed or pulled
-  where the furniture mode does not reach, the island's cottage). On a chair or in bed (`SITDOWN_WAIT`, `WAIT_BED`)
-  a tap pushes the stick toward it for 12 frames. A tap while a message's text is still coming is B (it hurries it).
+  where the furniture mode does not reach, the island's cottage). A tap on furniture in a room plans its four sides,
+  the one it faces first (the item's low two bits), presses A there and then pushes the stick into it for 30 frames
+  (ac_my_room_action.c_inc `aMR_SitDownFurniture` sits the player after 14). On a chair or in bed (`SITDOWN_WAIT`,
+  `WAIT_BED`) a tap pushes the stick toward it for 12 frames. A tap while a message's text is still coming is B (it hurries it).
   The NES games' door icon holds L+R+Z for 20 frames.
 - `pc_gx_window_to_ui` no longer reads `g_pc_widescreen_stretch`: emu64 sets it while it draws (stretched blits of
   transitions) and between frames it held whatever was drawn last, so the Korean editor's keyboard and the menus could

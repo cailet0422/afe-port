@@ -280,7 +280,9 @@ ninja -C pc/build32strip
   `indoor_distance_addition_idx`를 세 값 사이에서 돌리고(C 오른쪽·아래로 다음, 마지막에서는 C 왼쪽·위 두 번으로 처음),
   아침 체조(`exercise_possible`, `Player_actor_Check_AbleRadioExercise`와 같은 조건)에서는 튕기기가 그 방향 C스틱이다.
   전등 아이콘은 십자 버튼(m_kankyo.c). 캐릭터를 꾹 누르면 A를 누르고 있다(잠자리채 들기, 가구 잡기: 가구 배치 모드가
-  닿지 않는 섬 별장에서 밀고 당기기). 의자·침대(`SITDOWN_WAIT`, `WAIT_BED`)에서는 누르면 그쪽으로 12프레임 스틱을 민다.
+  닿지 않는 섬 별장에서 밀고 당기기). 방의 가구를 누르면 네 쪽을 계획해 가구가 향한 쪽(아이템 번호의 아래 두 비트)부터
+  가서 A를 누르고, 이어 30프레임 동안 가구 쪽으로 스틱을 민다(ac_my_room_action.c_inc `aMR_SitDownFurniture`가 14프레임
+  뒤에 앉힘). 의자·침대(`SITDOWN_WAIT`, `WAIT_BED`)에서는 누르면 그쪽으로 12프레임 스틱을 민다.
   대사 글자가 아직 나오는 중일 때 누르면 B(빨리 나옴). 패미컴의 문 아이콘은 L+R+Z를 20프레임 누른다.
 - `pc_gx_window_to_ui`는 이제 `g_pc_widescreen_stretch`를 읽지 않는다. emu64가 그리는 동안 바꾸는 값이라(전환
   효과의 늘인 그림) 프레임 사이에는 마지막에 그린 것의 값이 남아 있어, 한글 편집기 키보드와 메뉴의 터치가 옆 칸으로
