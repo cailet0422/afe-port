@@ -36,6 +36,9 @@
 #include "m_collision_bg.h"
 #include "ac_my_room.h"
 #include "m_ftr_def.h"
+#include "m_item_name.h"
+#include "m_font.h"
+#include "charmap.h"
 
 #include <math.h>
 #include <string.h>
@@ -68,6 +71,13 @@ static int s_on;
 static int s_sel_x = -1, s_sel_z = -1; /* the picked piece's anchor unit */
 static int s_msg;                       /* the last edit's answer, for the hint (0 none) */
 static u32 s_msg_until;
+static mActor_name_t s_name_item;       /* the piece whose name shows (a tap on it), until s_name_until */
+static u32 s_name_until;
+
+static void show_name(mActor_name_t item) {
+    s_name_item = item;
+    s_name_until = pc_frame_counter + 180;
+}
 
 /* A drag: a piece of the room, or one from the pockets */
 static struct {
@@ -814,6 +824,7 @@ void pc_touch_room_finger(int kind, s64 id, float x, float y) {
             s_drag.active = 1;
             s_drag.slot = s_slots[i];
             s_drag.ftr = pocket_piece(Now_Private->inventory.pockets[s_drag.slot]);
+            show_name(Now_Private->inventory.pockets[s_drag.slot]);
             return;
         }
         if (unit_at(x, y, &ux, &uz) && piece_at(fl, ux, uz, &ax, &az)) {
@@ -822,6 +833,7 @@ void pc_touch_room_finger(int kind, s64 id, float x, float y) {
             s_drag.active = 1;
             s_drag.slot = -1;
             s_drag.ftr = fl->layer_main.items[az][ax];
+            show_name((mActor_name_t)(s_drag.ftr & ~3));
             s_drag.ax = ax;
             s_drag.az = az;
             s_drag.gx = ux - ax;
@@ -847,6 +859,9 @@ void pc_touch_room_finger(int kind, s64 id, float x, float y) {
         if (s_drag.moved) {
             drag_update(x, y);
         }
+        if (s_name_item != EMPTY_NO) {
+            s_name_until = pc_frame_counter + 120; /* (shown while it is carried) */
+        }
         return;
     }
     /* up */
@@ -871,4 +886,39 @@ void pc_touch_room_finger(int kind, s64 id, float x, float y) {
         }
     }
     s_drag.active = 0;
+}
+
+/* The picked piece's name over the pockets' row, in the game's own font (so
+ * as the game writes it, Korean patch or not); called by the room's draw
+ * (ac_my_room_draw.c_inc) */
+void pc_touch_room_draw(GAME* game) {
+    u8 name[mIN_ITEM_NAME_LEN];
+    int len = mIN_ITEM_NAME_LEN;
+    GRAPH* graph;
+    f32 scale = 1.0f;
+    f32 width, x, y;
+    static const int ofs[4][2] = { { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 } };
+    int i;
+
+    if (!s_on || game == NULL || s_name_item == EMPTY_NO || (s32)(s_name_until - pc_frame_counter) <= 0) {
+        return;
+    }
+    mIN_copy_name_str(name, s_name_item);
+    while (len > 0 && name[len - 1] == CHAR_SPACE) {
+        len--;
+    }
+    if (len == 0) {
+        return;
+    }
+    graph = game->graph;
+    width = mFont_GetStringWidth(name, len, TRUE) * scale;
+    x = 160.0f - width * 0.5f;
+    y = 182.0f; /* just above the pockets' row (pc_touch_room_hud) */
+    mFont_SetMatrix(graph, mFont_MODE_FONT);
+    for (i = 0; i < 4; i++) {
+        mFont_SetLineStrings(game, name, len, x + ofs[i][0], y + ofs[i][1], 40, 30, 20, 255, FALSE, FALSE, scale, scale,
+                             mFont_MODE_FONT);
+    }
+    mFont_SetLineStrings(game, name, len, x, y, 255, 250, 230, 255, FALSE, FALSE, scale, scale, mFont_MODE_FONT);
+    mFont_UnSetMatrix(graph, mFont_MODE_FONT);
 }

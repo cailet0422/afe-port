@@ -69,6 +69,7 @@
  *                                     moved to x2,y2 the next frame, lifted after n frames
  *     <frame> TOUCHW x,z [n]          a finger where that point of the ground is on the window
  *     <frame> TOUCHNPC id [n]         a finger on that villager (hex id), e.g. the full touch mode
+ *     <frame> FGDUMP x,z              logs the items of the 7x7 units around a point
  *     <frame> KEY <name>              a key press event (SDL key name, '_' for a space,
  *                                     e.g. Escape, Return, Down, Left_Shift): menus
  *     <frame> PAD <name>              a gamepad button or trigger event (SDL names: a,

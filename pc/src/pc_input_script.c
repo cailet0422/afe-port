@@ -92,6 +92,7 @@ typedef enum {
     SCRIPT_BGM,
     SCRIPT_MAP,
     SCRIPT_BLOCK,
+    SCRIPT_FGDUMP,
     SCRIPT_CLICK,
     SCRIPT_MP,
 } ScriptKind;
@@ -371,6 +372,10 @@ int pc_input_script_load(const char* path) {
             }
         } else if (strcmp(word, "BLOCK") == 0) {
             ev.kind = SCRIPT_BLOCK;
+        } else if (strcmp(word, "FGDUMP") == 0 && fields >= 3 &&
+                   sscanf(arg, "%f,%f", &ev.seek_pos[0], &ev.seek_pos[1]) == 2) {
+            /* FGDUMP x,z: the items of the 7x7 units around a point (tests) */
+            ev.kind = SCRIPT_FGDUMP;
         } else if (strcmp(word, "MAP") == 0) {
             ev.kind = SCRIPT_MAP;
         } else if (strcmp(word, "TYPE") == 0 && fields >= 3) {
@@ -1546,6 +1551,21 @@ int pc_input_script_frame(u32 real_frame) {
             log_positions(frame);
         } else if (ev->kind == SCRIPT_MAP) {
             pc_minimap_request_toggle();
+        } else if (ev->kind == SCRIPT_FGDUMP) {
+            int cx = (int)(ev->seek_pos[0] / 40.0f), cz = (int)(ev->seek_pos[1] / 40.0f);
+
+            for (int dz = -3; dz <= 3; dz++) {
+                char line[160];
+                int n = snprintf(line, sizeof(line), "[INPUT] fg z %4d:", (cz + dz) * 40 + 20);
+
+                for (int dx = -3; dx <= 3; dx++) {
+                    xyz_t p = { (cx + dx) * 40.0f + 20.0f, 0.0f, (cz + dz) * 40.0f + 20.0f };
+                    mActor_name_t* fg = mFI_GetUnitFG(p);
+
+                    n += snprintf(line + n, sizeof(line) - n, " %04X", fg != NULL ? *fg : 0xDEAD);
+                }
+                printf("%s   (x from %d)\n", line, (cx - 3) * 40 + 20);
+            }
         } else if (ev->kind == SCRIPT_BLOCK) {
             log_block(frame);
         } else if (ev->kind >= SCRIPT_GIVE && ev->kind <= SCRIPT_BGM) {

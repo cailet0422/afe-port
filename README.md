@@ -366,6 +366,11 @@ pad is the default on Android):
   - **Tap a thing** to walk up and use it: items, flowers and weeds are picked up, trees shaken (or chopped with the
     axe), signs, mailboxes and furniture used; with the shovel a tap on the ground digs there (or fills the hole);
     with the net or the rod a tap nearby swings or casts that way. A tap on yourself is A.
+  - **Mailboxes, the notice board, the map and music boards, signs, gyroids and villagers' doors**: tap them (their
+    top counts too); you go to the side they answer from (the notice board from the front, a mailbox from its front)
+    and use them. If nothing happens there, the other sides are tried.
+  - **Events**: whatever wants A (climbing out of a pitfall, the scenes of the events, the boat) takes a tap anywhere;
+    a snowball is pushed by walking with it; the morning exercises follow a drag as they would the stick.
   - Icons at the top: the pause menu, save and the gamepad (top left), the map and the pockets (top right). In the
     pockets, tap a slot for its commands (or to put down what the hand holds), tap a command, and **drag an item** to
     another slot or onto yourself to wear or hold it; in the map, tap an acre. The X closes them.
@@ -373,7 +378,7 @@ pad is the default on Android):
     **swipe** it left or right (or tap a side) to take another one out.
   - **Furniture mode** (the chair icon, in your own house): tap a piece to pick it, drag it to move it (green where it
     fits), turn it with the arrows, put it in your pockets with the satchel, or drag a piece from the pockets at the
-    bottom onto the floor. The check mark ends the mode.
+    bottom onto the floor. A tap on a piece, in the room or in the row, shows its name. The check mark ends the mode.
   - On the title screen, a touch anywhere starts (START).
   - Everything else that wants buttons (other menus, the NES games) brings the GameCube pad up by itself; the gamepad
     icon shows it at any time.
