@@ -483,6 +483,9 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_typing.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_ptr32.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_touch.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_touch_full.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_touch_menu.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_touch_room.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_minimap.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_autosave.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_minimap_core.c
@@ -510,6 +513,7 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_menu.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_textures.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_mp.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_touch.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_render.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gfx/pc_gfx.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gfx/pc_gfx_vk.c
@@ -635,10 +639,11 @@ set_source_files_properties(${IMGUI_SOURCES} PROPERTIES COMPILE_OPTIONS "-O2;-w"
 set_property(SOURCE ${IMGUI_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_menu.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_textures.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_mp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_render.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_touch.cpp
     APPEND PROPERTY INCLUDE_DIRECTORIES ${IMGUI_DIR})
 set_property(SOURCE ${IMGUI_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_menu.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_textures.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_mp.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_mp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/pc_gui_touch.cpp
     APPEND PROPERTY COMPILE_DEFINITIONS IMGUI_DISABLE_DEMO_WINDOWS IMGUI_DISABLE_DEBUG_TOOLS)
 
 # Padclamp.c defines a plain `inline` helper; MWCC emits it like GNU89 does.

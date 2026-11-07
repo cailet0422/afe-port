@@ -578,6 +578,12 @@ static void chat_button_geometry(ImVec2* c, float* r) {
     float w = io.DisplaySize.x, h = io.DisplaySize.y;
     float u = w < h ? w : h;
 
+    if (g_pc_settings.touch_controls == 2) {
+        /* the full touch mode: under its pause menu icon (pc_touch_full.c) */
+        *c = ImVec2(0.08f * u, 0.205f * u);
+        *r = 0.045f * u;
+        return;
+    }
     *c = ImVec2(w * 0.5f + 0.27f * u, 0.075f * u);
     *r = 0.05f * u;
 }

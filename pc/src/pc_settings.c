@@ -64,6 +64,7 @@ static const struct {
     { "ko_image", g_pc_settings.ko_image, sizeof(g_pc_settings.ko_image) },
     { "update_skip", g_pc_settings.update_skip, sizeof(g_pc_settings.update_skip) },
     { "mp_name", g_pc_settings.mp_name, sizeof(g_pc_settings.mp_name) },
+    { "touch_layout", g_pc_settings.touch_layout, sizeof(g_pc_settings.touch_layout) },
 };
 
 /* Settings that take a number in a range (others are left as they are) */
@@ -82,7 +83,7 @@ static const struct {
     { "nes_aspect", &g_pc_settings.nes_aspect, 0, 1 },
     { "master_volume", &g_pc_settings.master_volume, 0, 100 },
     { "text_input", &g_pc_settings.text_input, 0, 1 },
-    { "touch_controls", &g_pc_settings.touch_controls, 0, 1 },
+    { "touch_controls", &g_pc_settings.touch_controls, 0, 2 },
     { "minimap", &g_pc_settings.minimap, 0, 1 },
     { "seamless_blocks", &g_pc_settings.seamless_blocks, 0, 1 },
     { "auto_update", &g_pc_settings.auto_update, 0, 1 },
@@ -202,8 +203,12 @@ void pc_settings_save(void) {
     fprintf(f, "# Hangul/English with the Hangul key, right Alt or Shift+Space), 1 = the system's input method\n");
     fprintf(f, "text_input = %d\n", g_pc_settings.text_input);
     fprintf(f, "\n");
-    fprintf(f, "# On-screen controller for touch screens: 0 = off, 1 = on\n");
+    fprintf(f, "# Touch screens: 0 = off, 1 = a GameCube pad drawn over the game, 2 = full touch (tap where to\n");
+    fprintf(f, "# walk, hold to run, tap villagers and things to use them, icons for the pockets and the map)\n");
     fprintf(f, "touch_controls = %d\n", g_pc_settings.touch_controls);
+    fprintf(f, "# The pad's pieces moved or resized in Settings > Edit pad layout (name=x,y,size; x and y as\n");
+    fprintf(f, "# fractions of the window); empty = where the game puts them\n");
+    fprintf(f, "touch_layout = %s\n", g_pc_settings.touch_layout);
     fprintf(f, "\n");
     fprintf(f, "[Paths]\n");
     fprintf(f, "# Folder with the disc image (.iso/.ciso/.gcm), or the image file itself.\n");

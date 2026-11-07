@@ -39,8 +39,11 @@ void pc_gx_window_to_ui(float wx, float wy, float* x, float* y) {
     float nx = wx * 2.0f - 1.0f;
 
     pc_gx_update_aspect();
-    /* GXSetProjection narrows orthographic drawing about the centre */
-    if ((g_pc_widescreen_stretch == 0 || g_pc_widescreen_stretch == 2) && g_aspect_active) {
+    /* GXSetProjection narrows orthographic drawing about the centre. (Not
+     * g_pc_widescreen_stretch: emu64 sets it while it draws, for the stretched
+     * blits of transitions; between frames it holds whatever came last, and
+     * the menus and text are always drawn narrowed.) */
+    if (g_aspect_active) {
         nx /= g_aspect_factor;
     }
     *x = (nx + 1.0f) * 0.5f * (float)PC_GC_WIDTH;

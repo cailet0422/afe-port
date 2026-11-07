@@ -221,7 +221,7 @@ int pc_minimap_on(void) {
 
 /* Always the same corner: the game keeps its clock away from it (m_banti.c) */
 static void layout(PcMinimapRect* r) {
-    pc_minimap_layout(g_pc_window_w, g_pc_window_h, g_pc_settings.touch_controls, r);
+    pc_minimap_layout(g_pc_window_w, g_pc_window_h, g_pc_settings.touch_controls == 1, r);
 }
 
 int pc_minimap_at(float x, float y) {
