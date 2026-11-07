@@ -29,6 +29,8 @@
  *     <frame> SOUND <kind> <id> <n> [<frames>]  play n sounds from that hex id, each for
  *                                     frames (120): BGM, SE (system), HANIWA (a gyroid's
  *                                     rhythm, 1-127), INST (a furniture instrument)
+ *     <frame> LETTERS <n> [<m>]       debug: n letters (to the player, from the player) in
+ *                                     the house's mailbox, m in the player's letters
  *     <frame> NOJOB                   debug: end the part-time job for Nook (day one), so
  *                                     the shops, post office and houses act as later on
  *     <frame> UNSAVED                 debug: the player's house as never saved at its gyroid
@@ -69,6 +71,7 @@
  *                                     moved to x2,y2 the next frame, lifted after n frames
  *     <frame> TOUCHW x,z [n]          a finger where that point of the ground is on the window
  *     <frame> TOUCHNPC id [n]         a finger on that villager (hex id), e.g. the full touch mode
+ *     <frame> FGDUMP x,z              logs the items of the 7x7 units around a point
  *     <frame> KEY <name>              a key press event (SDL key name, '_' for a space,
  *                                     e.g. Escape, Return, Down, Left_Shift): menus
  *     <frame> PAD <name>              a gamepad button or trigger event (SDL names: a,

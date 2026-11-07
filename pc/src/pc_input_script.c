@@ -24,6 +24,7 @@
 #include "m_house.h"
 #include "m_choice.h"
 #include "m_msg.h"
+#include "m_mail.h"
 #include "m_time.h"
 #include "m_actor.h"
 #include "ac_insect.h"
@@ -78,6 +79,7 @@ typedef enum {
     SCRIPT_NAMES,
     SCRIPT_SOUND,
     SCRIPT_NOJOB,
+    SCRIPT_LETTERS,
     SCRIPT_UNSAVED,
     SCRIPT_JOBDONE,
     SCRIPT_BELLS,
@@ -92,6 +94,7 @@ typedef enum {
     SCRIPT_BGM,
     SCRIPT_MAP,
     SCRIPT_BLOCK,
+    SCRIPT_FGDUMP,
     SCRIPT_CLICK,
     SCRIPT_MP,
 } ScriptKind;
@@ -304,6 +307,10 @@ int pc_input_script_load(const char* path) {
             ev.kind = SCRIPT_NAMES;
             ev.value[0] = (u32)strtoul(arg, NULL, 16);
             ev.value[1] = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : 1;
+        } else if (strcmp(word, "LETTERS") == 0 && fields >= 3) {
+            ev.kind = SCRIPT_LETTERS;
+            ev.value[0] = (u32)strtoul(arg, NULL, 10);
+            ev.value[1] = fields >= 4 ? (u32)strtoul(arg2, NULL, 10) : 0;
         } else if (strcmp(word, "NOJOB") == 0) {
             ev.kind = SCRIPT_NOJOB;
         } else if (strcmp(word, "UNSAVED") == 0) {
@@ -371,6 +378,10 @@ int pc_input_script_load(const char* path) {
             }
         } else if (strcmp(word, "BLOCK") == 0) {
             ev.kind = SCRIPT_BLOCK;
+        } else if (strcmp(word, "FGDUMP") == 0 && fields >= 3 &&
+                   sscanf(arg, "%f,%f", &ev.seek_pos[0], &ev.seek_pos[1]) == 2) {
+            /* FGDUMP x,z: the items of the 7x7 units around a point (tests) */
+            ev.kind = SCRIPT_FGDUMP;
         } else if (strcmp(word, "MAP") == 0) {
             ev.kind = SCRIPT_MAP;
         } else if (strcmp(word, "TYPE") == 0 && fields >= 3) {
@@ -1184,6 +1195,23 @@ static void debug_command(const ScriptEvent* ev) {
             mSM_open_submenu_new(&play->submenu, mSM_OVL_LEDIT, (int)ev->value[0], 0,
                                  animal != NULL ? (void*)animal->catchphrase : (void*)scratch);
         }
+    } else if (ev->kind == SCRIPT_LETTERS) {
+        /* letters from the player to the player in the house's mailbox, and
+         * in the player's own letters (full, the mailbox's menu keeps them) */
+        Mail_c* box = Save_Get(homes[mHS_get_arrange_idx(Common_Get(player_no))]).mailbox;
+        int j;
+
+        for (i = 0; i < HOME_MAILBOX_SIZE && i < (int)ev->value[0]; i++) {
+            mMl_init_mail(&box[i], &Now_Private->player_ID);
+            mMl_set_to_plname(&box[i], &Now_Private->player_ID);
+            box[i].content.paper_type = (u8)i;
+        }
+        for (j = 0; j < mPr_INVENTORY_MAIL_COUNT && j < (int)ev->value[1]; j++) {
+            mMl_init_mail(&Now_Private->mail[j], &Now_Private->player_ID);
+            mMl_set_to_plname(&Now_Private->mail[j], &Now_Private->player_ID);
+            Now_Private->mail[j].content.paper_type = (u8)(10 + j);
+        }
+        printf("[INPUT] frame %u: %d letters in the mailbox, %d in the pockets\n", (unsigned)s_frame, i, j);
     } else if (ev->kind == SCRIPT_NOJOB) {
         /* as when Nook lets the player go: the shops, the post office and
          * the villagers' houses act as on any later day */
@@ -1546,6 +1574,21 @@ int pc_input_script_frame(u32 real_frame) {
             log_positions(frame);
         } else if (ev->kind == SCRIPT_MAP) {
             pc_minimap_request_toggle();
+        } else if (ev->kind == SCRIPT_FGDUMP) {
+            int cx = (int)(ev->seek_pos[0] / 40.0f), cz = (int)(ev->seek_pos[1] / 40.0f);
+
+            for (int dz = -3; dz <= 3; dz++) {
+                char line[160];
+                int n = snprintf(line, sizeof(line), "[INPUT] fg z %4d:", (cz + dz) * 40 + 20);
+
+                for (int dx = -3; dx <= 3; dx++) {
+                    xyz_t p = { (cx + dx) * 40.0f + 20.0f, 0.0f, (cz + dz) * 40.0f + 20.0f };
+                    mActor_name_t* fg = mFI_GetUnitFG(p);
+
+                    n += snprintf(line + n, sizeof(line) - n, " %04X", fg != NULL ? *fg : 0xDEAD);
+                }
+                printf("%s   (x from %d)\n", line, (cx - 3) * 40 + 20);
+            }
         } else if (ev->kind == SCRIPT_BLOCK) {
             log_block(frame);
         } else if (ev->kind >= SCRIPT_GIVE && ev->kind <= SCRIPT_BGM) {

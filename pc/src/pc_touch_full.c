@@ -24,6 +24,7 @@
 #include "m_camera2.h"
 #include "m_event.h"
 #include "m_actor.h"
+#include "m_demo.h"
 
 #include <dolphin/pad.h>
 #include <math.h>
@@ -89,7 +90,20 @@ static struct {
     u32 start;
     u32 still;
     float lx, lz;
+    /* GO_USE of a thing that answers from one side only (a board, a
+     * mailbox, a sign, a door): the places to stand and the way to face
+     * (FACE_UNIT: towards the unit), tried in turn until the press takes */
+    int sides, side;
+    float side_x[4], side_z[4];
+    s16 side_yaw[4];
+    int check;        /* frames left to see whether the last press took */
+    int scene;
+    int detour;       /* frames of a step aside left (something in the way) */
+    int detours;      /* steps aside taken */
+    int detour_sign;
 } s_go;
+
+#define FACE_UNIT 0x7FFF
 
 static s8 s_stick_x, s_stick_y; /* for the next reads */
 static int s_dash;              /* R held with the stick: the player runs */
@@ -142,6 +156,14 @@ int pc_touch_msg_open(void) {
     return msg != NULL && !mMsg_Check_main_hide(msg);
 }
 
+/* States the stick moves the player out of or along: standing, walking,
+ * running, pushing a snowball (the winter's snowmen), twirling an umbrella
+ * (an idle pose the stick ends) */
+static int steerable_index(int index) {
+    return (index >= mPlayer_INDEX_WAIT && index <= mPlayer_INDEX_DASH) || index == mPlayer_INDEX_PUSH_SNOWBALL ||
+           index == mPlayer_INDEX_ROTATE_UMBRELLA;
+}
+
 /* The player can be steered: walking or standing, no message, no menu */
 int pc_touch_player_free(GAME_PLAY* play) {
     int index;
@@ -151,7 +173,7 @@ int pc_touch_player_free(GAME_PLAY* play) {
         return FALSE;
     }
     index = mPlib_get_player_actor_main_index((GAME*)play);
-    return index >= mPlayer_INDEX_WAIT && index <= mPlayer_INDEX_DASH;
+    return steerable_index(index);
 }
 
 static int submenu_type(GAME_PLAY* play) {
@@ -339,6 +361,168 @@ static u16 item_button(mActor_name_t item, int in_room) {
     return PAD_BUTTON_A;
 }
 
+/* --- Things that answer A from one side --------------------------------- */
+
+enum {
+    OBJ_NONE,    /* a tree, a rock ...: A from wherever the player comes */
+    OBJ_BOARD,   /* the notice board, the map board, the music board: from the south, facing north (m_submenu.c) */
+    OBJ_SIGN,    /* a sign: from the south (ac_sign.c) */
+    OBJ_MAILBOX, /* a mailbox: in front of it as it is turned (ac_mailbox_move.c_inc) */
+    OBJ_GYROID,  /* a gyroid: from any side, close */
+    OBJ_DOOR,    /* a villager's door: from the front */
+};
+
+static int obj_kind(mActor_name_t item) {
+    if (item == MESSAGE_BOARD0 || item == MESSAGE_BOARD1 || item == MAP_BOARD0 || item == MAP_BOARD1 ||
+        item == MUSIC_BOARD0 || item == MUSIC_BOARD1) {
+        return OBJ_BOARD;
+    }
+    if (item >= DUMMY_MAILBOX0 && item <= DUMMY_MAILBOX3) {
+        return OBJ_MAILBOX;
+    }
+    if (ITEM_IS_SIGN(item)) {
+        return OBJ_SIGN;
+    }
+    if (ITEM_IS_DUMMY_HANIWA(item)) {
+        return OBJ_GYROID;
+    }
+    if (ITEM_IS_DUMMY_NPC_HOUSE(item)) {
+        return OBJ_DOOR;
+    }
+    return OBJ_NONE;
+}
+
+/* How tall a thing stands over its unit (a finger on its top still means it) */
+static float thing_height(mActor_name_t item) {
+    if (IS_ITEM_TREE(item) || IS_ITEM_ANY_PALM_TREE(item)) {
+        return IS_ITEM_SMALL_TREE(item) ? 35.0f : 75.0f;
+    }
+    switch (obj_kind(item)) {
+        case OBJ_BOARD: return 55.0f;
+        case OBJ_MAILBOX: return 38.0f;
+        case OBJ_SIGN: return 38.0f;
+        case OBJ_GYROID: return 40.0f;
+        case OBJ_DOOR: return 60.0f;
+        default: return 0.0f;
+    }
+}
+
+/* The tall thing under a point of the window (pixels): each unit near where
+ * the finger meets the ground stands as a column of its thing's height; the
+ * nearest to the camera wins */
+static int thing_at(GAME_PLAY* play, const xyz_t* ground, float px, float py, float* ux, float* uz,
+                    mActor_name_t* out) {
+    int gx = (int)floorf(ground->x / 40.0f), gz = (int)floorf(ground->z / 40.0f);
+    int found = FALSE;
+    float best_z = -1e9f;
+    int x, z;
+
+    for (z = gz - 1; z <= gz + 5; z++) {
+        for (x = gx - 2; x <= gx + 2; x++) {
+            xyz_t c = { x * 40.0f + 20.0f, 0.0f, z * 40.0f + 20.0f };
+            mActor_name_t* fg = mFI_GetUnitFG(c);
+            float h, bx, by, tx, ty, ex, ey, hw;
+            xyz_t base, top, edge;
+
+            if (fg == NULL || (h = thing_height(*fg)) <= 0.0f) {
+                continue;
+            }
+            c.y = mCoBG_GetBgY_AngleS_FromWpos(NULL, c, 0.0f);
+            base = c;
+            if (obj_kind(*fg) == OBJ_BOARD) {
+                base.z += 20.0f; /* (a board stands on its units' south edge) */
+            }
+            top = base;
+            top.y += h;
+            edge = base;
+            edge.x += 20.0f;
+            if (!pc_touch_world_to_window(play, &base, &bx, &by) || !pc_touch_world_to_window(play, &top, &tx, &ty) ||
+                !pc_touch_world_to_window(play, &edge, &ex, &ey)) {
+                continue;
+            }
+            bx *= g_pc_window_w;
+            by *= g_pc_window_h;
+            ty *= g_pc_window_h;
+            hw = fabsf(ex * g_pc_window_w - bx) * 1.1f;
+            if (px >= bx - hw && px <= bx + hw && py >= ty - hw * 0.3f && py <= by + hw * 0.5f && c.z > best_z) {
+                best_z = c.z;
+                *ux = c.x;
+                *uz = c.z;
+                *out = *fg;
+                found = TRUE;
+            }
+        }
+    }
+    return found;
+}
+
+/* The mailbox standing on a unit (its turn says where its front is) */
+static ACTOR* mailbox_at(GAME_PLAY* play, float ux, float uz) {
+    ACTOR* a;
+
+    for (a = play->actor_info.list[ACTOR_PART_ITEM].actor; a != NULL; a = a->next_actor) {
+        if (a->id == mAc_PROFILE_MAILBOX && fabsf(a->world.position.x - ux) < 40.0f &&
+            fabsf(a->world.position.z - uz) < 40.0f) {
+            return a;
+        }
+    }
+    return NULL;
+}
+
+static void add_side(float ux, float uz, s16 dir, float dist, s16 face) {
+    float a = (float)dir * ((float)M_PI / 32768.0f);
+    int i = s_go.sides;
+
+    if (i >= 4) {
+        return;
+    }
+    s_go.side_x[i] = ux + sinf(a) * dist;
+    s_go.side_z[i] = uz + cosf(a) * dist;
+    s_go.side_yaw[i] = face;
+    s_go.sides++;
+}
+
+/* The places to stand for a thing at (ux, uz), the likeliest first. Yaws:
+ * 0 is south (+z), 0x8000 north; standing south of a thing, one faces north. */
+static void plan_sides(GAME_PLAY* play, PLAYER_ACTOR* player, int kind, float ux, float uz) {
+    float px = player->actor_class.world.position.x - ux;
+    float pz = player->actor_class.world.position.z - uz;
+    s16 near = (px * px + pz * pz) > 1.0f ? yaw_to(px, pz) : 0;
+    int i;
+
+    s_go.sides = 0;
+    switch (kind) {
+        case OBJ_BOARD:
+        case OBJ_SIGN:
+            /* just off its south edge: the unit 20 ahead is the thing's (Player_actor_check_forward) */
+            add_side(ux, uz, 0, 36.0f, (s16)0x8000);
+            break;
+        case OBJ_MAILBOX: {
+            ACTOR* box = mailbox_at(play, ux, uz);
+            s16 front = box != NULL ? (s16)(box->shape_info.rotation.y - 0x2000) : 0;
+
+            for (i = 0; i < 4; i++) {
+                add_side(ux, uz, (s16)(front + i * 0x4000), 30.0f, FACE_UNIT);
+            }
+            break;
+        }
+        case OBJ_GYROID:
+            /* the nearest side first, then round it */
+            near = (s16)(((near + 0x2000) & 0xC000));
+            for (i = 0; i < 4; i++) {
+                add_side(ux, uz, (s16)(near + i * 0x4000), 36.0f, FACE_UNIT);
+            }
+            break;
+        case OBJ_DOOR:
+        default:
+            add_side(ux, uz, 0, 34.0f, (s16)0x8000);
+            add_side(ux, uz, 0x4000, 34.0f, FACE_UNIT);
+            add_side(ux, uz, (s16)0xC000, 34.0f, FACE_UNIT);
+            add_side(ux, uz, (s16)0x8000, 34.0f, FACE_UNIT);
+            break;
+    }
+}
+
 /* --- The choice window ------------------------------------------------ */
 
 /* Which choice a window point is on, -1 if none (m_choice_main.c_inc
@@ -519,7 +703,7 @@ static int hud_mode(GAME_PLAY* play) {
         return 0;
     }
     menu = submenu_type(play);
-    if (menu == mSM_OVL_INVENTORY || menu == mSM_OVL_MAP) {
+    if (pc_touch_menu_owns(play)) {
         return play->submenu.process_status == mSM_PROCESS_PLAY ? 2 : 0;
     }
     if (menu != mSM_OVL_NONE || pc_touch_msg_open() || pc_touch_title()) {
@@ -683,12 +867,8 @@ int pc_touch_full_pad_shown(void) {
         return TRUE; /* the screens before the game (the memory card's ...): the buttons */
     }
     menu = submenu_type(play);
-    if (menu == mSM_OVL_INVENTORY && play->submenu.overlay != NULL &&
-        play->submenu.overlay->menu_info[mSM_OVL_INVENTORY].data0 == mSM_IV_OPEN_CPMAIL) {
-        return TRUE; /* (the pockets beside the letters' copy: another layout) */
-    }
-    /* the menus other than the pockets and the map want buttons */
-    return menu != mSM_OVL_NONE && menu != mSM_OVL_INVENTORY && menu != mSM_OVL_MAP;
+    /* the menus but those worked by touch want buttons (pc_touch_menu.c) */
+    return menu != mSM_OVL_NONE && !pc_touch_menu_owns(play);
 }
 
 /* --- Fingers ---------------------------------------------------------- */
@@ -763,7 +943,7 @@ int pc_touch_full_finger_down(s64 id, float x, float y) {
     } else if (pc_touch_room_on()) {
         f->kind = FK_ROOM;
         pc_touch_room_finger(0, f->id, x, y);
-    } else if (play != NULL && (submenu_type(play) == mSM_OVL_INVENTORY || submenu_type(play) == mSM_OVL_MAP)) {
+    } else if (play != NULL && pc_touch_menu_owns(play)) {
         f->kind = FK_MENU;
         pc_touch_menu_finger(0, f->id, x, y);
     } else if (pc_minimap_at(x, y) && pc_touch_player_free(play)) {
@@ -778,6 +958,8 @@ int pc_touch_full_finger_down(s64 id, float x, float y) {
         }
         f->kind = FK_WORLD;
         s_go.kind = GO_NONE;
+        s_go.sides = 0;
+        s_go.check = 0;
     }
     return TRUE;
 }
@@ -918,6 +1100,10 @@ void pc_touch_full_read(u16* buttons, s8* stick_x, s8* stick_y) {
 /* --- The game frame ----------------------------------------------------- */
 
 static void go_to(int kind, float x, float z, float stop, float reach, u16 button, ACTOR* actor) {
+    s_go.check = 0;
+    s_go.detour = 0;
+    s_go.detours = 0;
+    s_go.detour_sign = 1;
     s_go.kind = kind;
     s_go.x = x;
     s_go.z = z;
@@ -953,6 +1139,8 @@ static void tap(GAME_PLAY* play, float fx, float fy) {
     if (play == NULL || player == NULL) {
         return;
     }
+    s_go.sides = 0;
+    s_go.check = 0;
     /* a message: on; a choice: that one */
     if (pc_touch_msg_open()) {
         mChoice_c* choice = mChoice_Get_base_window_p();
@@ -971,8 +1159,9 @@ static void tap(GAME_PLAY* play, float fx, float fy) {
         return;
     }
     index = mPlib_get_player_actor_main_index((GAME*)play);
-    if (index < mPlayer_INDEX_WAIT || index > mPlayer_INDEX_DASH) {
-        /* busy (a rod in the water, a net held, a scene): A, as the game asks */
+    if (!steerable_index(index)) {
+        /* busy (a rod in the water, a net held, a pitfall to climb out of,
+         * an event's scene): A, as the game asks */
         press(PAD_BUTTON_A, 0);
         return;
     }
@@ -1015,7 +1204,28 @@ static void tap(GAME_PLAY* play, float fx, float fy) {
         int in_room = mFI_IS_ROOM(mFI_GetFieldId());
         float ux = floorf(ground.x / 40.0f) * 40.0f + 20.0f;
         float uz = floorf(ground.z / 40.0f) * 40.0f + 20.0f;
-        u16 button = item_button(item, in_room);
+        u16 button;
+        mActor_name_t thing;
+        float tux, tuz;
+
+        /* a tall thing seen under the finger (the ground there is behind it) */
+        if (!in_room && thing_at(play, &ground, px, py, &tux, &tuz, &thing)) {
+            int obj = obj_kind(thing);
+
+            if (obj != OBJ_NONE) {
+                plan_sides(play, player, obj, tux, tuz);
+                s_go.side = 0;
+                go_to(GO_USE, s_go.side_x[0], s_go.side_z[0], 5.0f, 60.0f, PAD_BUTTON_A, NULL);
+                s_go.ux = tux;
+                s_go.uz = tuz;
+                printf("[TOUCH] use %04X at %.0f,%.0f (%d sides)\n", (unsigned)thing, tux, tuz, s_go.sides);
+                return;
+            }
+            item = thing;
+            ux = tux;
+            uz = tuz;
+        }
+        button = item_button(item, in_room);
 
         if (button == 0 && mPlayer_ITEM_IS_SHOVEL(kind) && !in_room) {
             button = PAD_BUTTON_A; /* dig here */
@@ -1034,6 +1244,7 @@ static void tap(GAME_PLAY* play, float fx, float fy) {
                 len = 1.0f;
             }
             go_to(GO_USE, ux + sx / len * off, uz + sz / len * off, 5.0f, 60.0f, button, NULL);
+            s_go.sides = 0;
             s_go.ux = ux;
             s_go.uz = uz;
             printf("[TOUCH] %s %04X at %.0f,%.0f\n", button == PAD_BUTTON_B ? "pick up" : "use", (unsigned)item, ux,
@@ -1069,25 +1280,63 @@ static void go_step(GAME_PLAY* play, PLAYER_ACTOR* player) {
     s_go.lx = px;
     s_go.lz = pz;
 
-    if (dist <= s_go.stop || (s_go.still > 12 && s_go.kind != GO_WALK) ||
-        (s_go.still > 20 && s_go.kind == GO_WALK) || pc_frame_counter - s_go.start > GO_GIVE_UP) {
-        int kind = s_go.kind;
+    {
+        float ex = s_go.ux - px, ez = s_go.uz - pz;
+        float to_unit = sqrtf(ex * ex + ez * ez);
+        int arrived = dist <= s_go.stop;
+        int blocked = s_go.still > 10;
+        /* stopped against the very thing to use (a tree, a rock) or within
+         * talking distance: that is close enough */
+        int close = (s_go.kind == GO_USE && s_go.sides == 0 && to_unit <= 46.0f) ||
+                    (s_go.kind == GO_TALK && dist <= s_go.reach);
 
-        s_go.kind = GO_NONE;
-        s_stick_x = s_stick_y = 0;
-        if (kind == GO_TALK) {
-            if (dist <= s_go.reach) {
-                face_and_press(player, tx, tz, PAD_BUTTON_A);
-            }
-        } else if (kind == GO_USE) {
-            float ux = s_go.ux, uz = s_go.uz;
-            float ex = ux - px, ez = uz - pz;
-
-            if (sqrtf(ex * ex + ez * ez) <= s_go.reach) {
-                face_and_press(player, ux, uz, s_go.button);
-            }
+        /* (not on a plain walk: a door is entered by walking into it, and a
+         * step aside there would lead away from it) */
+        if (blocked && !arrived && !close && s_go.detours < 5 && dist > 10.0f &&
+            (s_go.kind == GO_TALK || s_go.sides > 0)) {
+            /* something in the way: a step aside, the other way each time */
+            s_go.detour = 22;
+            s_go.detour_sign = -s_go.detour_sign;
+            s_go.detours++;
+            s_go.still = 0;
         }
-        return;
+        if (arrived || (blocked && s_go.detour == 0) || pc_frame_counter - s_go.start > GO_GIVE_UP) {
+            int kind = s_go.kind;
+
+            s_go.kind = GO_NONE;
+            s_stick_x = s_stick_y = 0;
+            if (kind == GO_TALK) {
+                if (dist <= s_go.reach) {
+                    face_and_press(player, tx, tz, PAD_BUTTON_A);
+                }
+            } else if (kind == GO_USE && s_go.sides > 0) {
+                /* a thing that answers from one side: only from that place */
+                if (dist <= 16.0f) {
+                    face_and_press(player, s_go.ux, s_go.uz, s_go.button);
+                    if (s_go.side_yaw[s_go.side] != FACE_UNIT) {
+                        s_face_yaw = s_go.side_yaw[s_go.side];
+                    }
+                    s_go.check = 40; /* (see whether it took: pc_touch_full_game_frame) */
+                    s_go.scene = Save_Get(scene_no);
+                } else if (s_go.side + 1 < s_go.sides) {
+                    s_go.check = 1; /* could not get there: the next side */
+                } else {
+                    s_go.sides = 0;
+                }
+            } else if (kind == GO_USE) {
+                if (to_unit <= s_go.reach) {
+                    face_and_press(player, s_go.ux, s_go.uz, s_go.button);
+                }
+            }
+            return;
+        }
+    }
+    if (s_go.detour > 0) {
+        float t = dx;
+
+        s_go.detour--;
+        dx = -dz * s_go.detour_sign;
+        dz = t * s_go.detour_sign;
     }
     /* slow down near the end: the player slides on for a while */
     speed = dist * 0.3f;
@@ -1172,6 +1421,8 @@ void pc_touch_full_game_frame(GAME* game) {
         if (pc_touch_player_free(play)) {
             player->Set_force_position_angle_proc((GAME*)play, NULL, &angle, mPlayer_FORCE_POSITION_ANGLE_ROTY);
             press(s_face_button, 1);
+            printf("[TOUCH] press %X at %.0f,%.0f facing %04X\n", s_face_button, player->actor_class.world.position.x,
+                   player->actor_class.world.position.z, (unsigned)(u16)s_face_yaw);
         }
     }
 
@@ -1204,6 +1455,24 @@ void pc_touch_full_game_frame(GAME* game) {
             s_face_pending = 0;
         }
         s_scene = Save_Get(scene_no);
+    }
+    /* a thing pressed from one side: it took (a message, a menu, the player
+     * busy, another scene), or the next side is tried */
+    if (s_go.check > 0 && s_go.kind == GO_NONE && !s_face_pending) {
+        int index = mPlib_get_player_actor_main_index((GAME*)play);
+
+        if (pc_touch_msg_open() || play->submenu.process_status != mSM_PROCESS_WAIT || !steerable_index(index) ||
+            Save_Get(scene_no) != s_go.scene || mDemo_Get_talk_actor() != NULL) {
+            s_go.check = 0;
+            s_go.sides = 0;
+        } else if (--s_go.check == 0) {
+            if (++s_go.side < s_go.sides) {
+                go_to(GO_USE, s_go.side_x[s_go.side], s_go.side_z[s_go.side], 5.0f, 60.0f, PAD_BUTTON_A, NULL);
+                printf("[TOUCH] another side (%d of %d)\n", s_go.side + 1, s_go.sides);
+            } else {
+                s_go.sides = 0;
+            }
+        }
     }
     if (!pc_touch_player_free(play)) {
         if (s_go.kind != GO_NONE && (pc_touch_msg_open() || play->submenu.process_status != mSM_PROCESS_WAIT)) {

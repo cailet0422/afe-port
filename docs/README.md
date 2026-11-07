@@ -259,18 +259,38 @@ full touch mode (`pc_touch_full.c`, `pc_touch_menu.c`, `pc_touch_room.c`, icons 
     talk distance, turn to it (`Set_force_position_angle_proc`), A; a unit with an item → stand a unit off, turn,
     B (items, flowers, weeds; outside, dropped furniture) or A (trees, rocks, signs, holes, furniture in a room); with
     the shovel, the empty ground → A; with the net or the rod, near → turn and A.
+  - Tall things (trees, boards, mailboxes, signs, gyroids, villagers' doors) are found as columns of their height over
+    their units near where the finger meets the ground, the nearest to the camera first, so a tap on a tree's crown
+    or the top of the notice board means it and not the ground behind. Things that answer from one side are given the
+    places to stand and the way to face: the boards (notice, map, music) from the south facing north, 36 off their
+    unit (m_submenu.c wants the unit 20 ahead to be the board and the player facing north within 45 degrees); a
+    mailbox in front of it as it is turned (its `shape_info.rotation.y` less 45 degrees, ac_mailbox_move.c_inc), then
+    round it; a gyroid from the nearest side; a door from the south. After the press, 40 frames tell whether it took
+    (a message, a menu, the player busy, another scene, a talk); if not, the next place. On the way to such a place,
+    or to a villager, a player stopped by something steps aside (up to five times, the other way each time); a plain
+    walk does not (a door is entered by walking into it).
+  - Steering also in the states the stick leads out of or along: pushing a snowball, twirling an umbrella. Any other
+    state of the player (a pitfall to climb out of, an event's scene) takes a tap as A.
   - The tool strip swaps `Now_Private->equipment` with a pocket (as the pockets' menu does, m_hand_ovl.c
     `mHD_drop_item`; the player takes it out at its next wait, walk or run). It moves round the empty hand and the
     pockets in order; the tool in hand is between two places, so a step back takes back the same one.
   - The title screen (its logo and demo run in `play_main`, `mEv_CheckTitleDemo() != 0`): a touch anywhere is START,
-    no pad, no icons. Other menus, the NES games and the screens outside `play_main` (the memory card's) bring the pad
-    up (`pc_touch_full_pad_shown`).
+    no pad, no icons. The menus not worked by touch, the NES games and the screens outside `play_main` (the memory
+    card's) bring the pad up (`pc_touch_full_pad_shown`).
 - The pockets (`pc_touch_menu.c`): slots from the tables of m_tag_ovl.c in the 640x480 picture
   (`pc_gx_window_to_ui`). The cursor goes where the finger is through `mTG_PC_touch_cursor` (m_tag_ovl.c, TARGET_PC):
   at the point where the stick would move it, under the same rules for what the hand holds; then A (a tap), L (a drag
   takes the item), A where the finger is lifted (or B off the slots). A line of the command list:
   `mTG_PC_touch_select_row` chooses it, `mTG_PC_select_geometry` says where the lines are. The map: the acre under the
   finger is selected as a stick step would (`sel_bx`, `sel_bz`, the cursor's target, `mSM_OVL_PROC_WAIT`).
+- The menus worked by touch (`pc_touch_menu_owns`; the others bring the pad up): the pockets (but beside the
+  letters' copy), the map, the mailbox, the notice board, a letter being read (`mSM_OVL_BOARD` opened to read) and
+  the pockets' warnings (`mSM_OVL_WARNING`). The mailbox is the pockets' menu with the mailbox's table
+  (`mTG_TABLE_MBOX`, 2 x 5 from (248, 162)) beside the player's letters; `mTG_PC_touch_cursor` goes into it only with
+  an empty hand, as the stick (`mTG_move_cursol_between_table_mailbox`). The notice board (m_notice_ovl.c) is worked
+  by stick pushes (6 frames: left and right turn its pages, up the newest, down the first) and A (write) or B (quit)
+  on its buttons. A warning with a question (type 0, the mailbox's "letters full, throw away?") is answered by a
+  push to the left and A (yes) or by B (no); one without a question takes A.
 - `pc_gx_window_to_ui` no longer reads `g_pc_widescreen_stretch`: emu64 sets it while it draws (stretched blits of
   transitions) and between frames it held whatever was drawn last, so the Korean editor's keyboard and the menus could
   get a touch a step to the side.
@@ -282,6 +302,10 @@ full touch mode (`pc_touch_full.c`, `pc_touch_menu.c`, `pc_touch_room.c`, icons 
   furniture down as the destructor does (what dressers hold back in layers 1-3, the switches), saves the gyroids'
   steps, calls `pc_touch_room_apply_edits` on the save's floor and builds the furniture again. A move carries the
   layers above each unit (the anchor's to the anchor), the switch bit and the step nibble.
+- The furniture mode shows the name of the piece last tapped (in the room or in the pockets' row) above the row, in
+  the game's own font (`mIN_copy_name_str`, `mFont_SetLineStrings`; so as the game writes it, with the Korean patch
+  or not), drawn from the room's draw (`pc_touch_room_draw`, called at the end of ac_my_room_draw.c_inc
+  `My_Room_Actor_draw`, TARGET_PC).
 - Tests: `TOUCHW x,z [frames]` and `TOUCHNPC id [frames]` in `--input-script` put a finger where a point of the ground
   or a villager is on the window.
 
