@@ -451,7 +451,8 @@ afe-decomp(`TARGET_PC`). `[Gameplay]`의 `seamless_blocks`(Settings → Gameplay
 
 - 버전은 `pc/VERSION`이다(CMake가 `PC_PORT_VERSION`을 정의하고, Android `build.gradle`이 `versionName`을
   여기서 가져와 `versionCode`를 major × 10000 + minor × 100 + patch로 만든다). **릴리즈마다 빌드 전에 올리고**,
-  릴리즈 태그는 `v<VERSION>`으로 한다.
+  릴리즈 태그는 `v<VERSION>`으로 한다. 같은 커밋에서 `python3 pc/tools/readme_version.py`를 실행하면 README.md와
+  README.ko.md의 다운로드 링크가 새 버전을 가리킨다(아니면 CI의 "README downloads" 단계가 실패한다).
 - 릴리즈 빌드만 업데이트한다: CMake `PC_UPDATER`는 `PC_STRIP_ASSETS`일 때 기본으로 켜지고(Android 제외),
   Android 앱은 정식 키로 서명됐을 때만. 파일은 이름 끝으로 고른다: `-Windows-x64.zip`, `-Windows-x86.zip`,
   `-Linux-x86_64.zip`, `-Android.apk`. 릴리즈 파일 이름을 계속 이렇게 짓고 `SHA256SUMS.txt`도 함께 올린다.
