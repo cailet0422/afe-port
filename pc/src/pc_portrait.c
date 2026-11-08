@@ -15,12 +15,16 @@
 #include "pc_settings.h"
 #include "pc_ko.h"
 #include "pc_touch_full.h"
+#include "pc_touch_internal.h"
 #include "ko_charset.h"
 
 #include "m_common_data.h"
 #include "m_msg.h"
 #include "m_choice.h"
 #include "charmap.h"
+#include "m_field_info.h"
+#include "m_play.h"
+#include "m_player_lib.h"
 
 #include <math.h>
 #include <string.h>
@@ -43,6 +47,85 @@ void pc_portrait_camera(float* dist, short* pitch, int indoor) {
         *pitch = (short)(*pitch - 0x0800); /* 11 degrees lower: 34 above the ground (lower, the
                                               trees in front hide the player) */
     }
+}
+
+/* --- Seeing far ----------------------------------------------------------------- */
+
+extern u32 pc_frame_counter;
+
+/* Outside in the layout (rooms keep the game's near and far) */
+int pc_portrait_far_view(void) {
+    return pc_portrait_layout() && mFI_GET_TYPE(mFI_GetFieldId()) == mFI_FIELD_FG;
+}
+
+float pc_portrait_cull_scale(void) {
+    return pc_portrait_far_view() ? PC_PORTRAIT_FAR / 1600.0f : 1.0f;
+}
+
+/* A block is in view when its ground (at its base height, and a little above
+ * for the cliffs going up north) reaches into the window */
+static int block_in_view(GAME_PLAY* play, int bx, int bz) {
+    float minx = 2.0f, maxx = -1.0f, miny = 2.0f, maxy = -1.0f;
+    float x0, z0, y0;
+    int i, front = 0;
+
+    if (!mFI_BkNum2WposXZ(&x0, &z0, bx, bz)) {
+        return FALSE;
+    }
+    y0 = mFI_BkNum2BaseHeight(bx, bz);
+    for (i = 0; i < 8; i++) {
+        xyz_t p;
+        float fx, fy;
+
+        p.x = x0 + ((i & 1) ? (float)mFI_BK_WORLDSIZE_X : 0.0f);
+        p.z = z0 + ((i & 2) ? (float)mFI_BK_WORLDSIZE_Z : 0.0f);
+        p.y = y0 + ((i & 4) ? 160.0f : 0.0f);
+        if (!pc_touch_world_to_window(play, &p, &fx, &fy)) {
+            continue; /* (behind the camera) */
+        }
+        front++;
+        minx = fx < minx ? fx : minx;
+        maxx = fx > maxx ? fx : maxx;
+        miny = fy < miny ? fy : miny;
+        maxy = fy > maxy ? fy : maxy;
+    }
+    return front > 0 && maxx > -0.02f && minx < 1.02f && maxy > -0.02f && miny < 1.02f;
+}
+
+int pc_portrait_view_blocks(void* play_v, int* bx, int* bz, int max) {
+    static u32 s_frame = 0xFFFFFFFFu;
+    static int s_n, s_bx[48], s_bz[48];
+    GAME_PLAY* play = (GAME_PLAY*)play_v;
+    int i, n;
+
+    if (!pc_portrait_far_view() || play == NULL) {
+        return 0;
+    }
+    if (s_frame != pc_frame_counter) {
+        PLAYER_ACTOR* player = GET_PLAYER_ACTOR(play);
+        int cx, cz, x, z;
+
+        s_frame = pc_frame_counter;
+        s_n = 0;
+        if (player != NULL && mFI_Wpos2BlockNum(&cx, &cz, player->actor_class.world.position)) {
+            /* (the camera looks north: up to five blocks ahead, two to each side) */
+            for (z = cz - 5; z <= cz + 1; z++) {
+                for (x = cx - 2; x <= cx + 2 && s_n < 48; x++) {
+                    if (mFI_BlockCheck(x, z) && block_in_view(play, x, z)) {
+                        s_bx[s_n] = x;
+                        s_bz[s_n] = z;
+                        s_n++;
+                    }
+                }
+            }
+        }
+    }
+    n = s_n < max ? s_n : max;
+    for (i = 0; i < n; i++) {
+        bx[i] = s_bx[i];
+        bz[i] = s_bz[i];
+    }
+    return n;
 }
 
 /* --- The choices as buttons ---------------------------------------------------------- */

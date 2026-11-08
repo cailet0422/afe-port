@@ -259,6 +259,13 @@ full touch mode (`pc_touch_full.c`, `pc_touch_menu.c`, `pc_touch_room.c`, icons 
     talk distance, turn to it (`Set_force_position_angle_proc`), A; a unit with an item → stand a unit off, turn,
     B (items, flowers, weeds; outside, dropped furniture) or A (trees, rocks, signs, holes, furniture in a room); with
     the shovel, the empty ground → A; with the net or the rod, near → turn and A.
+  - A tap is meant for a thing more often than for the ground: with the shovel (outside) the ground it works on
+    comes first (`unit_near` with dig: a buried item's unit, `mFI_Wpos2DepositGet`, which the game draws as a crack;
+    a shining spot; a buried pitfall; a hole), within 0.9 of a unit of the finger on the screen, before villagers and
+    tall things; a buried unit's item is not picked up. With nothing under the finger, the nearest thing to pick up or
+    use within a unit of it (each thing a column from its unit's middle up to its height; half that for a tall thing,
+    whose picture `thing_at` already catches; not flowers, nor trees with the axe), then a villager within half as far
+    again around them (`npc_near`), then the ground.
   - Tall things (trees, boards, mailboxes, signs, gyroids, villagers' doors) are found as columns of their height over
     their units near where the finger meets the ground, the nearest to the camera first, so a tap on a tree's crown
     or the top of the notice board means it and not the ground behind. Things that answer from one side are given the
@@ -348,6 +355,17 @@ factor), and the 2D picture keeps its shape in a band of the window's width (an 
   culling, PC_ENHANCEMENTS, for its edges) and the camera is lower and nearer: m_camera2.c
   `Camera2_Get_GoalDistanceAndDirection` (TARGET_PC) hands the normal and wading cameras' distance and pitch to
   `pc_portrait_camera` (outside 0.86 of the distance and 11 degrees lower; in a room 0.92 and 5.6 degrees).
+- Seeing far: the top of the window nearly reaches the horizon, two to five acres north, where the game draws nothing
+  (ground: the 3x3 acres around the player, ac_field_draw.c; trees and items: the four nearest, bg_item; far plane
+  1600), so it was black there. Outside in the layout (`pc_portrait_far_view`): the far plane is `PC_PORTRAIT_FAR`
+  (m_camera2.c `Camera2_SetView`, TARGET_PC), the actors' culling distance grows as much (m_actor.c,
+  PC_ENHANCEMENTS, `pc_portrait_cull_scale`), and `pc_portrait_view_blocks` lists the town's acres whose ground
+  reaches into the window (their corners through `pc_touch_world_to_window`, once a frame): ac_field_draw.c draws the
+  ground of those outside its nine (`aFD_DrawBlock`), bg_item_common.c_inc (`bg_item_common_pc_draw_far`) their items
+  one by one with `bit_cmn_single_draw_BT` as `bg_item_common_classifyitemDataTable` places them (the units' kept
+  heights are only there for the game's four acres: the collision's ground instead; buried ones not), while the
+  graph has room. The graph's display list buffers are larger on PC (sys_dynamic.h, TARGET_PC). Buildings and
+  villagers are actors of the acres around the player only.
 - The 2D is placed by part: the game puts `gDPNoOpTag(PC_NOOP_UI_PLACE + place)` before what it draws and emu64's
   `dl_G_NOOP` hands it to `pc_gx_set_ui_place`, which re-applies the ortho projection with that placement's affine.
   m_msg.c (`mMsg_pc_place`, TARGET_PC): the message window (`PC_UI_PLACE_MSG`, 1.22 times larger, its top under the

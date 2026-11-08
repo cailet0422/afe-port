@@ -146,6 +146,17 @@ int pc_portrait_choices(char text[][PC_PORTRAIT_CHOICE_LEN], int max, int* curso
 /* Android: the activity's orientation from the settings (landscape unless
  * the full touch mode); elsewhere nothing */
 void pc_portrait_apply(void);
+/* Held upright the camera sees much farther north than the game ever
+ * shows (the top of the window nearly reaches the horizon): outside, the
+ * far plane (m_camera2.c), the actors' culling distance (m_actor.c) and the
+ * blocks it sees, beyond the ones the game draws (ac_field_draw.c draws
+ * their ground, bg_item their items). pc_portrait_view_blocks gives the
+ * town's blocks whose ground is in the window this frame (blocks x, z),
+ * at most max; 0 outside the layout. */
+#define PC_PORTRAIT_FAR 3600.0f
+int pc_portrait_far_view(void);
+float pc_portrait_cull_scale(void);
+int pc_portrait_view_blocks(void* play, int* bx, int* bz, int max);
 
 /* --- Functions --- */
 void pc_platform_init(void);
