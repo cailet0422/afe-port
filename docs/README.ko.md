@@ -321,8 +321,10 @@ ninja -C pc/build32strip
   그만큼 늘고(m_actor.c, PC_ENHANCEMENTS, `pc_portrait_cull_scale`), `pc_portrait_view_blocks`가 땅이 창에 들어오는
   마을 구역을 매 프레임 한 번 꼽는다(구역 꼭짓점을 `pc_touch_world_to_window`로). ac_field_draw.c는 아홉 구역 밖의
   땅을(`aFD_DrawBlock`), bg_item_common.c_inc(`bg_item_common_pc_draw_far`)는 그 물건을 하나씩
-  `bit_cmn_single_draw_BT`로 `bg_item_common_classifyitemDataTable`처럼 놓아 그린다(칸 높이 keep_h는 게임의 네 구역에만
-  있어 충돌의 땅 높이를 쓰고, 묻힌 것은 그리지 않음). 그래프에 여유가 있는 동안만. PC에서는 디스플레이 리스트 버퍼를 더
+  `bit_cmn_single_draw_BT`로 `bg_item_common_classifyitemDataTable`처럼 놓아 그린다(높이는 칸의 땅 높이 `keep_h`;
+  충돌 높이는 게시판·울타리 윗면이라 쓰지 않음; 묻힌 것은 그리지 않음). 그래프에 여유가 있는 동안만, bg_item 자신의 아이템
+  표(`item_table`) 구역은 빼고(그리기 표의 `bx`/`bz`는 구역이 새로 들어올 때만 정해지고 액터가 만들어질 때는 아니라 믿을 수
+  없음). PC에서는 디스플레이 리스트 버퍼를 더
   크게 잡는다(sys_dynamic.h, TARGET_PC). 건물과 주민은 플레이어 둘레 구역의 액터뿐이다.
 - 2D는 부분별로 놓는다. 게임이 그리기 전에 `gDPNoOpTag(PC_NOOP_UI_PLACE + 배치)`를 넣고, emu64 `dl_G_NOOP`가
   `pc_gx_set_ui_place`로 넘기면 정사영 투영을 그 배치의 아핀으로 다시 적용한다. m_msg.c(`mMsg_pc_place`, TARGET_PC):

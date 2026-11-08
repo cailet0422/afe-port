@@ -363,8 +363,9 @@ factor), and the 2D picture keeps its shape in a band of the window's width (an 
   reaches into the window (their corners through `pc_touch_world_to_window`, once a frame): ac_field_draw.c draws the
   ground of those outside its nine (`aFD_DrawBlock`), bg_item_common.c_inc (`bg_item_common_pc_draw_far`) their items
   one by one with `bit_cmn_single_draw_BT` as `bg_item_common_classifyitemDataTable` places them (the units' kept
-  heights are only there for the game's four acres: the collision's ground instead; buried ones not), while the
-  graph has room. The graph's display list buffers are larger on PC (sys_dynamic.h, TARGET_PC). Buildings and
+  ground heights, `keep_h`, not the collision's, which is the top of a board or a fence; buried ones not), while the
+  graph has room, skipping the acres of bg_item's own item table (`item_table`; its draw tables' `bx`/`bz` are only
+  set when an acre comes in, not when the actor is made, so they are not to be trusted). The graph's display list buffers are larger on PC (sys_dynamic.h, TARGET_PC). Buildings and
   villagers are actors of the acres around the player only.
 - The 2D is placed by part: the game puts `gDPNoOpTag(PC_NOOP_UI_PLACE + place)` before what it draws and emu64's
   `dl_G_NOOP` hands it to `pc_gx_set_ui_place`, which re-applies the ortho projection with that placement's affine.
