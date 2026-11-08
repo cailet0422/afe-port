@@ -563,6 +563,7 @@ int main(int argc, char* argv[]) {
     pc_settings_load();
     pc_keybindings_load();
     pc_platform_init();
+    pc_portrait_apply(); /* (Android: the full touch mode may turn upright) */
     pc_update_init(); /* looks for a new version on a thread meanwhile */
     while (!pc_disc_init()) {
         char cwd[512];

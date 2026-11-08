@@ -67,7 +67,8 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
 - Android: on-screen touch gamepad (its buttons can be moved and resized), a **full touch mode** in which the whole
   game is played with the fingers (tap to walk, tap villagers and things, every menu by tap and swipe: the catalog,
   the designs drawn with a finger, letters, the post office, the town tune, ...; icons for the pockets and the map, a
-  tool strip, the room's camera and light, a furniture mode in your house; [Touch controls](#touch-controls)),
+  tool strip, the room's camera and light, a furniture mode in your house; held upright, a layout for the phone with
+  the camera closer, the messages at the top and the answers as big buttons; [Touch controls](#touch-controls)),
   physical gamepads, and a crash report shown on the next launch.
 - Minimap: outside in town, a small map of the town sits in the bottom left corner (you, facing the
   way you walk, and the villagers' houses). **M** opens the game's full map at any time, even before
@@ -416,6 +417,14 @@ pad is the default on Android):
       memory card's designs**: as the pockets.
   - On the title screen, a touch anywhere starts (START).
   - The gamepad icon brings the GameCube pad up at any time; the NES games are played with it.
+  - **Held upright** (a phone turned to portrait; on a PC, a window taller than wide): the game is laid out for the
+    phone. The 3D fills the screen with the camera lower and closer, the message window sits at the top, larger, and
+    the answers are big buttons at the bottom to tap (on the original disc, whose kana the port does not write out,
+    the game's own answer window moves to the bottom, larger). The clock is at the bottom, the tools in a row under
+    the icons; a menu takes the screen's width in the middle with its keys under it (turn the phone for bigger
+    menus). **Screen orientation**, under Touch controls on Android: turn with the phone (the default; a rotation lock
+    keeps the phone's way), always landscape or always upright (`touch_orientation` in `settings.ini`, 0/1/2). The
+    other touch modes stay in landscape.
 
 ## Known limitations
 

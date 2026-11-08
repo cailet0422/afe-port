@@ -300,6 +300,33 @@ ninja -C pc/build32strip
 - 테스트: `--input-script`의 `TOUCHW x,z [프레임]`, `TOUCHNPC id [프레임]`이 땅의 한 점이나 주민이 창에 보이는 자리에
   손가락을 댄다.
 
+#### 세로로 들기 (세로 화면 배치)
+
+4:3보다 세로로 긴 창(`pc_gx.c`의 `g_tall_active`: 창 비율을 4:3으로 나눈 값)은 vert+다. 3D 투영은 게임의 너비를
+그대로 두고 위아래를 더 보며(`apply_projection`이 원근 투영의 1행을 그 비율로 곱함), 2D 그림은 창 너비의 띠 안에서
+모양을 유지한다(정사영의 행을 `ui_place_affine`으로). 풀 터치 모드에서는 세로 화면 배치가 된다(`pc_portrait_layout`,
+`pc_portrait.c`).
+
+- 3D를 1.45배 가깝게 그리고(`pc_gx_3d_scale`: `pc_touch_full.c`의 화면 ↔ 월드, m_actor.c 컬링의 가장자리
+  PC_ENHANCEMENTS가 함께 씀) 카메라는 더 낮고 가깝다. m_camera2.c `Camera2_Get_GoalDistanceAndDirection`(TARGET_PC)이
+  보통·물가 카메라의 거리와 피치를 `pc_portrait_camera`에 넘긴다(바깥은 거리 0.86배, 11도 낮게; 방은 0.92배, 5.6도).
+- 2D는 부분별로 놓는다. 게임이 그리기 전에 `gDPNoOpTag(PC_NOOP_UI_PLACE + 배치)`를 넣고, emu64 `dl_G_NOOP`가
+  `pc_gx_set_ui_place`로 넘기면 정사영 투영을 그 배치의 아핀으로 다시 적용한다. m_msg.c(`mMsg_pc_place`, TARGET_PC):
+  대사창(`PC_UI_PLACE_MSG`, 1.22배, 위쪽은 아이콘 줄 아래)과 선택지(`PC_UI_PLACE_CHOICE`, 1.5배, 아래). m_play.c:
+  발밑 표시(`watch_my_step_draw`, `PC_UI_PLACE_TOP`, 도구 줄 아래)와 시계(`banti_draw`, `PC_UI_PLACE_BOTTOM`), 그 뒤에
+  띠(`PC_UI_PLACE_BAND`, 메뉴)로 돌아간다. 대사창과 선택지는 `mMsg_Get_base_window_p`, `mChoice_Get_base_window_p`에서
+  읽은 중심을 기준으로 키운다(`pc_gx_ui_place_center`).
+- 한글패치에서는 선택지를 ImGui 버튼으로 그린다(`pc_portrait_choice_buttons`; m_msg.c TARGET_PC가 `mChoice_Draw`를
+  부르지 않음). `pc_portrait_choices`가 글자를 UTF-8로(`ko_charset_decode`, ASCII와 같은 기호, 사전 코드는
+  `pc_ko_expand` 슬롯 6) 커서 줄과 함께 주고, `gui/pc_gui_touch.cpp`가 그리며, `pc_portrait_button_at`이 누르기를 받는다.
+  원본 디스크는 포트에 가나 표가 없어 게임의 창을 아래에 놓아 그린다(`window_to_placed_ui`가 누른 자리를 되돌림).
+- 도구는 아이콘 아래 자체 줄로(`PC_PORTRAIT_TOOL_ROW`), 메뉴 키는 아래쪽 줄로(`pc_touch_menus_hud`), 가구 배치 모드의
+  소지품 줄은 창이 좁으면 여러 줄로 간다.
+- Android: `touch_orientation`(0 폰 방향 따라, 1 가로, 2 세로)을 시작할 때와 설정·터치 모드가 바뀔 때 JNI로 액티비티의
+  요청 방향으로 정한다(`pc_portrait_apply`: `FULL_USER` 13, `SENSOR_LANDSCAPE` 6, `SENSOR_PORTRAIT` 7). 다른 터치
+  모드는 가로다. 매니페스트는 `sensorLandscape` 그대로이고(전처럼 시작) 회전을 직접 처리하므로(`configChanges`) 회전은
+  창 크기 변경(`SDL_WINDOWEVENT_SIZE_CHANGED`)이다.
+
 ### 조작키 바꾸기
 
 일시정지 메뉴 → 설정 → **조작**에서 바꾼다(`pc/src/gui/pc_gui_menu.cpp`, `pc_keybindings.c`).

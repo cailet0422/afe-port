@@ -592,11 +592,24 @@ static float shorter_side(void) {
 static void slot_place(int i, float* x, float* y, float* r) {
     float u = shorter_side();
     float gap = 0.125f * u;
-    float w = gap * (s_slot_count - 1);
+    /* in rows when the window is narrow (held upright), the last at the bottom */
+    int cols = (int)(((float)g_pc_window_w - 0.1f * u) / gap) + 1; /* (whole slots) */
+    int rows, row, in_row;
+    float w;
 
+    if (cols < 1) {
+        cols = 1;
+    }
+    if (cols > s_slot_count) {
+        cols = s_slot_count > 0 ? s_slot_count : 1;
+    }
+    rows = (s_slot_count + cols - 1) / cols;
+    row = i / cols;
+    in_row = row < rows - 1 ? cols : s_slot_count - row * cols;
+    w = gap * (in_row - 1);
     *r = 0.05f * u;
-    *x = g_pc_window_w * 0.5f - w * 0.5f + gap * i;
-    *y = g_pc_window_h - 0.09f * u;
+    *x = g_pc_window_w * 0.5f - w * 0.5f + gap * (i % cols);
+    *y = g_pc_window_h - 0.09f * u - gap * (rows - 1 - row);
 }
 
 static int slot_at(float px, float py) {
@@ -914,6 +927,23 @@ void pc_touch_room_draw(GAME* game) {
     width = mFont_GetStringWidth(name, len, TRUE) * scale;
     x = 160.0f - width * 0.5f;
     y = 182.0f; /* just above the pockets' row (pc_touch_room_hud) */
+    if (pc_portrait_layout()) {
+        /* held upright the row is far under the picture's band: above its
+         * top row, through the band's placement back to the picture */
+        float sx, sy, sr, x0, y0, x1, y1;
+
+        if (s_slot_count > 0) {
+            slot_place(0, &sx, &sy, &sr);
+        } else {
+            sr = 0.05f * shorter_side();
+            sy = g_pc_window_h - 0.09f * shorter_side();
+        }
+        pc_gx_ui_to_window(PC_UI_PLACE_BAND, 0.0f, 0.0f, &x0, &y0);
+        pc_gx_ui_to_window(PC_UI_PLACE_BAND, 640.0f, 480.0f, &x1, &y1);
+        if (y1 > y0) {
+            y = ((sy - sr * 1.2f) / g_pc_window_h - y0) / (y1 - y0) * 240.0f - 8.0f - 16.0f;
+        }
+    }
     mFont_SetMatrix(graph, mFont_MODE_FONT);
     for (i = 0; i < 4; i++) {
         mFont_SetLineStrings(game, name, len, x + ofs[i][0], y + ofs[i][1], 40, 30, 20, 255, FALSE, FALSE, scale, scale,
