@@ -337,21 +337,33 @@ static int hit_actor(GAME_PLAY* play, ACTOR* a, float height, float px, float py
     return TRUE;
 }
 
-/* The villager (or other character) under a point of the window, pixels */
-static ACTOR* npc_at(GAME_PLAY* play, float px, float py) {
+/* The villager (or other character) under a point of the window, pixels;
+ * with loose, also one just beside it (half as far again around it) */
+static ACTOR* npc_near(GAME_PLAY* play, float px, float py, int loose) {
     ACTOR* best = NULL;
     float best_score = 2.0f;
+    float grow = loose ? 1.5f : 1.0f;
     ACTOR* a;
 
     for (a = play->actor_info.list[ACTOR_PART_NPC].actor; a != NULL; a = a->next_actor) {
-        float score;
+        float cx, cy, hw, hh, nx, ny, score;
 
-        if (hit_actor(play, a, 38.0f, px, py, &score) && score < best_score) {
+        if (!actor_box(play, a, 38.0f, &cx, &cy, &hw, &hh)) {
+            continue;
+        }
+        nx = (px - cx) / (hw * grow);
+        ny = (py - cy) / (hh * grow);
+        score = nx * nx + ny * ny;
+        if (score <= 1.0f && score < best_score) {
             best = a;
             best_score = score;
         }
     }
     return best;
+}
+
+static ACTOR* npc_at(GAME_PLAY* play, float px, float py) {
+    return npc_near(play, px, py, FALSE);
 }
 
 static int npc_alive(GAME_PLAY* play, ACTOR* actor) {
@@ -474,6 +486,89 @@ static int thing_at(GAME_PLAY* play, const xyz_t* ground, float px, float py, fl
                 *ux = c.x;
                 *uz = c.z;
                 *out = *fg;
+                found = TRUE;
+            }
+        }
+    }
+    return found;
+}
+
+/* Ground the shovel works on: something buried (the game draws a crack
+ * there; the unit holds the buried item), a shining spot, a buried pitfall,
+ * a hole to fill. Outside only. */
+static int dig_spot(xyz_t c, mActor_name_t item) {
+    return mFI_Wpos2DepositGet(c) || item == SHINE_SPOT || item == HOLE_SHINE || ITEM_IS_BURIED_PITFALL_HOLE(item) ||
+           ITEM_IS_HOLE(item);
+}
+
+/* The unit near a window point (pixels) a tap there most likely means:
+ * with dig, the ground the shovel works on (dig_spot); else a thing to pick
+ * up or use (not buried; not a flower, which a pick would take away, nor a
+ * tree with the axe in hand, which a tap would chop: those only where
+ * tapped). A thing stands from its unit's middle up to its height (an item
+ * a little), and counts when the tap is within tol units of that on the
+ * screen (half that for a tall thing, whose big picture thing_at catches
+ * already). Outside only. */
+static int unit_near(GAME_PLAY* play, const xyz_t* ground, float px, float py, int dig, float tol, float* ux,
+                     float* uz, mActor_name_t* out) {
+    int gx = (int)floorf(ground->x / 40.0f), gz = (int)floorf(ground->z / 40.0f);
+    s8 kind = Now_Private->equipment != EMPTY_NO ? mPlib_Get_ItemNoToItemKind(Now_Private->equipment) : -1;
+    float best = tol;
+    int found = FALSE;
+    int x, z;
+
+    for (z = gz - 2; z <= gz + 3; z++) {
+        for (x = gx - 2; x <= gx + 2; x++) {
+            xyz_t c = { x * 40.0f + 20.0f, 0.0f, z * 40.0f + 20.0f };
+            xyz_t e, t;
+            mActor_name_t* fg = mFI_GetUnitFG(c);
+            mActor_name_t item;
+            float bx, by, ex, ey, tx, ty, unit_px, d, vx, vy, len2, k;
+
+            if (fg == NULL) {
+                continue;
+            }
+            item = *fg;
+            if (dig) {
+                if (!dig_spot(c, item)) {
+                    continue;
+                }
+            } else if (item_button(item, FALSE) == 0 || mFI_Wpos2DepositGet(c) || IS_ITEM_FLOWER(item) ||
+                       ((IS_ITEM_TREE(item) || IS_ITEM_ANY_PALM_TREE(item)) && mPlayer_ITEM_IS_AXE(kind))) {
+                continue;
+            }
+            c.y = mCoBG_GetBgY_AngleS_FromWpos(NULL, c, 0.0f);
+            e = c;
+            e.x += 20.0f;
+            t = c;
+            t.y += dig ? 0.0f : (thing_height(item) > 0.0f ? thing_height(item) : 16.0f);
+            if (!pc_touch_world_to_window(play, &c, &bx, &by) || !pc_touch_world_to_window(play, &e, &ex, &ey) ||
+                !pc_touch_world_to_window(play, &t, &tx, &ty)) {
+                continue;
+            }
+            unit_px = fabsf(ex - bx) * 2.0f * g_pc_window_w; /* (a unit across, here on the screen) */
+            if (unit_px < 1.0f) {
+                continue;
+            }
+            bx *= g_pc_window_w;
+            by *= g_pc_window_h;
+            tx *= g_pc_window_w;
+            ty *= g_pc_window_h;
+            /* the distance from the tap to the thing's column, base to top */
+            vx = tx - bx;
+            vy = ty - by;
+            len2 = vx * vx + vy * vy;
+            k = len2 > 0.0f ? ((px - bx) * vx + (py - by) * vy) / len2 : 0.0f;
+            k = k < 0.0f ? 0.0f : k > 1.0f ? 1.0f : k;
+            d = sqrtf((px - bx - k * vx) * (px - bx - k * vx) + (py - by - k * vy) * (py - by - k * vy)) / unit_px;
+            if (!dig && thing_height(item) > 0.0f) {
+                d *= 2.0f; /* (a tall thing's picture is big and caught where tapped: only just beside it) */
+            }
+            if (d < best) {
+                best = d;
+                *ux = c.x;
+                *uz = c.z;
+                *out = item;
                 found = TRUE;
             }
         }
@@ -1317,6 +1412,49 @@ static int exercise_possible(GAME_PLAY* play, PLAYER_ACTOR* player) {
     return aMR_RadioBgmNow();
 }
 
+/* Up to a villager and talk */
+static void talk_to(ACTOR* npc) {
+    float stop = npc->talk_distance > 30.0f ? npc->talk_distance - 14.0f : 30.0f;
+
+    if (stop > 42.0f) {
+        stop = 42.0f;
+    }
+    go_to(GO_TALK, npc->world.position.x, npc->world.position.z, stop, npc->talk_distance - 4.0f, PAD_BUTTON_A, npc);
+    printf("[TOUCH] talk to %04X\n", (unsigned)npc->npc_id);
+}
+
+/* A unit's thing used with a button: stand a unit off it, facing it (B
+ * looks 10 to 35 ahead, Search_putin_item; A the next unit: trees, the
+ * shovel) */
+static void use_unit(PLAYER_ACTOR* player, u16 button, mActor_name_t item, float ux, float uz, const char* what) {
+    float sx = player->actor_class.world.position.x - ux;
+    float sz = player->actor_class.world.position.z - uz;
+    float len = sqrtf(sx * sx + sz * sz);
+    float off = button == PAD_BUTTON_B ? 22.0f : 34.0f;
+
+    if (len < 1.0f) {
+        sx = 0.0f;
+        sz = 1.0f; /* on it: step back south */
+        len = 1.0f;
+    }
+    go_to(GO_USE, ux + sx / len * off, uz + sz / len * off, 5.0f, 60.0f, button, NULL);
+    s_go.sides = 0;
+    s_go.ux = ux;
+    s_go.uz = uz;
+    printf("[TOUCH] %s %04X at %.0f,%.0f\n", what, (unsigned)item, ux, uz);
+}
+
+/* A thing that answers from one side (boards, signs, mailboxes, gyroids,
+ * doors): to its likeliest side, then the others */
+static void use_obj(GAME_PLAY* play, PLAYER_ACTOR* player, int obj, mActor_name_t thing, float ux, float uz) {
+    plan_sides(play, player, obj, ux, uz);
+    s_go.side = 0;
+    go_to(GO_USE, s_go.side_x[0], s_go.side_z[0], 5.0f, 60.0f, PAD_BUTTON_A, NULL);
+    s_go.ux = ux;
+    s_go.uz = uz;
+    printf("[TOUCH] use %04X at %.0f,%.0f (%d sides)\n", (unsigned)thing, ux, uz, s_go.sides);
+}
+
 static void tap(GAME_PLAY* play, float fx, float fy) {
     PLAYER_ACTOR* player = pc_touch_player(play);
     float px = fx * g_pc_window_w, py = fy * g_pc_window_h;
@@ -1326,6 +1464,7 @@ static void tap(GAME_PLAY* play, float fx, float fy) {
     float dx, dz, dist;
     int index;
     float score;
+    int in_room, shovel, have_ground;
 
     if (play == NULL || player == NULL) {
         return;
@@ -1377,32 +1516,41 @@ static void tap(GAME_PLAY* play, float fx, float fy) {
         press(PAD_BUTTON_A, 0);
         return;
     }
+    in_room = mFI_IS_ROOM(mFI_GetFieldId());
+    kind = Now_Private->equipment != EMPTY_NO ? mPlib_Get_ItemNoToItemKind(Now_Private->equipment) : -1;
+    shovel = mPlayer_ITEM_IS_SHOVEL(kind) && !in_room;
+    have_ground = pc_touch_window_to_ground(play, fx, fy, &ground);
+
     /* the player: A (what is in front) */
     if (hit_actor(play, &player->actor_class, 34.0f, px, py, &score)) {
         press(PAD_BUTTON_A, 0);
         printf("[TOUCH] A\n");
         return;
     }
+    /* with the shovel the ground it works on comes first, near the finger:
+     * something buried (a crack), a shining spot, a hole (before the trees
+     * and the villagers seen there, and before the bare ground) */
+    if (shovel && have_ground) {
+        float sux, suz;
+        mActor_name_t spot;
+
+        if (unit_near(play, &ground, px, py, TRUE, 0.9f, &sux, &suz, &spot)) {
+            use_unit(player, PAD_BUTTON_A, spot, sux, suz, "dig");
+            return;
+        }
+    }
     /* a villager: up to them and talk */
     npc = npc_at(play, px, py);
     if (npc != NULL) {
-        float stop = npc->talk_distance > 30.0f ? npc->talk_distance - 14.0f : 30.0f;
-
-        if (stop > 42.0f) {
-            stop = 42.0f;
-        }
-        go_to(GO_TALK, npc->world.position.x, npc->world.position.z, stop, npc->talk_distance - 4.0f, PAD_BUTTON_A,
-              npc);
-        printf("[TOUCH] talk to %04X\n", (unsigned)npc->npc_id);
+        talk_to(npc);
         return;
     }
-    if (!pc_touch_window_to_ground(play, fx, fy, &ground)) {
+    if (!have_ground) {
         return;
     }
     dx = ground.x - player->actor_class.world.position.x;
     dz = ground.z - player->actor_class.world.position.z;
     dist = sqrtf(dx * dx + dz * dz);
-    kind = Now_Private->equipment != EMPTY_NO ? mPlib_Get_ItemNoToItemKind(Now_Private->equipment) : -1;
 
     /* the net swings and the rod casts where it is tapped, near enough */
     if ((mPlayer_ITEM_IS_NET(kind) && dist < 90.0f) || (mPlayer_ITEM_IS_ROD(kind) && dist < 170.0f)) {
@@ -1413,24 +1561,21 @@ static void tap(GAME_PLAY* play, float fx, float fy) {
     {
         mActor_name_t* fg = mFI_GetUnitFG(ground);
         mActor_name_t item = fg != NULL ? *fg : EMPTY_NO;
-        int in_room = mFI_IS_ROOM(mFI_GetFieldId());
         float ux = floorf(ground.x / 40.0f) * 40.0f + 20.0f;
         float uz = floorf(ground.z / 40.0f) * 40.0f + 20.0f;
         u16 button;
         mActor_name_t thing;
         float tux, tuz;
 
+        if (!in_room && mFI_Wpos2DepositGet(ground)) {
+            item = EMPTY_NO; /* (buried: the unit holds it, there is nothing to pick up) */
+        }
         /* a tall thing seen under the finger (the ground there is behind it) */
         if (!in_room && thing_at(play, &ground, px, py, &tux, &tuz, &thing)) {
             int obj = obj_kind(thing);
 
             if (obj != OBJ_NONE) {
-                plan_sides(play, player, obj, tux, tuz);
-                s_go.side = 0;
-                go_to(GO_USE, s_go.side_x[0], s_go.side_z[0], 5.0f, 60.0f, PAD_BUTTON_A, NULL);
-                s_go.ux = tux;
-                s_go.uz = tuz;
-                printf("[TOUCH] use %04X at %.0f,%.0f (%d sides)\n", (unsigned)thing, tux, tuz, s_go.sides);
+                use_obj(play, player, obj, thing, tux, tuz);
                 return;
             }
             item = thing;
@@ -1439,7 +1584,30 @@ static void tap(GAME_PLAY* play, float fx, float fy) {
         }
         button = item_button(item, in_room);
 
-        if (button == 0 && mPlayer_ITEM_IS_SHOVEL(kind) && !in_room) {
+        /* nothing right under the finger: what is close to it, as a tap is
+         * meant for a thing more often than for the bare ground (an item to
+         * pick up, a tree, a sign..., a villager just beside the finger) */
+        if (button == 0 && !in_room && !shovel) {
+            float nux, nuz;
+            mActor_name_t near_item;
+
+            if (unit_near(play, &ground, px, py, FALSE, 1.0f, &nux, &nuz, &near_item)) {
+                int obj = obj_kind(near_item);
+
+                if (obj != OBJ_NONE) {
+                    use_obj(play, player, obj, near_item, nux, nuz);
+                    return;
+                }
+                item = near_item;
+                ux = nux;
+                uz = nuz;
+                button = item_button(item, in_room);
+            } else if ((npc = npc_near(play, px, py, TRUE)) != NULL) {
+                talk_to(npc);
+                return;
+            }
+        }
+        if (button == 0 && shovel) {
             button = PAD_BUTTON_A; /* dig here */
         }
         if (in_room && item == RSV_FE1F) {
@@ -1513,24 +1681,7 @@ static void tap(GAME_PLAY* play, float fx, float fy) {
             return;
         }
         if (button != 0) {
-            /* stand a unit off it, facing it: B looks 10 to 35 ahead
-             * (Search_putin_item), A the next unit (trees, the shovel) */
-            float sx = player->actor_class.world.position.x - ux;
-            float sz = player->actor_class.world.position.z - uz;
-            float len = sqrtf(sx * sx + sz * sz);
-            float off = button == PAD_BUTTON_B ? 22.0f : 34.0f;
-
-            if (len < 1.0f) {
-                sx = 0.0f;
-                sz = 1.0f; /* on it: step back south */
-                len = 1.0f;
-            }
-            go_to(GO_USE, ux + sx / len * off, uz + sz / len * off, 5.0f, 60.0f, button, NULL);
-            s_go.sides = 0;
-            s_go.ux = ux;
-            s_go.uz = uz;
-            printf("[TOUCH] %s %04X at %.0f,%.0f\n", button == PAD_BUTTON_B ? "pick up" : "use", (unsigned)item, ux,
-                   uz);
+            use_unit(player, button, item, ux, uz, button == PAD_BUTTON_B ? "pick up" : "use");
             return;
         }
     }

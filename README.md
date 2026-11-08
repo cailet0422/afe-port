@@ -371,6 +371,10 @@ pad is the default on Android):
     chopped with the axe), signs, mailboxes and furniture used; with the shovel a tap on the ground digs there (or
     fills the hole); with the net or the rod a tap nearby swings or casts that way. A tap on yourself is A (what is in
     front of you: an exhibit in the museum, the lighthouse's switch, ...).
+  - **A tap means a thing before the ground**: a tap just beside an item, a sign or a villager (or on the top of an
+    item's picture) uses it rather than walking there; flowers, and trees with the axe in hand, only where tapped (a
+    pick or a chop cannot be taken back). **With the shovel**, the ground it works on comes first: a crack where
+    something is buried (a fossil, ...), a shining spot, a hole, near the finger, even behind a tree or a villager.
   - **Keep a finger on yourself** to hold A: the net is raised (drag to sneak with it, let go to swing), a piece of
     furniture is grabbed (drag to push or pull it, as in the island's cottage).
   - **Mailboxes, the notice board, the map and music boards, signs, gyroids and villagers' doors**: tap them (their
@@ -422,9 +426,11 @@ pad is the default on Android):
     the answers are big buttons at the bottom to tap (on the original disc, whose kana the port does not write out,
     the game's own answer window moves to the bottom, larger). The clock is at the bottom, the tools in a row under
     the icons; a menu takes the screen's width in the middle with its keys under it (turn the phone for bigger
-    menus). **Screen orientation**, under Touch controls on Android: turn with the phone (the default; a rotation lock
-    keeps the phone's way), always landscape or always upright (`touch_orientation` in `settings.ini`, 0/1/2). The
-    other touch modes stay in landscape.
+    menus). The top of the screen sees far north, nearly to the horizon: the ground, trees and items of the acres
+    out there are drawn too (the game itself only ever shows those nearest the player); the buildings and villagers
+    of acres two or more away are not. **Screen orientation**, under Touch controls on Android: turn with the phone
+    (the default; a rotation lock keeps the phone's way), always landscape or always upright (`touch_orientation` in
+    `settings.ini`, 0/1/2). The other touch modes stay in landscape.
 
 ## Known limitations
 

@@ -234,6 +234,11 @@ ninja -C pc/build32strip
     플레이어 → A, 주민(`ACTOR_PART_NPC`, 발에서 38 위까지의 상자) → 대화 거리 안까지 걸어가 돌아서서
     (`Set_force_position_angle_proc`) A, 물건이 있는 칸 → 한 칸 떨어져 돌아서서 B(물건·꽃·잡초, 밖에 떨어진 가구)나
     A(나무·바위·표지판·구멍·방 안 가구), 삽을 들고 빈 땅 → A, 잠자리채·낚싯대를 들고 가까운 곳 → 돌아서서 A.
+  - 탭은 땅보다 물건을 뜻할 때가 많다: 삽을 들면(바깥) 삽으로 할 수 있는 땅이 먼저다(`unit_near`의 dig: 묻힌 물건의 칸
+    `mFI_Wpos2DepositGet`, 게임이 금으로 그리는 곳; 빛나는 곳; 묻힌 함정; 구멍). 화면에서 손가락으로부터 0.9칸 안이면
+    주민과 키 큰 것보다 앞선다. 묻힌 칸의 물건은 줍지 않는다. 손가락 아래에 아무것도 없으면 한 칸 안의 가장 가까운 주울
+    것·쓸 것(각각 칸 가운데에서 그 높이까지의 기둥; 키 큰 것은 `thing_at`이 그림을 이미 잡으므로 절반; 꽃과 도끼를 든 때의
+    나무는 빼고), 그다음 둘레를 반만큼 넓힌 주민(`npc_near`), 그다음 땅.
   - 키 큰 것(나무, 게시판, 우편함, 표지판, 하니와, 주민 집 문)은 손가락이 땅에 닿는 곳 근처 칸 위에 그 높이의 기둥으로
     찾고, 카메라에 가까운 것을 먼저 고른다. 그래서 나무 꼭대기나 게시판 윗부분을 눌러도 그 뒤의 땅이 아니라 그것을
     누른 것이 된다. 한쪽에서만 반응하는 것은 설 자리와 바라볼 방향을 정해 준다: 게시판(알림·지도·음악)은 남쪽에서
@@ -310,6 +315,15 @@ ninja -C pc/build32strip
 - 3D를 1.45배 가깝게 그리고(`pc_gx_3d_scale`: `pc_touch_full.c`의 화면 ↔ 월드, m_actor.c 컬링의 가장자리
   PC_ENHANCEMENTS가 함께 씀) 카메라는 더 낮고 가깝다. m_camera2.c `Camera2_Get_GoalDistanceAndDirection`(TARGET_PC)이
   보통·물가 카메라의 거리와 피치를 `pc_portrait_camera`에 넘긴다(바깥은 거리 0.86배, 11도 낮게; 방은 0.92배, 5.6도).
+- 멀리 보기: 창 위쪽은 지평선 가까이, 북쪽으로 두~다섯 구역까지 보이는데 게임은 거기를 그리지 않아(땅은 플레이어
+  둘레 3x3 구역, ac_field_draw.c; 나무·물건은 가까운 네 구역, bg_item; 원평면 1600) 검게 나왔다. 세로 배치의 바깥에서
+  (`pc_portrait_far_view`) 원평면은 `PC_PORTRAIT_FAR`(m_camera2.c `Camera2_SetView`, TARGET_PC), 액터 컬링 거리도
+  그만큼 늘고(m_actor.c, PC_ENHANCEMENTS, `pc_portrait_cull_scale`), `pc_portrait_view_blocks`가 땅이 창에 들어오는
+  마을 구역을 매 프레임 한 번 꼽는다(구역 꼭짓점을 `pc_touch_world_to_window`로). ac_field_draw.c는 아홉 구역 밖의
+  땅을(`aFD_DrawBlock`), bg_item_common.c_inc(`bg_item_common_pc_draw_far`)는 그 물건을 하나씩
+  `bit_cmn_single_draw_BT`로 `bg_item_common_classifyitemDataTable`처럼 놓아 그린다(칸 높이 keep_h는 게임의 네 구역에만
+  있어 충돌의 땅 높이를 쓰고, 묻힌 것은 그리지 않음). 그래프에 여유가 있는 동안만. PC에서는 디스플레이 리스트 버퍼를 더
+  크게 잡는다(sys_dynamic.h, TARGET_PC). 건물과 주민은 플레이어 둘레 구역의 액터뿐이다.
 - 2D는 부분별로 놓는다. 게임이 그리기 전에 `gDPNoOpTag(PC_NOOP_UI_PLACE + 배치)`를 넣고, emu64 `dl_G_NOOP`가
   `pc_gx_set_ui_place`로 넘기면 정사영 투영을 그 배치의 아핀으로 다시 적용한다. m_msg.c(`mMsg_pc_place`, TARGET_PC):
   대사창(`PC_UI_PLACE_MSG`, 1.22배, 위쪽은 아이콘 줄 아래)과 선택지(`PC_UI_PLACE_CHOICE`, 1.5배, 아래). m_play.c:
