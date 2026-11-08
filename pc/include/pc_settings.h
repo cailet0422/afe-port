@@ -20,6 +20,8 @@ typedef struct {
     int text_input;       /* 0 = built-in Hangul input from keys, 1 = the system's input method */
     int touch_controls;   /* 0 = off, 1 = on-screen pad for touch screens, 2 = full touch (pc_touch_full.c:
                              tap to walk, tap things to use them, icons for the menus) */
+    int touch_orientation; /* Android, full touch: 0 = turns with the phone (upright: the portrait layout,
+                              pc_portrait.c), 1 = always landscape, 2 = always upright. Other modes: landscape */
     char touch_layout[768]; /* the pad's pieces moved or resized in the layout editor ("A=0.71,0.66,1.20;..."):
                                centre as fractions of the window, size factor; others where pc_touch.c puts them */
     int minimap;          /* 0 = off, 1 = the town's map in the bottom left corner outside (pc_minimap.c) */

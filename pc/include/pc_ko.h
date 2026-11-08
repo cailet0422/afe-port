@@ -50,8 +50,8 @@ int pc_ko_encode_utf8(const char* text, u8* out, int max);
  * stays valid until the slot is used again. The patch's slots: 0 drawing a
  * line (mFont_SetLineStrings_AndSpace_new), 1 and 2 its width
  * (mFont_GetStringWidth, ...2F), 3 mMsg_Set_free_str, 4 mMsg_Set_item_str;
- * 5 is the PC's own (pc_ko_ledit_match). */
-#define PC_KO_EXPAND_SLOTS 6
+ * 5 and 6 are the PC's own (pc_ko_ledit_match, the upright choices). */
+#define PC_KO_EXPAND_SLOTS 7
 int pc_ko_expand(const u8* str, int len, int slot, const u8** out);
 
 /* A villager's catchphrase as text (the patch packs it), padded with spaces

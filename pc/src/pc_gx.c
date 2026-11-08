@@ -1,5 +1,6 @@
 /* pc_gx.c - GX API → OpenGL 3.3: state management, vertex submission, draw dispatch */
 #include "pc_gx_internal.h"
+#include "pc_settings.h"
 #include <stddef.h>
 #include <math.h>
 #include <dolphin/gx/GXEnum.h>
@@ -21,6 +22,11 @@ static float g_aspect_factor = 1.0f;
 static float g_aspect_offset = 0.0f;
 static int   g_aspect_active = 0;
 
+/* A window taller than 4:3: the 2D picture's height in it (as a part of the
+ * window's height; the picture keeps its shape across the window's width) */
+static float g_tall_factor = 1.0f;
+static int   g_tall_active = 0;
+
 static void pc_gx_update_aspect(void) {
     float gc_aspect = (float)PC_GC_WIDTH / (float)PC_GC_HEIGHT;
     float win_aspect = (float)g_pc_window_w / (float)g_pc_window_h;
@@ -33,21 +39,179 @@ static void pc_gx_update_aspect(void) {
         g_aspect_offset = 0.0f;
         g_aspect_active = 0;
     }
+    if (win_aspect < gc_aspect - 0.01f) {
+        g_tall_factor = win_aspect / gc_aspect;
+        g_tall_active = 1;
+    } else {
+        g_tall_factor = 1.0f;
+        g_tall_active = 0;
+    }
+}
+
+/* --- The portrait layout ---------------------------------------------------- */
+
+#define PORTRAIT_ZOOM 1.45f /* the 3D drawn closer (the camera too: pc_portrait_camera) */
+#define MSG_SCALE 1.22f      /* the message window larger, at the top */
+#define CHOICE_SCALE 1.5f
+
+static int g_ui_place = PC_UI_PLACE_BAND;
+static float g_proj_raw[4][4]; /* the game's projection before the corrections */
+
+int pc_portrait_layout(void) {
+    return g_pc_settings.touch_controls == 2 && g_pc_window_h > g_pc_window_w;
+}
+
+void pc_gx_3d_scale(float* sx, float* sy) {
+    pc_gx_update_aspect();
+    *sx = g_aspect_active ? g_aspect_factor : 1.0f;
+    *sy = g_tall_active ? g_tall_factor : 1.0f;
+    if (pc_portrait_layout()) {
+        *sx *= PORTRAIT_ZOOM;
+        *sy *= PORTRAIT_ZOOM;
+    }
+}
+
+/* The touch icons' row (pc_touch_full.c build_hud: centres 0.085 of the
+ * shorter side down, radius 0.05) and a little more, in window pixels; with
+ * the tools' row under it (held upright, while playing) */
+static float hud_bottom(int tools) {
+    float u = (float)(g_pc_window_w < g_pc_window_h ? g_pc_window_w : g_pc_window_h);
+
+    return tools ? (PC_PORTRAIT_TOOL_ROW + 0.075f) * u : 0.16f * u;
+}
+
+/* Where a placement puts the 2D picture: x' = ax*x + bx, y' = ay*y + by in
+ * normalized device coordinates (y up), from the picture's to the window's */
+static void ui_place_affine(int place, float* ax, float* bx, float* ay, float* by) {
+    float h = (float)g_pc_window_h;
+    float f = g_tall_factor;
+
+    *ax = g_aspect_active ? g_aspect_factor : 1.0f;
+    *bx = 0.0f;
+    *ay = 1.0f;
+    *by = 0.0f;
+    if (!g_tall_active) {
+        return;
+    }
+    *ay = f;
+    if (!pc_portrait_layout()) {
+        return; /* (a tall window outside the portrait layout: the picture in the middle) */
+    }
+    switch (place) {
+        case PC_UI_PLACE_TOP:
+            *by = 1.0f - f - 2.0f * hud_bottom(1) / h;
+            break;
+        case PC_UI_PLACE_BOTTOM:
+            *by = -1.0f + f + 2.0f * (0.02f * h) / h;
+            break;
+        case PC_UI_PLACE_MSG:
+        case PC_UI_PLACE_CHOICE: {
+            /* about the window's centre: larger, then its centre to the top
+             * (under the icons) or to the bottom */
+            float cx, cy, s, w_h, ty;
+
+            pc_gx_ui_place_center(place, &cx, &cy, &w_h);
+            s = place == PC_UI_PLACE_MSG ? MSG_SCALE : CHOICE_SCALE;
+            /* (the picture's 320x240 to its NDC) */
+            cx = cx / 160.0f - 1.0f;
+            cy = 1.0f - cy / 120.0f;
+            if (place == PC_UI_PLACE_MSG) {
+                /* its top (w_h above the centre, 240-high picture) under the icons */
+                float top_px = hud_bottom(0) + 0.05f * (float)g_pc_window_w; /* (no icons in a talk) */
+                float half_px = s * w_h * 0.5f * ((float)g_pc_window_w / 320.0f);
+
+                ty = 1.0f - 2.0f * (top_px + half_px) / h;
+            } else {
+                float half_px = s * w_h * 0.5f * ((float)g_pc_window_w / 320.0f);
+
+                ty = -1.0f + 2.0f * (0.06f * h + half_px) / h;
+            }
+            *ax = s;
+            *bx = place == PC_UI_PLACE_CHOICE ? -s * cx : cx * (1.0f - s);
+            *ay = s * f;
+            *by = ty - s * f * cy;
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+/* The projection as the game set it, corrected for the window */
+static void apply_projection(void) {
+    u32 type = g_gx.projection_type;
+    int i;
+
+    memcpy(g_gx.projection_mtx, g_proj_raw, sizeof(g_proj_raw));
+    /* Widescreen: 0=hor+ (both), 1=stretch (none), 2=UI (ortho only) */
+    if (g_pc_widescreen_stretch == 1) {
+        return;
+    }
+    if (!g_tall_active) {
+        /* 4:3 or wider: the x scale about the centre (as before the tall
+         * windows, to the bit) */
+        if ((g_pc_widescreen_stretch == 0 || type == GX_ORTHOGRAPHIC) && g_aspect_active) {
+            g_gx.projection_mtx[0][0] *= g_aspect_factor;
+        }
+        return;
+    }
+    if (type == GX_PERSPECTIVE) {
+        float sx, sy;
+
+        if (g_pc_widescreen_stretch != 0) {
+            return; /* (a menu's 3D in its viewport, remapped: GXSetViewport) */
+        }
+        pc_gx_3d_scale(&sx, &sy);
+        for (i = 0; i < 4; i++) {
+            g_gx.projection_mtx[0][i] *= sx;
+            g_gx.projection_mtx[1][i] *= sy;
+        }
+    } else {
+        float ax, bx, ay, by;
+
+        ui_place_affine(g_ui_place, &ax, &bx, &ay, &by);
+        for (i = 0; i < 4; i++) {
+            g_gx.projection_mtx[0][i] = ax * g_proj_raw[0][i] + bx * g_proj_raw[3][i];
+            g_gx.projection_mtx[1][i] = ay * g_proj_raw[1][i] + by * g_proj_raw[3][i];
+        }
+    }
+}
+
+void pc_gx_set_ui_place(int place) {
+    if (place < 0 || place >= PC_UI_PLACE_NUM || place == g_ui_place) {
+        return;
+    }
+    g_ui_place = place;
+    if (g_tall_active && g_gx.projection_type == GX_ORTHOGRAPHIC) { /* (else the same everywhere) */
+        pc_gx_flush_if_begin_complete();
+        DIRTY(PC_GX_DIRTY_PROJECTION);
+        apply_projection();
+    }
 }
 
 void pc_gx_window_to_ui(float wx, float wy, float* x, float* y) {
-    float nx = wx * 2.0f - 1.0f;
+    float ax, bx, ay, by;
 
     pc_gx_update_aspect();
-    /* GXSetProjection narrows orthographic drawing about the centre. (Not
-     * g_pc_widescreen_stretch: emu64 sets it while it draws, for the stretched
-     * blits of transitions; between frames it holds whatever came last, and
-     * the menus and text are always drawn narrowed.) */
-    if (g_aspect_active) {
-        nx /= g_aspect_factor;
-    }
-    *x = (nx + 1.0f) * 0.5f * (float)PC_GC_WIDTH;
-    *y = wy * (float)PC_GC_HEIGHT;
+    /* GXSetProjection narrows orthographic drawing about the centre (and in a
+     * tall window keeps it in a band). (Not g_pc_widescreen_stretch: emu64
+     * sets it while it draws, for the stretched blits of transitions; between
+     * frames it holds whatever came last, and the menus and text are always
+     * drawn corrected.) */
+    ui_place_affine(PC_UI_PLACE_BAND, &ax, &bx, &ay, &by);
+    *x = (((wx * 2.0f - 1.0f) - bx) / ax + 1.0f) * 0.5f * (float)PC_GC_WIDTH;
+    *y = (1.0f - (((1.0f - wy * 2.0f) - by) / ay)) * 0.5f * (float)PC_GC_HEIGHT;
+}
+
+void pc_gx_ui_to_window(int place, float x, float y, float* wx, float* wy) {
+    float ax, bx, ay, by;
+    float nx = x / (float)PC_GC_WIDTH * 2.0f - 1.0f;
+    float ny = 1.0f - y / (float)PC_GC_HEIGHT * 2.0f;
+
+    pc_gx_update_aspect();
+    ui_place_affine(place, &ax, &bx, &ay, &by);
+    *wx = (ax * nx + bx + 1.0f) * 0.5f;
+    *wy = (1.0f - (ay * ny + by)) * 0.5f;
 }
 
 /* How far a window wider than 4:3 reaches past the game's 2D picture on each
@@ -270,6 +434,7 @@ void pc_gx_begin_frame(void) {
     g_pc_widescreen_stretch = 0;
 #ifdef PC_ENHANCEMENTS
     pc_gx_update_aspect();
+    g_ui_place = PC_UI_PLACE_BAND;
 #endif
     if (g_pc_vi_skip) {
         return; /* not shown: leave the framebuffer alone (nothing is drawn into it) */
@@ -638,13 +803,8 @@ void GXSetProjection(const void* mtx, u32 type) {
     }
 
 #ifdef PC_ENHANCEMENTS
-    /* Widescreen: 0=hor+ (both), 1=stretch (none), 2=UI (ortho only) */
-    if (g_pc_widescreen_stretch == 0 ||
-        (g_pc_widescreen_stretch == 2 && type == GX_ORTHOGRAPHIC)) {
-        if (g_aspect_active) {
-            g_gx.projection_mtx[0][0] *= g_aspect_factor;
-        }
-    }
+    memcpy(g_proj_raw, g_gx.projection_mtx, sizeof(g_proj_raw));
+    apply_projection();
 #endif
 }
 
@@ -696,21 +856,33 @@ void GXSetViewport(f32 left, f32 top, f32 wd, f32 ht, f32 nearz, f32 farz) {
         float adj_left = left;
         float adj_wd = wd;
 
+        float adj_top = top;
+        float adj_ht = ht;
+
         /* UI mode: remap sub-viewports to match aspect-corrected content */
-        if (g_pc_widescreen_stretch == 2 && g_aspect_active) {
+        if (g_pc_widescreen_stretch == 2 && (g_aspect_active || g_tall_active)) {
             int is_full = (left < 1.0f && top < 1.0f &&
                            wd > (float)(PC_GC_WIDTH - 1) &&
                            ht > (float)(PC_GC_HEIGHT - 1));
-            if (!is_full) {
+            if (!is_full && !g_tall_active) {
                 adj_left = g_aspect_offset + left * g_aspect_factor;
                 adj_wd = wd * g_aspect_factor;
+            } else if (!is_full) {
+                float ax, bx, ay, by;
+
+                /* (where the picture's middle band is: the menus) */
+                ui_place_affine(PC_UI_PLACE_BAND, &ax, &bx, &ay, &by);
+                adj_left = (ax * (left / (float)PC_GC_WIDTH * 2.0f - 1.0f) + bx + 1.0f) * 0.5f * (float)PC_GC_WIDTH;
+                adj_wd = wd * ax;
+                adj_top = (1.0f - (ay * (1.0f - top / (float)PC_GC_HEIGHT * 2.0f) + by)) * 0.5f * (float)PC_GC_HEIGHT;
+                adj_ht = ht * ay;
             }
         }
 
         int gl_x = (int)(adj_left * sx);
         int gl_w = (int)(adj_wd * sx);
-        int gl_h = (int)(ht * sy);
-        int gl_y = g_pc_window_h - (int)(top * sy) - gl_h;
+        int gl_h = (int)(adj_ht * sy);
+        int gl_y = g_pc_window_h - (int)(adj_top * sy) - gl_h;
         pc_gfx_viewport(gl_x, gl_y, gl_w, gl_h);
     }
 #else

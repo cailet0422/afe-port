@@ -528,8 +528,23 @@ static void tab_gameplay() {
               "주민과 물건을 눌러 쓰고, 소지품·지도 아이콘과 위쪽 도구 칸으로 조작합니다."));
         if (ImGui::Combo("##touch", &g_pc_settings.touch_controls, names, 3)) {
             save();
+            pc_portrait_apply();
         }
     }
+#ifdef __ANDROID__
+    if (g_pc_settings.touch_controls == 2) {
+        const char* names[] = { T("Turn with the phone", "폰 방향 따라"), T("Landscape", "가로"),
+                                T("Portrait", "세로") };
+        row(T("Screen orientation", "화면 방향"),
+            T("Held upright the game is laid out for a phone: the camera closer, the messages at the top and the "
+              "answers as big buttons at the bottom",
+              "세로로 들면 폰에 맞춘 화면이 됩니다: 카메라가 가까워지고, 대사는 위에, 대답은 아래의 큰 버튼으로"));
+        if (ImGui::Combo("##orient", &g_pc_settings.touch_orientation, names, 3)) {
+            save();
+            pc_portrait_apply();
+        }
+    }
+#endif
     if (g_pc_settings.touch_controls == 1) {
         row(T("Pad layout", "패드 배치"),
             T("Move the pad's buttons, the D-pad and the stick, and make them bigger or smaller",

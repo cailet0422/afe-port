@@ -84,6 +84,7 @@ static const struct {
     { "master_volume", &g_pc_settings.master_volume, 0, 100 },
     { "text_input", &g_pc_settings.text_input, 0, 1 },
     { "touch_controls", &g_pc_settings.touch_controls, 0, 2 },
+    { "touch_orientation", &g_pc_settings.touch_orientation, 0, 2 },
     { "minimap", &g_pc_settings.minimap, 0, 1 },
     { "seamless_blocks", &g_pc_settings.seamless_blocks, 0, 1 },
     { "auto_update", &g_pc_settings.auto_update, 0, 1 },
@@ -206,6 +207,9 @@ void pc_settings_save(void) {
     fprintf(f, "# Touch screens: 0 = off, 1 = a GameCube pad drawn over the game, 2 = full touch (tap where to\n");
     fprintf(f, "# walk, hold to run, tap villagers and things to use them, icons for the pockets and the map)\n");
     fprintf(f, "touch_controls = %d\n", g_pc_settings.touch_controls);
+    fprintf(f, "# Android, full touch: 0 = turn with the phone (held upright: the portrait layout),\n");
+    fprintf(f, "# 1 = always landscape, 2 = always upright. On a PC a window taller than wide is upright\n");
+    fprintf(f, "touch_orientation = %d\n", g_pc_settings.touch_orientation);
     fprintf(f, "# The pad's pieces moved or resized in Settings > Edit pad layout (name=x,y,size; x and y as\n");
     fprintf(f, "# fractions of the window); empty = where the game puts them\n");
     fprintf(f, "touch_layout = %s\n", g_pc_settings.touch_layout);

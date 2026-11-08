@@ -337,6 +337,37 @@ full touch mode (`pc_touch_full.c`, `pc_touch_menu.c`, `pc_touch_room.c`, icons 
 - Tests: `TOUCHW x,z [frames]` and `TOUCHNPC id [frames]` in `--input-script` put a finger where a point of the ground
   or a villager is on the window.
 
+#### Held upright (the portrait layout)
+
+A window taller than 4:3 (`g_tall_active` in `pc_gx.c`: the window's aspect over 4:3's) is vert+: the 3D's projection
+keeps the game's width and sees more above and below (`apply_projection` scales row 1 of a perspective by the
+factor), and the 2D picture keeps its shape in a band of the window's width (an ortho's rows through
+`ui_place_affine`). In the full touch mode it is the portrait layout (`pc_portrait_layout`, `pc_portrait.c`):
+
+- The 3D is drawn 1.45 times closer (`pc_gx_3d_scale`, which `pc_touch_full.c` uses for screen ↔ world and m_actor.c's
+  culling, PC_ENHANCEMENTS, for its edges) and the camera is lower and nearer: m_camera2.c
+  `Camera2_Get_GoalDistanceAndDirection` (TARGET_PC) hands the normal and wading cameras' distance and pitch to
+  `pc_portrait_camera` (outside 0.86 of the distance and 11 degrees lower; in a room 0.92 and 5.6 degrees).
+- The 2D is placed by part: the game puts `gDPNoOpTag(PC_NOOP_UI_PLACE + place)` before what it draws and emu64's
+  `dl_G_NOOP` hands it to `pc_gx_set_ui_place`, which re-applies the ortho projection with that placement's affine.
+  m_msg.c (`mMsg_pc_place`, TARGET_PC): the message window (`PC_UI_PLACE_MSG`, 1.22 times larger, its top under the
+  icons' row) and its choices (`PC_UI_PLACE_CHOICE`, 1.5 times, at the bottom); m_play.c: what is under the player's
+  feet (`watch_my_step_draw`, `PC_UI_PLACE_TOP`, under the tools' row) and the clock (`banti_draw`,
+  `PC_UI_PLACE_BOTTOM`); then back to the band (`PC_UI_PLACE_BAND`, the menus). The window and the choices are scaled
+  about their centres, read from `mMsg_Get_base_window_p` and `mChoice_Get_base_window_p` (`pc_gx_ui_place_center`).
+- With the Korean patch the choices are ImGui buttons (`pc_portrait_choice_buttons`; `mChoice_Draw` is not called,
+  m_msg.c TARGET_PC): `pc_portrait_choices` gives their text as UTF-8 (`ko_charset_decode`, the ASCII-like signs,
+  dictionary codes through `pc_ko_expand` slot 6) and the cursor's row; `gui/pc_gui_touch.cpp` draws them,
+  `pc_portrait_button_at` takes the taps. On the original disc the port has no kana table, so the game's own window
+  is drawn, placed at the bottom (`window_to_placed_ui` maps a tap back to it).
+- The tools go to a row of their own under the icons (`PC_PORTRAIT_TOOL_ROW`); a menu's keys go in rows at the
+  bottom (`pc_touch_menus_hud`); the furniture mode's pockets wrap into rows when the window is narrow.
+- Android: `touch_orientation` (0 turn with the phone, 1 landscape, 2 upright) becomes the activity's requested
+  orientation through JNI (`pc_portrait_apply`: `FULL_USER` 13, `SENSOR_LANDSCAPE` 6, `SENSOR_PORTRAIT` 7) at start
+  and when the setting or the touch mode changes; other touch modes stay landscape. The manifest keeps
+  `sensorLandscape` (the activity starts as before) and handles the turn itself (`configChanges`), so a turn is a
+  window resize (`SDL_WINDOWEVENT_SIZE_CHANGED`).
+
 ### Rebinding controls
 
 Change them under pause menu → Settings → **Controls** (`pc/src/gui/pc_gui_menu.cpp`, `pc_keybindings.c`).

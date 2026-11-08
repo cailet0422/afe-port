@@ -6,8 +6,10 @@
 
 extern "C" {
 #include "pc_touch_full.h"
+#include "pc_platform.h"
 }
 
+#include <float.h>
 #include <math.h>
 
 namespace gui {
@@ -379,21 +381,70 @@ static void DrawIcon(ImDrawList* dl, const PCTouchHudIcon& ic, float W, float H,
     }
 }
 
+/* The portrait layout's choices (pc_portrait.c): big cream buttons with an
+ * orange rim at the bottom, from the bottom up as the game lists them */
+static char s_choice_text[8][PC_PORTRAIT_CHOICE_LEN];
+
+static void DrawPortraitChoices(ImDrawList* dl, int n, int cursor, float W, float H) {
+    ImFont* font = ImGui::GetFont();
+
+    for (int i = 0; i < n; i++) {
+        float x0, y0, x1, y1;
+        pc_portrait_button_rect(i, n, &x0, &y0, &x1, &y1);
+        x0 *= W;
+        x1 *= W;
+        y0 *= H;
+        y1 *= H;
+        float bh = y1 - y0, r = bh * 0.5f, rim = bh * 0.06f;
+        bool on = i == cursor;
+        ImU32 shade = IM_COL32(0xC8, 0x7A, 0x2E, 0x90);
+        ImU32 edge = on ? IM_COL32(0xF0, 0x8A, 0x24, 0xFF) : IM_COL32(0xF4, 0xA4, 0x4C, 0xFF);
+        ImU32 fill = on ? IM_COL32(0xFF, 0xEE, 0xCF, 0xFF) : IM_COL32(0xFF, 0xFA, 0xEC, 0xFF);
+
+        dl->AddRectFilled(ImVec2(x0, y0 + rim * 1.2f), ImVec2(x1, y1 + rim * 1.2f), shade, r); /* (its shadow) */
+        dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), edge, r);
+        dl->AddRectFilled(ImVec2(x0 + rim, y0 + rim), ImVec2(x1 - rim, y1 - rim), fill, r - rim);
+
+        const char* text = s_choice_text[i];
+        float size = bh * 0.42f;
+        ImVec2 ts = font->CalcTextSizeA(size, FLT_MAX, 0.0f, text);
+        float room = (x1 - x0) - 2.0f * r;
+        if (ts.x > room && ts.x > 0.0f) {
+            size *= room / ts.x;
+            ts = font->CalcTextSizeA(size, FLT_MAX, 0.0f, text);
+        }
+        ImVec2 p((x0 + x1 - ts.x) * 0.5f, (y0 + y1 - ts.y) * 0.5f);
+        ImU32 ink = IM_COL32(0x6A, 0x47, 0x28, 0xFF);
+        dl->AddText(font, size, p, ink, text);
+        dl->AddText(font, size, ImVec2(p.x + size * 0.04f, p.y), ink, text); /* (bolder) */
+    }
+}
+
 bool TouchHudWanted() {
     PCTouchHudIcon icons[4];
-    return pc_touch_full_on() && pc_touch_full_hud(icons, 4) > 0;
+    int cursor;
+    if (!pc_touch_full_on()) {
+        return false;
+    }
+    return pc_touch_full_hud(icons, 4) > 0 || pc_portrait_choices(s_choice_text, 8, &cursor) > 0;
 }
 
 void TouchHud() {
     static PCTouchHudIcon icons[64];
     int n = pc_touch_full_hud(icons, 64);
-    if (n <= 0) {
+    int cursor = 0;
+    int choices = pc_portrait_choices(s_choice_text, 8, &cursor);
+    if (n <= 0 && choices <= 0) {
         return;
     }
     ImGuiIO& io = ImGui::GetIO();
     float W = io.DisplaySize.x, H = io.DisplaySize.y;
     float U = W < H ? W : H;
     ImDrawList* dl = ImGui::GetBackgroundDrawList();
+
+    if (choices > 0) {
+        DrawPortraitChoices(dl, choices, cursor, W, H);
+    }
 
     /* the furniture mode: the floor's grid and the picked piece */
     if (pc_touch_full_furniture_mode()) {

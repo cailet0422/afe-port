@@ -99,6 +99,54 @@ void pc_request_restart(void);
 #define PC_NOOP_WIDESCREEN_STRETCH_OFF 0xAC5700u
 extern int g_pc_widescreen_stretch;
 
+/* --- A window taller than 4:3 (a phone held upright) ---
+ * The 3D fills it (more is seen above and below, vert+), the game's 2D
+ * picture keeps its shape in a band of the window's width. In the full touch
+ * mode it is the portrait layout (pc_portrait_layout): the 3D drawn closer
+ * (pc_gx_3d_scale's zoom, m_camera2.c's camera a little lower and nearer),
+ * and the 2D placed by part, by NOOPTag markers (PC_NOOP_UI_PLACE + place)
+ * the game puts before what it draws: the message window at the top, the
+ * clock at the bottom, the menus in the middle. */
+#define PC_NOOP_UI_PLACE 0xAC5710u
+enum {
+    PC_UI_PLACE_BAND,   /* the middle (the menus; all of it in a wide window) */
+    PC_UI_PLACE_TOP,    /* under the touch icons (what is under the player's feet) */
+    PC_UI_PLACE_BOTTOM, /* at the bottom (the clock) */
+    PC_UI_PLACE_MSG,    /* the message window: at the top, larger */
+    PC_UI_PLACE_CHOICE, /* its choices: at the bottom, larger */
+    PC_UI_PLACE_NUM
+};
+int pc_portrait_layout(void);
+/* Held upright the touch icons' row has the tools in a second row under it,
+ * this far down (of the window's width) */
+#define PC_PORTRAIT_TOOL_ROW 0.215f
+void pc_gx_set_ui_place(int place);
+/* A point of the 2D picture (640x480) drawn in a placement: where it is in
+ * the window (fractions) */
+void pc_gx_ui_to_window(int place, float x, float y, float* wx, float* wy);
+/* The message window's or the choices' centre and height in the picture's
+ * 320x240 (pc_touch_full.c, from the game's windows) */
+void pc_gx_ui_place_center(int place, float* cx, float* cy, float* h);
+/* The multipliers of the main 3D projection's x and y (hor+, vert+, zoom) */
+void pc_gx_3d_scale(float* sx, float* sy);
+/* The camera of the portrait layout: the normal camera's distance and its
+ * pitch (s16, x of the direction) as the game would set them, changed */
+void pc_portrait_camera(float* dist, short* pitch, int indoor);
+/* The choices are drawn by the full touch mode as buttons (the game's own
+ * window not drawn) */
+int pc_portrait_choice_buttons(void);
+/* Button i of n (fractions of the window); the button at a window point,
+ * -1 if none */
+void pc_portrait_button_rect(int i, int n, float* x0, float* y0, float* x1, float* y1);
+int pc_portrait_button_at(float fx, float fy, int n);
+/* The choices shown as buttons now: their text (UTF-8) and the cursor's row;
+ * 0 when none are */
+#define PC_PORTRAIT_CHOICE_LEN 96
+int pc_portrait_choices(char text[][PC_PORTRAIT_CHOICE_LEN], int max, int* cursor_row);
+/* Android: the activity's orientation from the settings (landscape unless
+ * the full touch mode); elsewhere nothing */
+void pc_portrait_apply(void);
+
 /* --- Functions --- */
 void pc_platform_init(void);
 #ifdef __ANDROID__

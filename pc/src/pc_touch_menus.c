@@ -999,6 +999,31 @@ int pc_touch_menus_hud(Submenu* sm, PCTouchHudIcon* out, int n, int max) {
     if (done_wanted(sm)) {
         ADD(PC_HUD_DONE, w - (close_button(sm) != 0 ? 0.20f : 0.08f) * u, y, r);
     }
+    if (pc_portrait_layout()) {
+        /* held upright the menu's picture takes the window's width: the keys
+         * in rows under it, at the bottom */
+        int cols = (int)((w - 0.04f * u) / (0.13f * u));
+        int nrows;
+
+        if (cols < 1) {
+            cols = 1;
+        }
+        nrows = (nk + cols - 1) / cols;
+        for (i = 0; i < nk; i++) {
+            int row = i / cols;
+            int in_row = row < nrows - 1 ? cols : nk - row * cols;
+            float kx = w * 0.5f + 0.13f * u * ((float)(i % cols) - (float)(in_row - 1) * 0.5f);
+            float ky = h - 0.10f * u - 0.13f * u * (float)(nrows - 1 - row);
+
+            ADD(PC_HUD_KEY, kx, ky, r * 0.85f);
+            if (n > 0 && out[n - 1].kind == PC_HUD_KEY) {
+                out[n - 1].index = keys[i].key;
+                out[n - 1].glyph = keys[i].glyph;
+                out[n - 1].label = ko ? keys[i].ko : keys[i].en;
+            }
+        }
+        nk = 0;
+    }
     for (i = 0; i < nk; i++) {
         /* down the right edge, in a second column when the window is short */
         int rows = (int)((h - 0.06f * u - (y + 0.13f * u)) / (0.115f * u)) + 1;

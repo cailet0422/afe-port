@@ -215,35 +215,31 @@ static int submenu_type(GAME_PLAY* play) {
 /* Widescreen: the game's 3D picture is widened about the centre (hor+,
  * pc_gx.c), its 2D drawing kept in the 4:3 middle. (g_pc_widescreen_stretch
  * only says how emu64 draws at that moment; the world is always hor+.) */
-static float aspect_3d(void) {
-    float w = (float)g_pc_window_w, h = (float)g_pc_window_h;
-    float gc = (float)PC_GC_WIDTH / (float)PC_GC_HEIGHT;
-
-    if (h <= 0.0f || w / h <= gc + 0.01f) {
-        return 1.0f;
-    }
-    return gc / (w / h);
-}
-
 int pc_touch_world_to_window(GAME_PLAY* play, const xyz_t* p, float* fx, float* fy) {
     const MtxF* m = &play->projection_matrix;
     float cx = m->xx * p->x + m->xy * p->y + m->xz * p->z + m->xw;
     float cy = m->yx * p->x + m->yy * p->y + m->yz * p->z + m->yw;
     float w = m->wx * p->x + m->wy * p->y + m->wz * p->z + m->ww;
+    float sx, sy;
 
     if (w < 1.0f) {
         return FALSE; /* behind the camera */
     }
-    *fx = (cx / w * aspect_3d() + 1.0f) * 0.5f;
-    *fy = (1.0f - cy / w) * 0.5f;
+    pc_gx_3d_scale(&sx, &sy); /* (as GXSetProjection draws it: hor+, vert+, the portrait's zoom) */
+    *fx = (cx / w * sx + 1.0f) * 0.5f;
+    *fy = (1.0f - cy / w * sy) * 0.5f;
     return isfinite(*fx) && isfinite(*fy);
 }
 
 /* Where a window point meets the plane y = h */
 static int window_to_plane(GAME_PLAY* play, float fx, float fy, float h, float* x, float* z) {
     const MtxF* m = &play->projection_matrix;
-    float nx = (fx * 2.0f - 1.0f) / aspect_3d();
-    float ny = 1.0f - fy * 2.0f;
+    float sx, sy;
+    float nx, ny;
+
+    pc_gx_3d_scale(&sx, &sy);
+    nx = (fx * 2.0f - 1.0f) / sx;
+    ny = (1.0f - fy * 2.0f) / sy;
     /* (row - n * w_row) . (x, h, z, 1) = 0 for the x and y rows */
     float a1 = m->xx - nx * m->wx, a3 = m->xz - nx * m->wz;
     float c1 = (m->xy - nx * m->wy) * h + (m->xw - nx * m->ww);
@@ -554,6 +550,17 @@ static void plan_sides(GAME_PLAY* play, PLAYER_ACTOR* player, int kind, float ux
 
 /* --- The choice window ------------------------------------------------ */
 
+/* A window point back to the picture (640x480) in a placement: by two
+ * points of pc_gx_ui_to_window (the placement is a scale and a shift) */
+static void window_to_placed_ui(int place, float fx, float fy, float* ux, float* uy) {
+    float x0, y0, x1, y1;
+
+    pc_gx_ui_to_window(place, 0.0f, 0.0f, &x0, &y0);
+    pc_gx_ui_to_window(place, 640.0f, 480.0f, &x1, &y1);
+    *ux = (fx - x0) / (x1 - x0) * 640.0f;
+    *uy = (fy - y0) / (y1 - y0) * 480.0f;
+}
+
 /* Which choice a window point is on, -1 if none (m_choice_main.c_inc
  * mChoice_Set_DisplayScaleAndDisplayPos, m_choice_draw.c_inc
  * mChoice_DrawFont: rows of 16 from the text's top left, in 320x240) */
@@ -565,7 +572,15 @@ int pc_touch_choice_at(float fx, float fy) {
     if (choice == NULL || choice->main_index != mChoice_MAIN_NORMAL || choice->data.choice_num <= 0) {
         return -1;
     }
-    pc_gx_window_to_ui(fx, fy, &ux, &uy);
+    if (pc_portrait_choice_buttons()) {
+        return pc_portrait_button_at(fx, fy, choice->data.choice_num); /* (the buttons drawn instead) */
+    }
+    if (pc_portrait_layout()) {
+        /* the game's window, placed at the bottom (pc_gx.c): back to the picture */
+        window_to_placed_ui(PC_UI_PLACE_CHOICE, fx, fy, &ux, &uy);
+    } else {
+        pc_gx_window_to_ui(fx, fy, &ux, &uy);
+    }
     ux *= 0.5f; /* 640x480 to the game's 320x240 */
     uy *= 0.5f;
     dotw = (choice->scale_x - 1.0f / 2.4f) / 0.5833333730697632f;
@@ -839,21 +854,23 @@ static int build_hud(PCTouchHudIcon* out, int max) {
                 n = add_icon(out, n, max, PC_HUD_LIGHT, 0.08f * u, ly, r * 0.9f);
             }
         }
-        /* the tools: the one in hand, and the ones a step left and right */
+        /* the tools: the one in hand, and the ones a step left and right
+         * (held upright, in a row of their own under the icons) */
         {
             int prev = tool_neighbour(-1);
             int next = tool_neighbour(1);
             mActor_name_t cur = Now_Private->equipment;
             int k = n;
+            float ty = pc_portrait_layout() ? PC_PORTRAIT_TOOL_ROW * u : y;
 
-            n = add_icon(out, n, max, PC_HUD_TOOL, w * 0.5f, y, 0.058f * u);
+            n = add_icon(out, n, max, PC_HUD_TOOL, w * 0.5f, ty, 0.058f * u);
             if (k < n) {
                 out[k].glyph = pc_touch_tool_glyph(cur, &out[k].gold);
                 out[k].item = cur;
             }
             if (prev != -2) {
                 k = n;
-                n = add_icon(out, n, max, PC_HUD_TOOL_PREV, w * 0.5f - 0.125f * u, y, 0.04f * u);
+                n = add_icon(out, n, max, PC_HUD_TOOL_PREV, w * 0.5f - 0.125f * u, ty, 0.04f * u);
                 if (k < n) {
                     mActor_name_t it = prev >= 0 ? Now_Private->inventory.pockets[prev] : EMPTY_NO;
 
@@ -864,7 +881,7 @@ static int build_hud(PCTouchHudIcon* out, int max) {
             }
             if (next != -2 && next != prev) {
                 k = n;
-                n = add_icon(out, n, max, PC_HUD_TOOL_NEXT, w * 0.5f + 0.125f * u, y, 0.04f * u);
+                n = add_icon(out, n, max, PC_HUD_TOOL_NEXT, w * 0.5f + 0.125f * u, ty, 0.04f * u);
                 if (k < n) {
                     mActor_name_t it = next >= 0 ? Now_Private->inventory.pockets[next] : EMPTY_NO;
 
