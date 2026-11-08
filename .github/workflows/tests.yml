@@ -46,3 +46,7 @@ jobs:
     # The shaders every backend takes are generated from pc/shaders
     - name: Shaders
       run: python3 pc/tools/gen_shaders.py --check
+
+    # The README's download links name the version in pc/VERSION
+    - name: README downloads
+      run: python3 pc/tools/readme_version.py --check

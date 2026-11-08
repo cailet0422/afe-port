@@ -509,7 +509,8 @@ title demo or on the first day's arrival, whose own wall keeps the player by the
 
 - The version is `pc/VERSION` (CMake defines `PC_PORT_VERSION`; Android's `build.gradle` takes `versionName` from it
   and makes `versionCode` major × 10000 + minor × 100 + patch). **Bump it for every release**, before building, and
-  give the release the tag `v<VERSION>`.
+  give the release the tag `v<VERSION>`. In the same commit run `python3 pc/tools/readme_version.py`: the download
+  links of README.md and README.ko.md then name the new version (CI's "README downloads" step fails otherwise).
 - Only release builds update: CMake `PC_UPDATER` is on by default with `PC_STRIP_ASSETS` (not for Android), and the
   Android app only when it is signed with the release key. Asset names are matched by their ends:
   `-Windows-x64.zip`, `-Windows-x86.zip`, `-Linux-x86_64.zip`, `-Android.apk`; keep naming the release files that
