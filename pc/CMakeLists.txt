@@ -464,6 +464,16 @@ add_custom_command(
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/res/gui_font.ttf" "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin2c.py"
     COMMENT "Embedding the menu font"
 )
+# Its kana and kanji, merged in (a subset of M PLUS Rounded 1c, SIL OFL:
+# pc/res/gui_font_jp_OFL.txt; pc/tools/make_jp_font.py)
+set(GUI_FONT_JP_C "${CMAKE_BINARY_DIR}/gen/pc_gui_font_jp.c")
+add_custom_command(
+    OUTPUT "${GUI_FONT_JP_C}"
+    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin2c.py" --own --size
+            "${CMAKE_CURRENT_SOURCE_DIR}/res/gui_font_jp.ttf" "${GUI_FONT_JP_C}" pc_gui_font_jp_ttf 4
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/res/gui_font_jp.ttf" "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin2c.py"
+    COMMENT "Embedding the menu font's Japanese"
+)
 
 # =============================================================================
 # PC port source files
@@ -487,6 +497,7 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_touch_menu.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_touch_menus.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_portrait.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/jp_charset.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_touch_room.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_minimap.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_autosave.c
@@ -543,6 +554,7 @@ set(PC_SOURCES
     ${SYSTEM_FONT_C}
     ${WINDOW_ICON_C}
     ${GUI_FONT_C}
+    ${GUI_FONT_JP_C}
 )
 
 # =============================================================================
@@ -755,6 +767,8 @@ add_custom_command(TARGET afe_pc POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${PC_DATA_DIR}/licenses"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/res/gui_font_OFL.txt" "${PC_DATA_DIR}/licenses/menu_font_OFL.txt"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/res/gui_font_jp_OFL.txt" "${PC_DATA_DIR}/licenses/menu_font_jp_OFL.txt"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/lib/imgui/LICENSE.txt" "${PC_DATA_DIR}/licenses/dear_imgui_LICENSE.txt"
     COMMENT "Copying third-party notices to ${PC_DATA_DIR}/licenses/"

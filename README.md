@@ -17,16 +17,16 @@
 ## Download
 
 <!-- The version in these links follows pc/VERSION: python3 pc/tools/readme_version.py (CI checks it). -->
-Latest release: **[v1.8.2](https://github.com/cailet0422/afe-port/releases/tag/v1.8.2)**
+Latest release: **[v1.8.3](https://github.com/cailet0422/afe-port/releases/tag/v1.8.3)**
 
 | Platform | Download | Requirements |
 |---|---|---|
-| Windows 64-bit | [DobutsuNoMoriEPlus-v1.8.2-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.2/DobutsuNoMoriEPlus-v1.8.2-Windows-x64.zip) | OpenGL 3.3, Vulkan 1.0 or Direct3D 12 (`SDL2.dll` included) |
-| Windows 32-bit | [DobutsuNoMoriEPlus-v1.8.2-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.2/DobutsuNoMoriEPlus-v1.8.2-Windows-x86.zip) | OpenGL 3.3, Vulkan 1.0 or Direct3D 12 (`SDL2.dll` included); also runs on 64-bit Windows |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.8.2-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.2/DobutsuNoMoriEPlus-v1.8.2-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 or Vulkan 1.0 |
-| Android | [DobutsuNoMoriEPlus-v1.8.2-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.8.2/DobutsuNoMoriEPlus-v1.8.2-Android.apk) | Android 5.0+, ARM 32/64-bit; OpenGL ES 3.0, or Vulkan on Android 7.0+ |
+| Windows 64-bit | [DobutsuNoMoriEPlus-v1.8.3-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.3/DobutsuNoMoriEPlus-v1.8.3-Windows-x64.zip) | OpenGL 3.3, Vulkan 1.0 or Direct3D 12 (`SDL2.dll` included) |
+| Windows 32-bit | [DobutsuNoMoriEPlus-v1.8.3-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.3/DobutsuNoMoriEPlus-v1.8.3-Windows-x86.zip) | OpenGL 3.3, Vulkan 1.0 or Direct3D 12 (`SDL2.dll` included); also runs on 64-bit Windows |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.8.3-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.3/DobutsuNoMoriEPlus-v1.8.3-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 or Vulkan 1.0 |
+| Android | [DobutsuNoMoriEPlus-v1.8.3-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.8.3/DobutsuNoMoriEPlus-v1.8.3-Android.apk) | Android 5.0+, ARM 32/64-bit; OpenGL ES 3.0, or Vulkan on Android 7.0+ |
 
-Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.8.2/SHA256SUMS.txt) ·
+Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.8.3/SHA256SUMS.txt) ·
 Older versions and release notes: [all releases](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -423,8 +423,8 @@ pad is the default on Android):
   - The gamepad icon brings the GameCube pad up at any time; the NES games are played with it.
   - **Held upright** (a phone turned to portrait; on a PC, a window taller than wide): the game is laid out for the
     phone. The 3D fills the screen with the camera lower and closer, the message window sits at the top, larger, and
-    the answers are big buttons at the bottom to tap (on the original disc, whose kana the port does not write out,
-    the game's own answer window moves to the bottom, larger). The clock is at the bottom, the tools in a row under
+    the answers are big buttons at the bottom to tap, in Korean with the patch and in Japanese on the original disc
+    (its kana and kanji in a rounded font). The clock is at the bottom, the tools in a row under
     the icons; a menu takes the screen's width in the middle with its keys under it (turn the phone for bigger
     menus). The top of the screen sees far north, nearly to the horizon: the ground, trees and items of the acres
     out there are drawn too (the game itself only ever shows those nearest the player); the buildings and villagers
@@ -503,7 +503,9 @@ Never commit game data: disc images, assets extracted from them, or build output
   the NES games.
 - The decompilation (`decomp/`) is under afe-decomp's license (CC0 1.0).
 - The menus use [Dear ImGui](https://github.com/ocornut/imgui) (MIT) and a subset of NanumGothic by NHN
-  (SIL Open Font License 1.1, renamed "AFE Menu Gothic" as the license asks; `pc/res/gui_font_OFL.txt`).
+  (SIL Open Font License 1.1, renamed "AFE Menu Gothic" as the license asks; `pc/res/gui_font_OFL.txt`), with the kana
+  and kanji of a subset of M PLUS Rounded 1c by The Rounded M+ Project Authors (SIL Open Font License 1.1, renamed
+  "AFE Menu Rounded"; `pc/res/gui_font_jp_OFL.txt`).
   HD textures are decoded with [bcdec](https://github.com/iOrange/bcdec) (MIT) and
   [stb_image](https://github.com/nothings/stb) (public domain).
 - The Animal Crossing HD Texture Pack is the work of TechieAndroid and its contributors
