@@ -210,7 +210,10 @@ ninja -C pc/build32strip
 - 글꼴: `pc/res/gui_font.ttf`, `pc/tools/make_gui_font.py`로 만든 나눔고딕의 일부(SIL OFL 1.1,
   `pc/res/gui_font_OFL.txt`) — ASCII, Latin-1, 문장부호, 한자를 뺀 KS X 1001(한글 2,350자, 호환 자모, 가나). OFL이
   예약 글꼴 이름을 원본에만 쓰게 하므로 "AFE Menu Gothic"으로 이름을 바꿨다. `bin2c.py --own --size`로 넣는다.
-  ImGui 1.92가 필요할 때 필요한 크기로 글리프를 만든다.
+  ImGui 1.92가 필요할 때 필요한 크기로 글리프를 만든다. 여기에 없는 글자를 위해 `pc/res/gui_font_jp.ttf`를 합친다
+  (`MergeMode`): `pc/tools/make_jp_font.py`로 만든 M PLUS Rounded 1c의 일부(SIL OFL 1.1, `pc/res/gui_font_jp_OFL.txt`,
+  "AFE Menu Rounded"로 이름을 바꿈). 원본 디스크 글꼴의 모든 글자(`gen_jp_charset.py --chars`), 가나 블록, CJK 문장부호,
+  전각 문자.
 - 설정은 바로 적용·저장된다. 화면 모드나 해상도를 바꾸면 유지할지 묻고 15초 뒤 되돌린다. MSAA, HD 텍스처 불러오기
   방식, 디스크 폴더, 한국어 켜기/끄기는 다음 시작까지 "다시 시작" 안내가 남는다.
 
@@ -332,10 +335,12 @@ ninja -C pc/build32strip
   발밑 표시(`watch_my_step_draw`, `PC_UI_PLACE_TOP`, 도구 줄 아래)와 시계(`banti_draw`, `PC_UI_PLACE_BOTTOM`), 그 뒤에
   띠(`PC_UI_PLACE_BAND`, 메뉴)로 돌아간다. 대사창과 선택지는 `mMsg_Get_base_window_p`, `mChoice_Get_base_window_p`에서
   읽은 중심을 기준으로 키운다(`pc_gx_ui_place_center`).
-- 한글패치에서는 선택지를 ImGui 버튼으로 그린다(`pc_portrait_choice_buttons`; m_msg.c TARGET_PC가 `mChoice_Draw`를
-  부르지 않음). `pc_portrait_choices`가 글자를 UTF-8로(`ko_charset_decode`, ASCII와 같은 기호, 사전 코드는
-  `pc_ko_expand` 슬롯 6) 커서 줄과 함께 주고, `gui/pc_gui_touch.cpp`가 그리며, `pc_portrait_button_at`이 누르기를 받는다.
-  원본 디스크는 포트에 가나 표가 없어 게임의 창을 아래에 놓아 그린다(`window_to_placed_ui`가 누른 자리를 되돌림).
+- 선택지는 ImGui 버튼으로 그린다(`pc_portrait_choice_buttons`; m_msg.c TARGET_PC가 `mChoice_Draw`를 부르지 않음).
+  `pc_portrait_choices`가 글자를 UTF-8로 커서 줄과 함께 주고, `gui/pc_gui_touch.cpp`가 그리며, `pc_portrait_button_at`이
+  누르기를 받는다. 한글패치: `ko_charset_decode`, ASCII와 같은 기호, 사전 코드는 `pc_ko_expand` 슬롯 6. 원본 디스크
+  (`jp_game_text`): `pc/tools/gen_jp_charset.py`가 charmap.h의 "e+ font"(가나 쪽과 한자 두 쪽)에서 만든 `jp_charset.c`를,
+  `mFont_GetStringWidth2F`처럼 읽는다. 한자 태그는 뒤따르는 루비의 쪽을 고르고(플레이어 한자 레벨이 태그보다 낮으면 가나),
+  루비 태그는 그 한자(태그 뒤의 코드)나 읽기(태그 안의 가나)이며, 제어 코드와 다른 태그는 건너뛴다.
 - 도구는 아이콘 아래 자체 줄로(`PC_PORTRAIT_TOOL_ROW`), 메뉴 키는 아래쪽 줄로(`pc_touch_menus_hud`), 가구 배치 모드의
   소지품 줄은 창이 좁으면 여러 줄로 간다.
 - Android: `touch_orientation`(0 폰 방향 따라, 1 가로, 2 세로)을 시작할 때와 설정·터치 모드가 바뀔 때 JNI로 액티비티의

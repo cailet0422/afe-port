@@ -47,6 +47,10 @@ jobs:
     - name: Shaders
       run: python3 pc/tools/gen_shaders.py --check
 
+    # The original disc's characters are generated from the decomp's charmap.h
+    - name: Japanese charset
+      run: python3 pc/tools/gen_jp_charset.py --check
+
     # The README's download links name the version in pc/VERSION
     - name: README downloads
       run: python3 pc/tools/readme_version.py --check

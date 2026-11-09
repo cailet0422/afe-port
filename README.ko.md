@@ -17,16 +17,16 @@
 ## 다운로드
 
 <!-- 아래 링크의 버전은 pc/VERSION을 따른다: python3 pc/tools/readme_version.py (CI가 확인). -->
-최신 릴리즈: **[v1.8.2](https://github.com/cailet0422/afe-port/releases/tag/v1.8.2)**
+최신 릴리즈: **[v1.8.3](https://github.com/cailet0422/afe-port/releases/tag/v1.8.3)**
 
 | 플랫폼 | 다운로드 | 필요 사항 |
 |---|---|---|
-| Windows 64비트 | [DobutsuNoMoriEPlus-v1.8.2-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.2/DobutsuNoMoriEPlus-v1.8.2-Windows-x64.zip) | OpenGL 3.3, Vulkan 1.0 또는 Direct3D 12 (`SDL2.dll` 포함) |
-| Windows 32비트 | [DobutsuNoMoriEPlus-v1.8.2-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.2/DobutsuNoMoriEPlus-v1.8.2-Windows-x86.zip) | OpenGL 3.3, Vulkan 1.0 또는 Direct3D 12 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.8.2-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.2/DobutsuNoMoriEPlus-v1.8.2-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 또는 Vulkan 1.0 |
-| Android | [DobutsuNoMoriEPlus-v1.8.2-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.8.2/DobutsuNoMoriEPlus-v1.8.2-Android.apk) | Android 5.0 이상, ARM 32·64비트. OpenGL ES 3.0, Android 7.0 이상은 Vulkan도 |
+| Windows 64비트 | [DobutsuNoMoriEPlus-v1.8.3-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.3/DobutsuNoMoriEPlus-v1.8.3-Windows-x64.zip) | OpenGL 3.3, Vulkan 1.0 또는 Direct3D 12 (`SDL2.dll` 포함) |
+| Windows 32비트 | [DobutsuNoMoriEPlus-v1.8.3-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.3/DobutsuNoMoriEPlus-v1.8.3-Windows-x86.zip) | OpenGL 3.3, Vulkan 1.0 또는 Direct3D 12 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.8.3-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.3/DobutsuNoMoriEPlus-v1.8.3-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 또는 Vulkan 1.0 |
+| Android | [DobutsuNoMoriEPlus-v1.8.3-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.8.3/DobutsuNoMoriEPlus-v1.8.3-Android.apk) | Android 5.0 이상, ARM 32·64비트. OpenGL ES 3.0, Android 7.0 이상은 Vulkan도 |
 
-체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.8.2/SHA256SUMS.txt) ·
+체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.8.3/SHA256SUMS.txt) ·
 이전 버전과 릴리즈 노트: [전체 릴리즈](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -378,8 +378,8 @@ Shift+Space로 전환). 입력 중에는 **Shift+Enter**(또는 Ctrl+Enter)가 S
   - 타이틀 화면에서는 아무 곳이나 누르면 시작합니다(START).
   - 게임패드 아이콘으로 언제든 게임큐브 패드를 띄울 수 있고, 패미컴 게임은 패드로 합니다.
   - **세로로 들기**(폰을 세로로 돌리거나, PC에서 창을 세로로 길게): 폰에 맞춘 화면이 됩니다. 3D가 화면을 채우고 카메라가
-    더 낮고 가까워지며, 대사창은 위에 크게, 대답은 아래의 큰 버튼으로 나와 눌러서 고릅니다(원본 디스크에서는 이 포트가
-    가나를 글자로 옮기지 않아 게임의 대답 창을 아래로 크게 옮깁니다). 시계는 아래, 도구 칸은 아이콘 아래 줄에 있고, 메뉴는
+    더 낮고 가까워지며, 대사창은 위에 크게, 대답은 아래의 큰 버튼으로 나와 눌러서 고릅니다(한글패치는 한국어로, 원본
+    디스크는 일본어로; 가나와 한자는 둥근 글꼴로). 시계는 아래, 도구 칸은 아이콘 아래 줄에 있고, 메뉴는
     가운데에 화면 너비로, 그 키는 메뉴 아래에 나옵니다(메뉴를 크게 보려면 폰을 가로로). Android에서는 터치 조작 아래의
     **화면 방향**: 폰 방향 따라(기본, 화면 회전 잠금이면 폰의 방향), 항상 가로, 항상 세로(`settings.ini`의
     `touch_orientation`, 0/1/2). 다른 터치 모드는 가로 그대로입니다. 화면 위쪽은 북쪽 멀리 지평선 가까이까지 보여서, 그쪽
@@ -455,7 +455,9 @@ ninja -C pc/build32
   씁니다.
 - 디컴프(`decomp/`)는 afe-decomp의 라이선스(CC0 1.0)를 따릅니다.
 - 메뉴는 [Dear ImGui](https://github.com/ocornut/imgui)(MIT)와 NHN 나눔고딕의 일부(SIL Open Font License 1.1, 라이선스에
-  따라 "AFE Menu Gothic"으로 이름을 바꿈; `pc/res/gui_font_OFL.txt`)를 씁니다. HD 텍스처는
+  따라 "AFE Menu Gothic"으로 이름을 바꿈; `pc/res/gui_font_OFL.txt`)를 쓰고, 가나와 한자는 The Rounded M+ Project
+  Authors의 M PLUS Rounded 1c 일부(SIL Open Font License 1.1, "AFE Menu Rounded"로 이름을 바꿈;
+  `pc/res/gui_font_jp_OFL.txt`)로 씁니다. HD 텍스처는
   [bcdec](https://github.com/iOrange/bcdec)(MIT)과 [stb_image](https://github.com/nothings/stb)(퍼블릭 도메인)로 풉니다.
 - Animal Crossing HD Texture Pack은 TechieAndroid와 기여자들의 작업입니다
   ([Dolphin 포럼](https://forums.dolphin-emu.org/Thread-animal-crossing-hd-texture-pack-version-25-october-11th-2026)).

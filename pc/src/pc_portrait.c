@@ -5,10 +5,11 @@
  * the game's 2D keeps its shape in the window's width, placed by part
  * (pc_gx.c, PC_NOOP_UI_PLACE markers from m_msg.c and m_play.c): the message
  * window at the top under the icons, larger; the clock at the bottom; the
- * menus in the middle. With the Korean patch the choices are big buttons at
- * the bottom (drawn by pc_gui_touch.cpp, the game's own window not drawn);
- * on the original disc, whose kana this port does not write out, the game's
- * window goes to the bottom, larger.
+ * menus in the middle. The choices are big buttons at the bottom (drawn by
+ * pc_gui_touch.cpp, the game's own window not drawn): their text as UTF-8,
+ * from the Korean patch's charset or the original disc's (jp_charset.c),
+ * in the menus' fonts (NanumGothic, and M PLUS Rounded for the kana and the
+ * kanji).
  *
  * On Android the orientation follows the setting (pc_portrait_apply). */
 #include "pc_platform.h"
@@ -17,10 +18,12 @@
 #include "pc_touch_full.h"
 #include "pc_touch_internal.h"
 #include "ko_charset.h"
+#include "jp_charset.h"
 
 #include "m_common_data.h"
 #include "m_msg.h"
 #include "m_choice.h"
+#include "m_font.h"
 #include "charmap.h"
 #include "m_field_info.h"
 #include "m_play.h"
@@ -131,7 +134,7 @@ int pc_portrait_view_blocks(void* play_v, int* bx, int* bz, int max) {
 /* --- The choices as buttons ---------------------------------------------------------- */
 
 int pc_portrait_choice_buttons(void) {
-    return g_pc_ko_mode && pc_portrait_layout();
+    return pc_portrait_layout();
 }
 
 /* The buttons, from the bottom up: fractions of the window */
@@ -177,14 +180,79 @@ static void utf8_put(char** o, char* end, unsigned u) {
     *o = p;
 }
 
-/* The game's characters (Korean patch) as text: Hangul, letters, digits and
- * the signs the choices use */
+/* The original disc's characters as text (m_font: mFont_GetStringWidth2F's
+ * walk): one-byte codes from the kana page; a kanji tag picks the page its
+ * rubies draw from (or the kana, when the player's kanji level is below the
+ * tag's); a ruby tag is then its kanji (the codes after it, on that page) or
+ * its reading (the kana in the tag); other tags and control codes are not
+ * text */
+static void jp_game_text(const u8* s, int n, char* out, int cap) {
+    char* o = out;
+    char* end = out + cap;
+    int page = 0;
+    int i, size;
+
+    for (i = 0; i < n; i += size) {
+        const u8* p = s + i;
+
+        size = mFont_CodeSize_get(p);
+        if (size < 1) {
+            size = 1;
+        }
+        if (*p == CHAR_CONTROL_CODE) {
+            continue;
+        }
+        if (*p == CHAR_MESSAGE_TAG) {
+            int group = mFont_Get_TagGroup(p);
+            int id = mFont_Get_TagId(p);
+
+            if (group == mFont_TAG_GROUP_BASE && id == mFont_TAG_BASE_KANJI_COM) {
+                int level, bank;
+
+                mFontTag_get_KanjiCom(p, &level, &bank);
+                page = level > mFont_GetPlayerKanjiLv() ? 0 : bank == 0 ? 1 : 2;
+            } else if (group == mFont_TAG_GROUP_SYS && id == mFont_TAG_SYS_RUBY) {
+                mFontRuby_c ruby;
+                const u8* q;
+                int count, k;
+
+                mFontTag_Get_Ruby(p, &ruby);
+                q = page == 0 ? p + ruby.ruby_start : p + ruby.cmd_size;
+                count = page == 0 ? ruby.ruby_count : ruby.kana_count;
+                for (k = 0; k < count && q + k < s + n; k++) {
+                    unsigned u = jp_charset[page][q[k]];
+
+                    if (u != 0) {
+                        utf8_put(&o, end, u);
+                    }
+                }
+            }
+            continue;
+        }
+        if (*p == CHAR_NEW_LINE) {
+            utf8_put(&o, end, ' ');
+        } else if (jp_charset[0][*p] != 0) {
+            utf8_put(&o, end, jp_charset[0][*p]);
+        }
+    }
+    while (o > out && o[-1] == ' ') {
+        o--;
+    }
+    *o = '\0';
+}
+
+/* The game's characters as text: the Korean patch's (Hangul, letters,
+ * digits and the signs the choices use), or the original disc's */
 static void game_text(const u8* s, int n, char* out, int cap) {
     const u8* str;
     char* o = out;
     char* end = out + cap;
     int i;
 
+    if (!g_pc_ko_mode) {
+        jp_game_text(s, n, out, cap);
+        return;
+    }
     n = pc_ko_expand(s, n, 5, &str); /* (dictionary codes: long names) */
     for (i = 0; i < n;) {
         int g = i + 1 < n ? ko_charset_decode(str + i) : -1;

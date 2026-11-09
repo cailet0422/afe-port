@@ -645,17 +645,6 @@ static void plan_sides(GAME_PLAY* play, PLAYER_ACTOR* player, int kind, float ux
 
 /* --- The choice window ------------------------------------------------ */
 
-/* A window point back to the picture (640x480) in a placement: by two
- * points of pc_gx_ui_to_window (the placement is a scale and a shift) */
-static void window_to_placed_ui(int place, float fx, float fy, float* ux, float* uy) {
-    float x0, y0, x1, y1;
-
-    pc_gx_ui_to_window(place, 0.0f, 0.0f, &x0, &y0);
-    pc_gx_ui_to_window(place, 640.0f, 480.0f, &x1, &y1);
-    *ux = (fx - x0) / (x1 - x0) * 640.0f;
-    *uy = (fy - y0) / (y1 - y0) * 480.0f;
-}
-
 /* Which choice a window point is on, -1 if none (m_choice_main.c_inc
  * mChoice_Set_DisplayScaleAndDisplayPos, m_choice_draw.c_inc
  * mChoice_DrawFont: rows of 16 from the text's top left, in 320x240) */
@@ -670,12 +659,7 @@ int pc_touch_choice_at(float fx, float fy) {
     if (pc_portrait_choice_buttons()) {
         return pc_portrait_button_at(fx, fy, choice->data.choice_num); /* (the buttons drawn instead) */
     }
-    if (pc_portrait_layout()) {
-        /* the game's window, placed at the bottom (pc_gx.c): back to the picture */
-        window_to_placed_ui(PC_UI_PLACE_CHOICE, fx, fy, &ux, &uy);
-    } else {
-        pc_gx_window_to_ui(fx, fy, &ux, &uy);
-    }
+    pc_gx_window_to_ui(fx, fy, &ux, &uy);
     ux *= 0.5f; /* 640x480 to the game's 320x240 */
     uy *= 0.5f;
     dotw = (choice->scale_x - 1.0f / 2.4f) / 0.5833333730697632f;

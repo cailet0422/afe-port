@@ -15,6 +15,9 @@ extern void pc_gx_restore_after_nes(void);
 /* pc/res/gui_font.ttf, embedded by pc/tools/bin2c.py */
 extern unsigned char pc_gui_font_ttf[];
 extern unsigned int pc_gui_font_ttf_size;
+/* pc/res/gui_font_jp.ttf: the kana and kanji it lacks */
+extern unsigned char pc_gui_font_jp_ttf[];
+extern unsigned int pc_gui_font_jp_ttf_size;
 }
 
 #include <math.h>
@@ -225,6 +228,17 @@ static bool init() {
     snprintf(cfg.Name, sizeof(cfg.Name), "AFE Menu Gothic");
     if (io.Fonts->AddFontFromMemoryTTF(pc_gui_font_ttf, (int)pc_gui_font_ttf_size, 20.0f, &cfg) == NULL) {
         io.Fonts->AddFontDefault();
+    } else {
+        /* the original disc's Japanese (the upright answer buttons):
+         * merged in, for the characters the Gothic does not have */
+        ImFontConfig jp;
+        jp.FontDataOwnedByAtlas = false;
+        jp.MergeMode = true;
+        jp.OversampleH = 2;
+        jp.OversampleV = 1;
+        /* (ImGui sizes a font by its ascent to descent: M+ spans 1.395 em,
+         * the Gothic 1.0, so the same em takes 1.395 times the size) */
+        io.Fonts->AddFontFromMemoryTTF(pc_gui_font_jp_ttf, (int)pc_gui_font_jp_ttf_size, 20.0f * 1.395f, &jp);
     }
 
     build_base_style();
