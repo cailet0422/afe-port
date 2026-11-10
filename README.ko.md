@@ -17,16 +17,16 @@
 ## 다운로드
 
 <!-- 아래 링크의 버전은 pc/VERSION을 따른다: python3 pc/tools/readme_version.py (CI가 확인). -->
-최신 릴리즈: **[v1.8.3](https://github.com/cailet0422/afe-port/releases/tag/v1.8.3)**
+최신 릴리즈: **[v1.8.4](https://github.com/cailet0422/afe-port/releases/tag/v1.8.4)**
 
 | 플랫폼 | 다운로드 | 필요 사항 |
 |---|---|---|
-| Windows 64비트 | [DobutsuNoMoriEPlus-v1.8.3-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.3/DobutsuNoMoriEPlus-v1.8.3-Windows-x64.zip) | OpenGL 3.3, Vulkan 1.0 또는 Direct3D 12 (`SDL2.dll` 포함) |
-| Windows 32비트 | [DobutsuNoMoriEPlus-v1.8.3-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.3/DobutsuNoMoriEPlus-v1.8.3-Windows-x86.zip) | OpenGL 3.3, Vulkan 1.0 또는 Direct3D 12 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.8.3-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.3/DobutsuNoMoriEPlus-v1.8.3-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 또는 Vulkan 1.0 |
-| Android | [DobutsuNoMoriEPlus-v1.8.3-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.8.3/DobutsuNoMoriEPlus-v1.8.3-Android.apk) | Android 5.0 이상, ARM 32·64비트. OpenGL ES 3.0, Android 7.0 이상은 Vulkan도 |
+| Windows 64비트 | [DobutsuNoMoriEPlus-v1.8.4-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.4/DobutsuNoMoriEPlus-v1.8.4-Windows-x64.zip) | OpenGL 3.3, Vulkan 1.0 또는 Direct3D 12 (`SDL2.dll` 포함) |
+| Windows 32비트 | [DobutsuNoMoriEPlus-v1.8.4-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.4/DobutsuNoMoriEPlus-v1.8.4-Windows-x86.zip) | OpenGL 3.3, Vulkan 1.0 또는 Direct3D 12 (`SDL2.dll` 포함), 64비트 Windows에서도 실행 |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.8.4-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.4/DobutsuNoMoriEPlus-v1.8.4-Linux-x86_64.zip) | SDL2(`libsdl2-2.0-0`), OpenGL 3.3 또는 Vulkan 1.0 |
+| Android | [DobutsuNoMoriEPlus-v1.8.4-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.8.4/DobutsuNoMoriEPlus-v1.8.4-Android.apk) | Android 5.0 이상, ARM 32·64비트. OpenGL ES 3.0, Android 7.0 이상은 Vulkan도 |
 
-체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.8.3/SHA256SUMS.txt) ·
+체크섬: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.8.4/SHA256SUMS.txt) ·
 이전 버전과 릴리즈 노트: [전체 릴리즈](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -90,7 +90,7 @@
    그 안에 폴더를 만듭니다).
 2. APK를 설치하고(출처를 알 수 없는 앱 허용) 실행한 뒤, **폴더 선택**으로 그 폴더를 고릅니다.
 3. 화면 터치 게임패드, 풀 터치 모드([터치 조작](#터치-조작)), 실제 게임패드로 플레이합니다. 터치 게임패드의 START
-   왼쪽 **SAVE**(풀 터치 모드에서는 상자에 화살표가 들어가는 아이콘)를 누르면 바로 저장합니다.
+   왼쪽 **SAVE**(풀 터치 모드에서는 일기장 아이콘)를 누르면 바로 저장합니다.
 
 APK는 정식 키로 서명되어 있어(인증서 SHA-256
 `db6fc1ad60b6b6d980bee0990f120ef481f195f117729fa194b124d14752e8b7`) 새 버전을 덮어서 설치해도 세이브가
