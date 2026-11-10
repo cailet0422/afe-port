@@ -1,7 +1,7 @@
 /* pc_gui_touch.cpp - the full touch mode's icons (pc_touch_full.h), drawn
  * with ImGui's draw lists over the game. The pictures are drawn here from
  * shapes, as stickers (round parts in one dark outline): a satchel for the
- * pockets, a folded map, a diary, an armchair, a gamepad, the tools; nothing
+ * pockets, a folded map, a floppy disk, an armchair, a gamepad, the tools; nothing
  * is taken from the game's own pictures. PC_TOUCH_ICON_SHEET=1 shows them
  * all on one sheet. */
 #include "pc_gui_internal.h"
@@ -158,16 +158,15 @@ static void DrawMenu(ImDrawList* dl, ImVec2 c, float r) {
     }
 }
 
-/* A diary with a leaf on its cover (saving) */
+/* A blue floppy disk (saving) */
 static void DrawSave(ImDrawList* dl, ImVec2 c, float r) {
     for (Pen p(dl, c, r); p.next();) {
-        p.box(-0.50f, -0.60f, 0.62f, 0.70f, 0.12f, kCream);              /* its pages */
-        p.box(-0.62f, -0.70f, 0.50f, 0.60f, 0.12f, Rgb(0xE9, 0x8B, 0x5B)); /* its cover */
-        if (p.detail()) {
-            dl->AddRectFilled(p.at(-0.62f, -0.70f), p.at(-0.36f, 0.60f), Rgb(0xC6, 0x66, 0x3E), r * 0.12f,
-                              ImDrawFlags_RoundCornersLeft);
-        }
-        p.leaf(0.08f, -0.06f, 0.62f, -PI * 0.25f, kLeaf);
+        p.poly({ { -0.66f, -0.66f }, { 0.44f, -0.66f }, { 0.66f, -0.44f }, { 0.66f, 0.66f }, { -0.66f, 0.66f } }, kBlue);
+        p.box(-0.34f, -0.66f, 0.30f, -0.22f, 0.04f, kMetal);  /* its shutter */
+        p.line(0.12f, -0.56f, 0.12f, -0.32f, 0.11f, Rgb(0x6C, 0x7A, 0x88));
+        p.box(-0.42f, 0.08f, 0.42f, 0.66f, 0.06f, kCream);    /* its label */
+        p.line(-0.26f, 0.28f, 0.26f, 0.28f, 0.05f, Rgb(0xC9, 0xB8, 0x94));
+        p.line(-0.26f, 0.46f, 0.26f, 0.46f, 0.05f, Rgb(0xC9, 0xB8, 0x94));
     }
 }
 

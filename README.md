@@ -102,7 +102,7 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
 2. Install the APK (allow installing from unknown sources), open it, and pick that folder with
    **Choose folder**.
 3. Play with the on-screen touch gamepad, the full touch mode ([Touch controls](#touch-controls)) or a physical
-   controller. **SAVE**, left of START on the touch gamepad (the diary icon in the full touch mode), saves
+   controller. **SAVE**, left of START on the touch gamepad (the floppy disk icon in the full touch mode), saves
    right away.
 
 The APK is signed with a release key (certificate SHA-256
