@@ -244,6 +244,12 @@ tabs, the Korean patch, resolution and update dialogs), `pc_gui_textures.cpp` (H
 `touch_controls` (Settings > Gameplay > Touch controls): 0 off, 1 the on-screen GameCube pad (`pc_touch.c`), 2 the
 full touch mode (`pc_touch_full.c`, `pc_touch_menu.c`, `pc_touch_room.c`, icons in `gui/pc_gui_touch.cpp`).
 
+The icons are drawn from shapes with ImGui's draw lists, nothing from the game's pictures: stickers, each made of
+round parts inside one dark brown outline (`Pen`: a picture's parts are drawn twice, first grown by the outline's
+width in its colour, then in their own, so the outline goes round their union), on a cream button with a tan rim
+(green when on) that sinks onto its shadow when pressed (`Button`). `PC_TOUCH_ICON_SHEET=1` in the environment shows
+every icon on one sheet instead of the HUD, for drawing them.
+
 - The pad's pieces (A B X Y L R Z START SAVE, the D-pad as one, the stick) can be moved and resized in Settings >
   Gameplay > Edit pad layout (`PAGE_PAD_LAYOUT` in `pc_gui_menu.cpp`): the pad is drawn under the page while it is
   open (`pc_touch_preview`), ImGui buttons over each piece take the drags, a slider the size (50-200%).

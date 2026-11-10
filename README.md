@@ -17,16 +17,16 @@
 ## Download
 
 <!-- The version in these links follows pc/VERSION: python3 pc/tools/readme_version.py (CI checks it). -->
-Latest release: **[v1.8.3](https://github.com/cailet0422/afe-port/releases/tag/v1.8.3)**
+Latest release: **[v1.8.4](https://github.com/cailet0422/afe-port/releases/tag/v1.8.4)**
 
 | Platform | Download | Requirements |
 |---|---|---|
-| Windows 64-bit | [DobutsuNoMoriEPlus-v1.8.3-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.3/DobutsuNoMoriEPlus-v1.8.3-Windows-x64.zip) | OpenGL 3.3, Vulkan 1.0 or Direct3D 12 (`SDL2.dll` included) |
-| Windows 32-bit | [DobutsuNoMoriEPlus-v1.8.3-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.3/DobutsuNoMoriEPlus-v1.8.3-Windows-x86.zip) | OpenGL 3.3, Vulkan 1.0 or Direct3D 12 (`SDL2.dll` included); also runs on 64-bit Windows |
-| Linux x86_64 | [DobutsuNoMoriEPlus-v1.8.3-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.3/DobutsuNoMoriEPlus-v1.8.3-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 or Vulkan 1.0 |
-| Android | [DobutsuNoMoriEPlus-v1.8.3-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.8.3/DobutsuNoMoriEPlus-v1.8.3-Android.apk) | Android 5.0+, ARM 32/64-bit; OpenGL ES 3.0, or Vulkan on Android 7.0+ |
+| Windows 64-bit | [DobutsuNoMoriEPlus-v1.8.4-Windows-x64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.4/DobutsuNoMoriEPlus-v1.8.4-Windows-x64.zip) | OpenGL 3.3, Vulkan 1.0 or Direct3D 12 (`SDL2.dll` included) |
+| Windows 32-bit | [DobutsuNoMoriEPlus-v1.8.4-Windows-x86.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.4/DobutsuNoMoriEPlus-v1.8.4-Windows-x86.zip) | OpenGL 3.3, Vulkan 1.0 or Direct3D 12 (`SDL2.dll` included); also runs on 64-bit Windows |
+| Linux x86_64 | [DobutsuNoMoriEPlus-v1.8.4-Linux-x86_64.zip](https://github.com/cailet0422/afe-port/releases/download/v1.8.4/DobutsuNoMoriEPlus-v1.8.4-Linux-x86_64.zip) | SDL2 (`libsdl2-2.0-0`), OpenGL 3.3 or Vulkan 1.0 |
+| Android | [DobutsuNoMoriEPlus-v1.8.4-Android.apk](https://github.com/cailet0422/afe-port/releases/download/v1.8.4/DobutsuNoMoriEPlus-v1.8.4-Android.apk) | Android 5.0+, ARM 32/64-bit; OpenGL ES 3.0, or Vulkan on Android 7.0+ |
 
-Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.8.3/SHA256SUMS.txt) ·
+Checksums: [SHA256SUMS.txt](https://github.com/cailet0422/afe-port/releases/download/v1.8.4/SHA256SUMS.txt) ·
 Older versions and release notes: [all releases](https://github.com/cailet0422/afe-port/releases)
 
 > [!IMPORTANT]
@@ -102,7 +102,7 @@ Older versions and release notes: [all releases](https://github.com/cailet0422/a
 2. Install the APK (allow installing from unknown sources), open it, and pick that folder with
    **Choose folder**.
 3. Play with the on-screen touch gamepad, the full touch mode ([Touch controls](#touch-controls)) or a physical
-   controller. **SAVE**, left of START on the touch gamepad (the arrow-into-tray icon in the full touch mode), saves
+   controller. **SAVE**, left of START on the touch gamepad (the floppy disk icon in the full touch mode), saves
    right away.
 
 The APK is signed with a release key (certificate SHA-256

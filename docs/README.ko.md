@@ -222,6 +222,11 @@ ninja -C pc/build32strip
 `touch_controls`(설정 > 게임 > 터치 조작): 0 끔, 1 화면 게임큐브 패드(`pc_touch.c`), 2 풀 터치 모드(`pc_touch_full.c`,
 `pc_touch_menu.c`, `pc_touch_room.c`, 아이콘은 `gui/pc_gui_touch.cpp`).
 
+아이콘은 게임 그림을 쓰지 않고 ImGui 드로 리스트의 도형으로 그린다. 스티커 모양으로, 둥근 조각들을 짙은 갈색 외곽선
+하나로 감싼다(`Pen`: 그림의 조각을 두 번 그림. 먼저 외곽선 두께만큼 키워 외곽선 색으로, 다음에 제 색으로. 그래서 외곽선이
+조각들의 합집합을 두른다). 바탕은 황갈색 테두리(켜졌을 때 초록)의 크림색 버튼이고 누르면 그림자 위로 내려앉는다(`Button`).
+환경 변수 `PC_TOUCH_ICON_SHEET=1`이면 HUD 대신 모든 아이콘을 한 장에 보여 준다(그릴 때 확인용).
+
 - 패드의 조각(A B X Y L R Z START SAVE, 십자 버튼 하나, 스틱)은 설정 > 게임 > 패드 배치 편집(`pc_gui_menu.cpp`의
   `PAGE_PAD_LAYOUT`)에서 옮기고 크기를 바꾼다. 그 페이지가 열려 있는 동안 패드를 그 아래에 그리고(`pc_touch_preview`),
   조각마다 놓인 ImGui 버튼이 끌기를, 슬라이더가 크기(50~200%)를 받는다. `touch_layout`에 `이름=x,y,크기;...`(중심은 창
